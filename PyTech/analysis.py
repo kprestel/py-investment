@@ -6,6 +6,7 @@ import matplotlib.dates as mdates
 import numpy as np
 from matplotlib.dates import DateFormatter, WeekdayLocator, DayLocator, MONDAY, date2num
 from matplotlib.finance import candlestick_ohlc
+from PyTech.Portfolio import Portfolio
 import sys
 
 import finsymbols
@@ -14,16 +15,18 @@ sys.path.append('/home/kp/CodeFiles/StockPicker/')
 
 
 def main():
-    universe_dict = get_stock_universe(stock_list=['AAPL', 'SPY'])
-    for i in sma(universe_dict):
+    portfolio = Portfolio(tickers=['AAPL', 'SPY'])
+    universe_dict = portfolio.asset_dict
+    # universe_dict = get_stock_universe(stock_list=['AAPL', 'SPY'])
+    for i in simple_moving_average(universe_dict):
         print(i.tail())
-    for i in smm(universe_dict):
+    for i in simple_moving_median(universe_dict):
         print(i.tail())
-    for i in ewma(universe_dict):
+    for i in exponential_weighted_moving_average(universe_dict):
         print(i.tail())
     for i in double_ewma(universe_dict):
         print(i.tail())
-    for i in tema(universe_dict):
+    for i in triple_ewma(universe_dict):
         print(i.tail())
     for i in triangle_moving_average(universe_dict):
         print(i.tail())
@@ -56,7 +59,7 @@ def main():
     for i in average_true_range(universe_dict):
         print(i.tail())
     _get_stock_beta(universe_dict, 'AAPL')
-    print(pd.read_csv("http://finance.yahoo.com/d/quotes.csv?s=AAPL+GOOG+MSFT&f=nabe"))
+    # print(pd.read_csv("http://finance.yahoo.com/d/quotes.csv?s=AAPL+GOOG+MSFT&f=nabe"))
 
 
 default_start = datetime.datetime.today() - datetime.timedelta(days=365)
@@ -101,7 +104,7 @@ def get_stock_universe(start=default_start, end=default_end, **kwargs):
     return df_dict
 
 
-def sma(universe_dict, period=50, column='Adj Close'):
+def simple_moving_average(universe_dict, period=50, column='Adj Close'):
     """
     :param ohlc: dict
     :param period: int, the number of days to use
@@ -111,6 +114,9 @@ def sma(universe_dict, period=50, column='Adj Close'):
     compute the simple moving average over a given period and return it in timeseries
     """
     for ticker, ts in universe_dict.items():
+        # temp_ts = pd.Series(ts[column].rolling(center=False, window=period, min_periods=period - 1).mean(),
+        #                     name='{} day SMA Ticker: {}'.format(period, ticker))
+        # yield temp_ts
         yield pd.Series(ts[column].rolling(center=False, window=period, min_periods=period - 1).mean(),
                         name='{} day SMA Ticker: {}'.format(period, ticker))
 
@@ -119,7 +125,7 @@ def _sma_computation(ohlc, period=50, column='Adj Close'):
     return pd.Series(ohlc[column].rolling(center=False, window=period, min_periods=period - 1).mean())
 
 
-def smm(universe_dict, period=50, column='Adj Close'):
+def simple_moving_median(universe_dict, period=50, column='Adj Close'):
     """
     :param ohlc: dict
     :param period: int, the number of days to use
@@ -133,14 +139,14 @@ def smm(universe_dict, period=50, column='Adj Close'):
                         name='{} day SMM Ticker: {}'.format(period, ticker))
 
 
-def ewma(universe_dict, period=50, column='Adj Close'):
+def exponential_weighted_moving_average(universe_dict, period=50, column='Adj Close'):
     """
     :param ohlc: dict
     :param period: int, the number of days to use
     :param column: string, the name of the column to use to compute the mean
     :return: Timeseries containing the simple moving median
 
-    compute the exponential moving average over a given period and return it in timeseries
+    compute the exponential weighted moving average (ewma) over a given period and return it in timeseries
     """
     for ticker, ts in universe_dict.items():
         yield pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean(),
@@ -176,7 +182,7 @@ def double_ewma(universe_dict, period=50, column='Adj Close'):
         yield pd.Series(dema, name='{} day DEMA Ticker: {}'.format(period, ticker))
 
 
-def tema(universe_dict, period=50, column='Adj Close'):
+def triple_ewma(universe_dict, period=50, column='Adj Close'):
     """
     :param universe_dict: dict
     :param period: int, days
@@ -186,13 +192,10 @@ def tema(universe_dict, period=50, column='Adj Close'):
     triple exponential moving average
     """
     for ticker, ts in universe_dict.items():
-        triple_ema = 3 * _ewma_computation(ohlc=ts, period=period, column=column)
-        ema_ema_ema = _ewma_computation(ohlc=ts, period=period, column=column).ewm(ignore_na=False,
-                                                                                   span=period).mean().ewm(
-            ignore_na=False, span=period).mean()
-        tema = triple_ema - 3 * _ewma_computation(ohlc=ts, period=period, column=column).ewm(ignore_na=False,
-                                                                                             min_periods=period - 1,
-                                                                                             span=period).mean() + ema_ema_ema
+        ewma = _ewma_computation(ohlc=ts, period=period, column=column)
+        triple_ema = 3 * ewma
+        ema_ema_ema = ewma.ewm(ignore_na=False, span=period).mean().ewm(ignore_na=False, span=period).mean()
+        tema = triple_ema - 3 * ewma.ewm(ignore_na=False, min_periods=period - 1, span=period).mean() + ema_ema_ema
         yield pd.Series(tema, name='{} day TEMA Ticker: {}'.format(period, ticker))
 
 
@@ -300,7 +303,7 @@ def zero_lag_ema(universe_dict, period=30, column='Adj Close'):
     """
     lag = (period - 1) / 2
     for ticker, ts in universe_dict.items():
-        yield pd.Series((ts[column] + (ts[column].diff(lag))), name='{} days ZLEMA Ticker: {}'.format(period, ticker))
+        yield pd.Series((ts[column] + (ts[column].diff(lag))), name='{} days Zero Lag EMA Ticker: {}'.format(period, ticker))
 
 
 def weighted_moving_average(universe_dict, period=30, column='Adj Close'):
@@ -436,7 +439,7 @@ def relative_strength_indicator(universe_dict, period=14, column='Adj Close'):
     """
     for ticker, ts in universe_dict.items():
         print(ts)
-        yield pd.Series(_relative_strength_indicator_computation(ts=ts, period=period, column=column),
+        yield pd.Series(_rsi_computation(ts=ts, period=period, column=column),
                         name='{} day RSI Ticker: {}'.format(period, ticker))
 
 
@@ -458,7 +461,7 @@ def inverse_fisher_transform(universe_dict, rsi_period=5, wma_period=9, column='
     """
     import numpy as np
     for ticker, ts in universe_dict.items():
-        v1 = pd.Series(.1 * (_relative_strength_indicator_computation(ts=ts, period=rsi_period, column=column) - 50),
+        v1 = pd.Series(.1 * (_rsi_computation(ts=ts, period=rsi_period, column=column) - 50),
                        name='v1')
         v2 = pd.Series(_weighted_moving_average_computation(ts=v1, period=wma_period, column=column), index=v1.index)
         yield pd.Series((np.exp(2 * v2) - 1) / (np.exp(2 * v2) + 1),
@@ -499,7 +502,7 @@ def true_range(universe_dict, period=14):
 
 def average_true_range(universe_dict, period=14):
     """
-    :param universe_dict: dict
+    :param universe_dict dict
     :param period: int
     :return: generator
 
@@ -548,22 +551,28 @@ def _get_stock_beta(universe_dict, ticker):
     beta = covar / variance
     correlation = stock_pct_change.corr(market_pct_change)
     print(correlation)
-
-    # stock_end_price = stock_end_price.iloc[0]['Adj Close']
-    # print stock_end_price
     market_return = ((market_end_price - market_start_price) / market_start_price) * 100
     stock_return = ((stock_end_price - stock_start_price) / stock_start_price) * 100
     risk_free_rate = web.DataReader('TB1YR', 'fred', start=default_start, end=default_end).tail(1).iloc[0]['TB1YR']
     market_adj_return = market_return - risk_free_rate
     stock_adj_return = stock_return - risk_free_rate
-    # beta = stock_adj_return / market_adj_return
     print(beta)
-    # print risk_free_rate
-    # print market_return
-    # print stock_return
 
 
 def directional_movement_indicator(universe_dict, period=14):
+    """
+    :param universe_dict: dict
+    :param period: int
+    :return: Series generator
+
+    DMI also known as Average Directional Movement Index (ADX)
+
+    this is a lagging indicator that only indicates a trend's strength rather than trend direction
+    so it is best coupled with another movement indicator to determine the strength of a trend
+
+    a strategy created by Alexander Elder states a buy signal is triggered when the DMI peaks and starts to decline
+    when the positive dmi is above the negative dmi. a sell signal is triggered when dmi stops falling and goes flat
+    """
     for ticker, ts in universe_dict.items():
         temp_df = pd.DataFrame()
         temp_df['up_move'] = ts['High'].diff()
@@ -583,14 +592,9 @@ def directional_movement_indicator(universe_dict, period=14):
                 negative_dm.append(0)
         temp_df['positive_dm'] = positive_dm
         temp_df['negative_dm'] = negative_dm
-        diplus = pd.Series(
-            100 * (temp_df['positive_dm'] / _average_true_range_computation(ts=ts, period=period * 6)).ewm(span=period,
-                                                                                                           min_periods=period - 1).mean(),
-            name='positive_dmi')
-        diminus = pd.Series(
-            100 * (temp_df['negative_dm'] / _average_true_range_computation(ts=ts, period=period * 6)).ewm(span=period,
-                                                                                                           min_periods=period - 1).mean(),
-            name='negative_dmi')
+        atr = _average_true_range_computation(ts=ts, period=period * 6)
+        diplus = pd.Series(100 * (temp_df['positive_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(), name='positive_dmi')
+        diminus = pd.Series(100 * (temp_df['negative_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(), name='negative_dmi')
         yield pd.concat([diplus, diminus])
 
 
@@ -625,6 +629,13 @@ def _average_true_range_computation(ts, period):
 
 
 def _directional_movement_indicator(ts, period):
+    """
+    :param ts: Series
+    :param period: int
+    :return: Series
+
+    DMI also known as average directional index
+    """
     temp_df = pd.DataFrame()
     temp_df['up_move'] = ts['High'].diff()
     temp_df['down_move'] = ts['Low'].diff()
@@ -643,17 +654,22 @@ def _directional_movement_indicator(ts, period):
             negative_dm.append(0)
     temp_df['positive_dm'] = positive_dm
     temp_df['negative_dm'] = negative_dm
-    diplus = pd.Series(
-        100 * (temp_df['positive_dm'] / _average_true_range_computation(ts=ts, period=period * 6)).ewm(span=period,
-                                                                                                       min_periods=period - 1).mean(),
-        name='positive_dmi')
-    diminus = pd.Series(
-        100 * (temp_df['negative_dm'] / _average_true_range_computation(ts=ts, period=period * 6)).ewm(span=period,
-                                                                                                       min_periods=period - 1).mean(),
-        name='negative_dmi')
+    atr = _average_true_range_computation(ts=ts, period=period * 6)
+    diplus = pd.Series(100 * (temp_df['positive_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(), name='positive_dmi')
+    # diplus = pd.Series( 100 * (temp_df['positive_dm'] / _average_true_range_computation(ts=ts, period=period * 6)).ewm(span=period, min_periods=period - 1).mean(), name='positive_dmi')
+    diminus = pd.Series(100 * (temp_df['negative_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(), name='negative_dmi')
+    # diminus = pd.Series( 100 * (temp_df['negative_dm'] / _average_true_range_computation(ts=ts, period=period * 6)).ewm(span=period, min_periods=period - 1).mean(), name='negative_dmi')
     yield pd.concat([diplus, diminus])
 
-def _relative_strength_indicator_computation(ts, period, column):
+def _rsi_computation(ts, period, column):
+    """
+    :param ts: Series
+    :param period: int
+    :param column: string
+    :return: Series
+
+    relative strength indicator
+    """
     gain = [0]
     loss = [0]
     for row, shifted_row in zip(iter(ts[column].items()), iter(ts[column].shift(-1).items())):
