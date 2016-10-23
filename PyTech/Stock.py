@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import pandas_datareader.data as web
 import datetime
 
@@ -8,14 +9,20 @@ class Stock:
         self.ticker = ticker
         if type(start) != datetime.datetime:
             raise TypeError('start must be a datetime.datetime')
+        else:
+            self.start = start
         if type(end) != datetime.datetime:
             raise TypeError('end must be a datetime.datetime')
+        else:
+            self.end = end
 
         try:
             self.series = web.DataReader(ticker, data_source='yahoo', start=start, end=end)
         except:
             print('Asset ' + str(ticker) + ' not found!')
         self.sma = self.simple_moving_average()
+        self.beta = self.calculate_beta()
+        self.buy_date = self.start
 
     def __getattr__(self, item):
         try:
@@ -28,11 +35,7 @@ class Stock:
 
     def simple_moving_average(self, period=50, column='Adj Close'):
         return pd.Series(self.series[column].rolling(center=False, window=period, min_periods=period - 1).mean(),
-                         name='{} day SMA Ticker: {}'.format(period, self.ticker))
-
-    @classmethod
-    def _sma_computation(cls, ts, period=50, column='Adj Close'):
-        return pd.Series(ts[column].rolling(center=False, window=period, min_periods=period - 1).mean())
+                         name='{} day SMA Ticker: {}'.format(period, self.ticker)).dropna()
 
     def simple_moving_median(self, period=50, column='Adj Close'):
         """
@@ -58,16 +61,6 @@ class Stock:
         return pd.Series(self.series[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean(),
                          name='{} day EWMA Ticker: {}'.format(period, self.ticker))
 
-    def _ewma_computation(self, period=50, column='Adj Close'):
-        """
-        :param ohlc: Timeseries
-        :param period: int, number of days
-        :param column: string
-        :return: Timeseries
-
-        this method is used for computations in other exponential moving averages
-        """
-        return pd.Series(self.series[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
     def double_ewma(self, period=50, column='Adj Close'):
         """
@@ -79,7 +72,7 @@ class Stock:
 
         double exponential moving average
         """
-        ewma = self._ewma_computation(period=period, column=column)
+        ewma = self._ewma_computation(ts=self.series, period=period, column=column)
         ewma_mean = ewma.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
         dema = 2 * ewma - ewma_mean
         yield pd.Series(dema, name='{} day DEMA Ticker: {}'.format(period, self.ticker))
@@ -127,7 +120,7 @@ class Stock:
 
         oscillates around 0. positive numbers indicate a bullish indicator
         """
-        emwa_one = self._ewma_computation(period=period, column=column)
+        emwa_one = self._ewma_computation(ts=self.series,period=period, column=column)
         emwa_two = emwa_one.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
         emwa_three = emwa_two.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
         trix = emwa_three.pct_change(periods=1)
@@ -235,7 +228,7 @@ class Stock:
         wma_delta = wma_one - wma_two
         sqrt_period = int(math.sqrt(period))
         wma = self._weighted_moving_average_computation(ts=wma_delta, period=sqrt_period, column=column)
-        wma_delta['_WMA'] = pd.Series(wma, index=ts.index)
+        wma_delta['_WMA'] = pd.Series(wma, index=self.series.index)
         yield pd.Series(wma_delta['_WMA'], name='{} day HMA Ticker: {}'.format(period, self.ticker))
 
     def volume_weighted_moving_average(universe_dict, period=30, column='Adj Close'):
@@ -283,7 +276,7 @@ class Stock:
             name='EMA_slow')
         macd_series = pd.Series(ema_fast - ema_slow, name='MACD')
         macd_signal_series = pd.Series(macd_series.ewm(ignore_na=False, span=signal).mean(), name='MACD_Signal')
-        yield pd.concat([macd_signal_series, macd_series], axis=1)
+        return pd.concat([macd_signal_series, macd_series], axis=1)
 
     def market_momentum(self, period=10, column='Adj Close'):
         """
@@ -296,7 +289,7 @@ class Stock:
 
         positive or negative number plotted on a zero line
         """
-        return pd.Series(ts[column].diff(period), name='{} day MOM Ticker: {}'.format(period, self.ticker))
+        return pd.Series(self.series[column].diff(period), name='{} day MOM Ticker: {}'.format(period, self.ticker))
 
     def rate_of_change(self, period=1, column='Adj Close'):
         """
@@ -307,7 +300,7 @@ class Stock:
 
         simply calculates the rate of change between two periods
         """
-        return pd.Series((self.series[column].diff(period) / ts[column][-period]) * 100,
+        return pd.Series((self.series[column].diff(period) / self.series[column][-period]) * 100,
                          name='{} day Rate of Change Ticker: {}'.format(period, self.ticker))
 
     def relative_strength_indicator(self, period=14, column='Adj Close'):
@@ -343,7 +336,7 @@ class Stock:
                        name='v1')
         v2 = pd.Series(self._weighted_moving_average_computation(ts=v1, period=wma_period, column=column),
                        index=v1.index)
-        yield pd.Series((np.exp(2 * v2) - 1) / (np.exp(2 * v2) + 1),
+        return pd.Series((np.exp(2 * v2) - 1) / (np.exp(2 * v2) + 1),
                         name='{} day IFT_RSI Ticker: {}'.format(rsi_period, self.ticker))
 
     def true_range(self, period=14):
@@ -403,7 +396,7 @@ class Stock:
         b_bandwidth = pd.Series((upper_bband - lower_bband) / middle_band, name='b_bandwidth')
         return pd.concat([upper_bband, middle_band, lower_bband, b_bandwidth, percent_b], axis=1)
 
-    def _get_stock_beta(self, ticker):
+    def calculate_beta(self):
         market_df = web.DataReader('SPY', 'yahoo', start=self.start, end=self.end)
         stock_df = self.series
         market_start_price = market_df[['Adj Close']].head(1).iloc[0]['Adj Close']
@@ -412,21 +405,16 @@ class Stock:
         stock_end_price = stock_df[['Adj Close']].tail(1).iloc[0]['Adj Close']
         market_pct_change = pd.Series(market_df['Adj Close'].pct_change(periods=1))
         stock_pct_change = pd.Series(stock_df['Adj Close'].pct_change(periods=1))
-        covar = market_pct_change.cov(stock_pct_change)
-        print(covar)
         covar = stock_pct_change.cov(market_pct_change)
-        print(covar)
         variance = market_pct_change.var()
-        print(variance)
         beta = covar / variance
         correlation = stock_pct_change.corr(market_pct_change)
-        print(correlation)
         market_return = ((market_end_price - market_start_price) / market_start_price) * 100
         stock_return = ((stock_end_price - stock_start_price) / stock_start_price) * 100
         risk_free_rate = web.DataReader('TB1YR', 'fred', start=self.start, end=self.end).tail(1).iloc[0]['TB1YR']
         market_adj_return = market_return - risk_free_rate
         stock_adj_return = stock_return - risk_free_rate
-        print(beta)
+        return beta
 
     def directional_movement_indicator(self, period=14):
         """
@@ -467,37 +455,6 @@ class Stock:
                             name='negative_dmi')
         return pd.concat([diplus, diminus])
 
-    @classmethod
-    def _true_range_computation(cls, ts, period):
-        """
-        :param ts: Timeseries
-        :param period: int
-        :return: Timeseries
-
-        this method is used internally to compute the average true range of a stock
-
-        the purpose of having it as separate function is so that external functions can return generators
-        """
-        range_one = pd.Series(ts['High'].tail(period) - ts['Low'].tail(period), name='high_low')
-        range_two = pd.Series(ts['High'].tail(period) - ts['Close'].shift(-1).abs().tail(period),
-                              name='high_prev_close')
-        range_three = pd.Series(ts['Close'].shift(-1).tail(period) - ts['Low'].abs().tail(period),
-                                name='prev_close_low')
-        tr = pd.concat([range_one, range_two, range_three], axis=1)
-        true_range_list = []
-        for row in tr.itertuples():
-            # TODO: fix this so it doesn't throw an exception for weekends
-            try:
-                true_range_list.append(max(row.high_low, row.high_prev_close, row.prev_close_low))
-            except TypeError:
-                continue
-        tr['TA'] = true_range_list
-        return pd.Series(tr['TA'])
-
-    @classmethod
-    def _average_true_range_computation(cls, ts, period):
-        tr = cls._true_range_computation(ts, period=period * 2)
-        return pd.Series(tr.rolling(center=False, window=period, min_periods=period - 1).mean())
 
     def _directional_movement_indicator(cls, ts, period):
         """
@@ -530,7 +487,76 @@ class Stock:
                            name='positive_dmi')
         diminus = pd.Series(100 * (temp_df['negative_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(),
                             name='negative_dmi')
-        yield pd.concat([diplus, diminus])
+        return pd.concat([diplus, diminus])
+
+
+    def sma_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
+        """
+        :param slow: int, how many days for the short term moving average
+        :param fast:  int, how many days for the long term moving average
+        :param column: str
+        :return:
+        """
+        slow_ts = self.simple_moving_average(period=slow, column=column)
+        fast_ts = self.simple_moving_average(period=fast, column=column)
+        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.series.index)
+        # if 50 SMA > 200 SMA set action to 1 which means Buy
+        # TODO: figure out a better way to mark buy vs sell
+        # also need to make sure this method works right...
+        self.series['Action'] = np.where(crossover_ts > 0, 1, 0)
+
+
+    def simple_median_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
+        slow_ts = self.simple_moving_median(period=slow, column=column)
+        fast_ts = self.simple_moving_median(period=fast, column=column)
+        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.series.index)
+        crossover_ts['Action'] = np.where(crossover_ts > 0, 1, 0)
+        print(crossover_ts)
+        # self.series['Action'] = np.where(crossover_ts > 0, 1, 0)
+
+
+
+
+
+
+
+
+
+    @classmethod
+    def _true_range_computation(cls, ts, period):
+        """
+        :param ts: Timeseries
+        :param period: int
+        :return: Timeseries
+
+        this method is used internally to compute the average true range of a stock
+
+        the purpose of having it as separate function is so that external functions can return generators
+        """
+        range_one = pd.Series(ts['High'].tail(period) - ts['Low'].tail(period), name='high_low')
+        range_two = pd.Series(ts['High'].tail(period) - ts['Close'].shift(-1).abs().tail(period),
+                              name='high_prev_close')
+        range_three = pd.Series(ts['Close'].shift(-1).tail(period) - ts['Low'].abs().tail(period),
+                                name='prev_close_low')
+        tr = pd.concat([range_one, range_two, range_three], axis=1)
+        true_range_list = []
+        for row in tr.itertuples():
+            # TODO: fix this so it doesn't throw an exception for weekends
+            try:
+                true_range_list.append(max(row.high_low, row.high_prev_close, row.prev_close_low))
+            except TypeError:
+                continue
+        tr['TA'] = true_range_list
+        return pd.Series(tr['TA'])
+
+    @classmethod
+    def _sma_computation(cls, ts, period=50, column='Adj Close'):
+        return pd.Series(ts[column].rolling(center=False, window=period, min_periods=period - 1).mean())
+
+    @classmethod
+    def _average_true_range_computation(cls, ts, period):
+        tr = cls._true_range_computation(ts, period=period * 2)
+        return pd.Series(tr.rolling(center=False, window=period, min_periods=period - 1).mean())
 
     @classmethod
     def _rsi_computation(cls, ts, period, column):
@@ -609,3 +635,16 @@ class Stock:
         for price, i in zip(chunk.iloc[::-1].tolist(), list(range(period + 1))[1:]):
             ma.append(price * (i / float(denominator)))
         return sum(ma)
+
+
+    @classmethod
+    def _ewma_computation(cls, ts, period=50, column='Adj Close'):
+        """
+        :param ohlc: Timeseries
+        :param period: int, number of days
+        :param column: string
+        :return: Timeseries
+
+        this method is used for computations in other exponential moving averages
+        """
+        return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
