@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import pandas_datareader.data as web
 import datetime
 
@@ -490,15 +491,34 @@ class Stock:
 
 
     def sma_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
-        import numpy as np
-        slow_ts = self.simple_moving_average(period=slow, column=column).dropna()
-        fast_ts = self.simple_moving_average(period=fast, column=column).dropna()
-        temp = pd.concat([slow_ts, fast_ts], axis=1).dropna()
-        print(slow_ts.head())
-        print(fast_ts.head())
-        crossover_ts = fast_ts - slow_ts
-        self.series['Action'] = np.where(crossover_ts.iloc[1] > 0, 1, 0)
-        print(self)
+        """
+        :param slow: int, how many days for the short term moving average
+        :param fast:  int, how many days for the long term moving average
+        :param column: str
+        :return:
+        """
+        slow_ts = self.simple_moving_average(period=slow, column=column)
+        fast_ts = self.simple_moving_average(period=fast, column=column)
+        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.series.index)
+        # if 50 SMA > 200 SMA set action to 1 which means Buy
+        # TODO: figure out a better way to mark buy vs sell
+        # also need to make sure this method works right...
+        self.series['Action'] = np.where(crossover_ts > 0, 1, 0)
+
+
+    def simple_median_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
+        slow_ts = self.simple_moving_median(period=slow, column=column)
+        fast_ts = self.simple_moving_median(period=fast, column=column)
+        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.series.index)
+        crossover_ts['Action'] = np.where(crossover_ts > 0, 1, 0)
+        print(crossover_ts)
+        # self.series['Action'] = np.where(crossover_ts > 0, 1, 0)
+
+
+
+
+
+
 
 
 

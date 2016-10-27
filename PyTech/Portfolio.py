@@ -15,7 +15,7 @@ class Portfolio:
         if start is None:
             # default to 1 year
             # self.start = datetime.datetime.today() - datetime.timedelta(days=365)
-            self.start = datetime.datetime.today() - datetime.timedelta(days=765)
+            self.start = datetime.datetime.today() - datetime.timedelta(days=365)
         elif type(start) != datetime.datetime:
             raise TypeError('start must be a datetime.datetime')
         else:
@@ -50,10 +50,11 @@ class Portfolio:
 if __name__ == "__main__":
     portfolio = Portfolio(tickers=['AAPL', 'SPY', 'SKX'])
     for i in portfolio.asset_dict.values():
-        print(i.sma_crossover_signals())
-        print(i.sma)
-        print(i.beta)
-    for i in portfolio.sma():
-        print(i.tail())
+        i.simple_median_crossover_signals()
+        # print(i.sma_crossover_signals())
+        # print(i.sma)
+        # print(i.beta)
+    # for i in portfolio.sma():
+    #     print(i.tail())
 
         # def simple_moving_average(self, period, column):
