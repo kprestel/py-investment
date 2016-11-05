@@ -3,6 +3,7 @@ import pandas_datareader.data as web
 import datetime
 
 from PyTech.Stock import Stock
+from xbrl import XBRLParser, GAAP, GAAPSerializer
 from PyTech import analysis
 
 
@@ -48,9 +49,34 @@ class Portfolio:
 
 
 if __name__ == "__main__":
-    portfolio = Portfolio(tickers=['AAPL', 'SPY', 'SKX'])
-    for i in portfolio.asset_dict.values():
-        i.simple_median_crossover_signals()
+    import requests
+    import xml.etree.ElementTree as et
+    from io import BytesIO, StringIO
+
+    head = {'Content-Type': 'application/xml'}
+    r = requests.get('https://www.sec.gov/Archives/edgar/data/320193/000162828016020309/aapl-20160924.xml', headers=head)
+    r.encoding = 'XML'
+    temp = BytesIO(r.content)
+    # temp = StringIO(r.text)
+    # temp = open(r.content)
+    tree = et.parse(temp)
+    # tree = et.parse(r.content)
+    root = tree.getroot()
+    print(root)
+
+    # with open()
+    x = XBRLParser()
+    # y = x.parse(file_handle='https://www.sec.gov/Archives/edgar/data/320193/000162828016020309/aapl-20160924.xml')
+    with open(temp, 'rb+') as f:
+        y = x.parse(file_handle=f)
+    # y = x.parse(file_handle=temp)
+    gaap = x.parse(y, doc_date='20160924', context='current', ignore_errors=0)
+    s = GAAPSerializer()
+    rs = s.dump(gaap)
+    print(rs.data)
+    # portfolio = Portfolio(tickers=['AAPL', 'SPY', 'SKX'])
+    # for i in portfolio.asset_dict.values():
+    #     i.simple_median_crossover_signals()
         # print(i.sma_crossover_signals())
         # print(i.sma)
         # print(i.beta)
