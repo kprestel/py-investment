@@ -1,6 +1,5 @@
 from __future__ import division
 from builtins import object
-from past.utils import old_div
 import logging
 
 from scrapy.exceptions import NotConfigured
@@ -75,7 +74,7 @@ class PassiveThrottle(object):
             slot.delay = new_delay
             self.stats.inc_value('delay_count')
         elif response.status == 200:
-            new_delay = max(old_div(slot.delay, 2), self.mindelay)
+            new_delay = max((slot.delay / 2), self.mindelay)
             if new_delay < 0.01:
                 new_delay = 0
             slot.delay = new_delay

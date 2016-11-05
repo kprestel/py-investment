@@ -1,12 +1,12 @@
-from future import standard_library
-standard_library.install_aliases()
+# from future import standard_library
+# standard_library.install_aliases()
 from builtins import next
 import io
 import re
 
 from scrapy.spider import Spider
 
-from pystock_crawler.items import SymbolItem
+from crawler.items import SymbolItem
 
 
 RE_SYMBOL = re.compile(r'^[A-Z]+$')

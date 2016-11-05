@@ -9,7 +9,7 @@ from scrapy.contrib.loader.processor import Compose, MapCompose, TakeFirst
 from scrapy.utils.misc import arg_to_iter
 from scrapy.utils.python import flatten
 
-from pystock_crawler.items import ReportItem
+from crawler.items import ReportItem
 
 
 DATE_FORMAT = '%Y-%m-%d'

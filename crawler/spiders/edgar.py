@@ -4,8 +4,8 @@ from builtins import object
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
-from pystock_crawler import utils
-from pystock_crawler.loaders import ReportItemLoader
+from crawler import utils
+from crawler.loaders import ReportItemLoader
 
 
 class URLGenerator(object):
