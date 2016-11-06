@@ -75,7 +75,6 @@ class EdgarSpider(CrawlSpider):
             if doc_type in ('10-Q', '10-K'):
                 print(item)
                 return item
-
         return None
 
 # from scrapy.crawler import CrawlerProcess
