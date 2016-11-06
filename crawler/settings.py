@@ -8,7 +8,7 @@
 #     http://doc.scrapy.org/en/latest/topics/settings.html
 #
 
-BOT_NAME = 'pystock-crawler'
+BOT_NAME = 'pytech_crawler'
 
 EXPORT_FIELDS = (
     # Price columns
@@ -21,21 +21,21 @@ EXPORT_FIELDS = (
 )
 
 FEED_EXPORTERS = {
-    'csv': 'pystock_crawler.exporters.CsvItemExporter2',
-    'symbollist': 'pystock_crawler.exporters.SymbolListExporter'
+    'csv': 'crawler.exporters.CsvItemExporter2',
+    'symbollist': 'crawler.exporters.SymbolListExporter'
 }
 
 HTTPCACHE_ENABLED = True
 
-HTTPCACHE_POLICY = 'scrapy.contrib.httpcache.RFC2616Policy'
+HTTPCACHE_POLICY = 'scrapy.extensions.httpcache.RFC2616Policy'
 
-HTTPCACHE_STORAGE = 'scrapy.contrib.httpcache.LeveldbCacheStorage'
+HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.LeveldbCacheStorage'
 
-LOG_LEVEL = 'INFO'
+LOG_LEVEL = 'DEBUG'
 
-NEWSPIDER_MODULE = 'pystock_crawler.spiders'
+NEWSPIDER_MODULE = 'crawler.spiders'
 
-SPIDER_MODULES = ['pystock_crawler.spiders']
+SPIDER_MODULES = ['crawler.spiders']
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'pystock-crawler (+http://www.yourdomain.com)'
@@ -49,8 +49,8 @@ COOKIES_ENABLED = False
 RETRY_TIMES = 4
 
 EXTENSIONS = {
-    'scrapy.contrib.throttle.AutoThrottle': None,
-    'pystock_crawler.throttle.PassiveThrottle': 0
+    'scrapy.throttle.AutoThrottle': None,
+    'crawler.throttle.PassiveThrottle': 0
 }
 
 PASSIVETHROTTLE_ENABLED = True

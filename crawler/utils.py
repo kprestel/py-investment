@@ -11,7 +11,7 @@ def check_date_arg(value, arg_name=None):
                 raise ValueError
             datetime.strptime(value, '%Y%m%d')
         except ValueError:
-            raise ValueError("Option '%s' must be in YYYYMMDD format, input is '%s'" % (arg_name, value))
+            raise ValueError("Option '{}' must be in YYYYMMDD format, input is '{}'".format(arg_name, value))
 
 
 def parse_limit_arg(value):
@@ -22,7 +22,7 @@ def parse_limit_arg(value):
                 raise ValueError
             return int(tokens[0]), int(tokens[1])
         except ValueError:
-            raise ValueError("Option 'limit' must be in START,COUNT format, input is '%s'" % value)
+            raise ValueError("Option 'limit' must be in START,COUNT format, input is '{}'".format(value))
     return 0, None
 
 
