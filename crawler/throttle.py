@@ -52,13 +52,12 @@ class PassiveThrottle(object):
         if slot is None:
             return
 
-        olddelay = slot.delay
+        old_delay = slot.delay
         self._adjust_delay(slot, response)
         if self.debug:
-            diff = slot.delay - olddelay
+            diff = slot.delay - old_delay
             conc = len(slot.transferring)
-            msg = "slot: %s | conc:%2d | delay:%5d ms (%+d)" % \
-                  (key, conc, slot.delay * 1000, diff * 1000)
+            msg = "slot: {} | conc: {} | delay: {} ms (%+d)".format((key, conc, slot.delay * 1000, diff * 1000))
             spider.log(msg, level=logging.INFO)
 
     def _get_slot(self, request, spider):

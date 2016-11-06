@@ -1,9 +1,10 @@
 import pandas as pd
 import pandas_datareader.data as web
 import datetime
+from crawler.spiders.edgar import EdgarSpider, URLGenerator
 
-from PyTech.Stock import Stock
-from PyTech import analysis
+from pytech.stock import Stock
+from pytech import analysis
 
 
 class Portfolio:
@@ -48,7 +49,23 @@ class Portfolio:
 
 
 if __name__ == "__main__":
-    pass
+    from scrapy.crawler import CrawlerProcess
+    from scrapy.utils.project import get_project_settings
+    # process = CrawlerProcess({'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)'})
+    process = CrawlerProcess(get_project_settings())
+    # spider = EdgarSpider(symbols='AAPL', startdate='20160101', enddate='20161104')
+    dict = {'symbols': 'AAPL', 'startdate':'20160101', 'enddate': '20161104'}
+    process.crawl(EdgarSpider, **dict)
+    process.start()
+    # spider._follow_links = True
+    # print(spider.start_urls)
+    # for x in spider.start_urls:
+    #     print(x)
+    # item = spider.start_requests()
+    # for i in item:
+
+        # print(test)
+    # item = spider.parse_10qk()
     # portfolio = Portfolio(tickers=['AAPL', 'SPY', 'SKX'])
     # for i in portfolio.asset_dict.values():
     #     i.simple_median_crossover_signals()

@@ -3,13 +3,15 @@ from builtins import object
 import re
 
 from datetime import datetime, timedelta
-from scrapy import log
-from scrapy.contrib.loader import ItemLoader
-from scrapy.contrib.loader.processor import Compose, MapCompose, TakeFirst
+# from scrapy import log
+import logging
+from scrapy.loader import ItemLoader
+from scrapy.loader.processors import Compose, MapCompose, TakeFirst
 from scrapy.utils.misc import arg_to_iter
 from scrapy.utils.python import flatten
 
 from crawler.items import ReportItem
+import functools
 
 
 DATE_FORMAT = '%Y-%m-%d'
@@ -23,12 +25,13 @@ THRESHOLD_TO_CLEAN = 20000000
 # Used to get rid of "<tag>LONG STRING...</tag>"
 RE_XML_GARBAGE = re.compile(r'>([^<]{100,})<')
 
+logger = logging.getLogger(__name__)
+
 
 class IntermediateValue(object):
     '''
     Intermediate data that serves as output of input processors, i.e., input
     of output processors. "Intermediate" is shorten as "imd" in later naming.
-
     '''
     def __init__(self, local_name, value, text, context, node=None, start_date=None,
                  end_date=None, instant=None):
@@ -52,7 +55,7 @@ class IntermediateValue(object):
         context_id = None
         if self.context:
             context_id = self.context.xpath('@id')[0].extract()
-        return '(%s, %s, %s)' % (self.local_name, self.value, context_id)
+        return '({}, {}, {})'.format(self.local_name, self.value, context_id)
 
     def is_member(self):
         return is_member(self.context)
@@ -91,7 +94,7 @@ class MatchEndDate(object):
                 url = loader_context['response'].url
             except KeyError:
                 url = None
-            log.msg(u'Cannot find context: %s in %s' % (context_id, url), log.WARNING)
+            logger.msg(u'Cannot find context: {} in {}'.format(context_id, url), logger.WARNING)
             return None
 
         date = instant = start_date = end_date = None
@@ -268,7 +271,7 @@ def imd_get_equity(imd_values):
 def imd_filter_member(imd_values):
     if imd_values:
         with_memberness = [(v, memberness(v.context)) for v in imd_values]
-        with_memberness = sorted(with_memberness, cmp=lambda a, b: a[1] - b[1])
+        with_memberness = sorted(with_memberness, key=functools.cmp_to_key(lambda a, b: a[1] - b[1]))
 
         m0 = with_memberness[0][1]
         non_members = []

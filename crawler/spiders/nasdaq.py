@@ -4,7 +4,7 @@ from builtins import next
 import io
 import re
 
-from scrapy.spider import Spider
+from scrapy.spiders import Spider
 
 from crawler.items import SymbolItem
 
