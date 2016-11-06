@@ -75,6 +75,7 @@ class EdgarSpider(CrawlSpider):
         if 'doc_type' in item:
             doc_type = item['doc_type']
             if doc_type in ('10-Q', '10-K'):
+                print(item)
                 return item
         return None
 
