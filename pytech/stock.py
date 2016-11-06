@@ -61,7 +61,6 @@ class Stock:
         return pd.Series(self.series[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean(),
                          name='{} day EWMA Ticker: {}'.format(period, self.ticker))
 
-
     def double_ewma(self, period=50, column='Adj Close'):
         """
 
@@ -120,7 +119,7 @@ class Stock:
 
         oscillates around 0. positive numbers indicate a bullish indicator
         """
-        emwa_one = self._ewma_computation(ts=self.series,period=period, column=column)
+        emwa_one = self._ewma_computation(ts=self.series, period=period, column=column)
         emwa_two = emwa_one.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
         emwa_three = emwa_two.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
         trix = emwa_three.pct_change(periods=1)
@@ -337,7 +336,7 @@ class Stock:
         v2 = pd.Series(self._weighted_moving_average_computation(ts=v1, period=wma_period, column=column),
                        index=v1.index)
         return pd.Series((np.exp(2 * v2) - 1) / (np.exp(2 * v2) + 1),
-                        name='{} day IFT_RSI Ticker: {}'.format(rsi_period, self.ticker))
+                         name='{} day IFT_RSI Ticker: {}'.format(rsi_period, self.ticker))
 
     def true_range(self, period=14):
         """
@@ -455,7 +454,6 @@ class Stock:
                             name='negative_dmi')
         return pd.concat([diplus, diminus])
 
-
     def _directional_movement_indicator(cls, ts, period):
         """
         :param ts: Series
@@ -489,7 +487,6 @@ class Stock:
                             name='negative_dmi')
         return pd.concat([diplus, diminus])
 
-
     def sma_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
         """
         :param slow: int, how many days for the short term moving average
@@ -505,22 +502,12 @@ class Stock:
         # also need to make sure this method works right...
         self.series['Action'] = np.where(crossover_ts > 0, 1, 0)
 
-
     def simple_median_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
         slow_ts = self.simple_moving_median(period=slow, column=column)
         fast_ts = self.simple_moving_median(period=fast, column=column)
         crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.series.index)
         crossover_ts['Action'] = np.where(crossover_ts > 0, 1, 0)
         print(crossover_ts)
-        # self.series['Action'] = np.where(crossover_ts > 0, 1, 0)
-
-
-
-
-
-
-
-
 
     @classmethod
     def _true_range_computation(cls, ts, period):
@@ -635,7 +622,6 @@ class Stock:
         for price, i in zip(chunk.iloc[::-1].tolist(), list(range(period + 1))[1:]):
             ma.append(price * (i / float(denominator)))
         return sum(ma)
-
 
     @classmethod
     def _ewma_computation(cls, ts, period=50, column='Adj Close'):
