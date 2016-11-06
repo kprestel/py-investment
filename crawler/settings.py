@@ -57,3 +57,9 @@ PASSIVETHROTTLE_ENABLED = True
 #PASSIVETHROTTLE_DEBUG = True
 
 DEPTH_STATS_VERBOSE = True
+
+ITEM_PIPELINES = {
+    'crawler.item_pipeline.JsonItemPipeline': 800
+}
+
+# BASE_OUTPUT_FILE_PATH = ''

@@ -21,6 +21,8 @@ __pycache__/
 # C extensions
 *.so
 .idea/*
+financials/*
+.idea/dictionaries/*
 
 # Distribution / packaging
 .Python
@@ -104,3 +106,8 @@ ENV/
 # Rope project settings
 .ropeproject
 
+financials/
+pytech/FY_20160924_10K_AAPL.json
+pytech/Q1_20151226_10Q_AAPL.json
+pytech/Q2_20160326_10Q_AAPL.json
+pytech/Q3_20160625_10Q_AAPL.json

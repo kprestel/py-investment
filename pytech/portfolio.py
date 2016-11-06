@@ -7,7 +7,7 @@ from pytech.stock import Stock
 from pytech import analysis
 
 
-class Portfolio:
+class Portfolio(object):
     def __init__(self, tickers, start=None, end=None, bench='^GSPC', starting_cash=1000000):
         if type(tickers) != list:
             # make sure tickers is a list
@@ -15,7 +15,6 @@ class Portfolio:
         # ensure start and end are proper type
         if start is None:
             # default to 1 year
-            # self.start = datetime.datetime.today() - datetime.timedelta(days=365)
             self.start = datetime.datetime.today() - datetime.timedelta(days=365)
         elif type(start) != datetime.datetime:
             raise TypeError('start must be a datetime.datetime')
@@ -23,13 +22,14 @@ class Portfolio:
             self.start = start
 
         if end is None:
-            # default to day
+            # default to today
             self.end = datetime.datetime.today()
         elif type(end) != datetime.datetime:
             raise TypeError('end must be a datetime.datetime')
         else:
             self.end = end
         self.asset_dict = {}
+        # benchmark defaults to the S&P 500
         self.benchmark = web.DataReader(bench, 'yahoo', start=self.start, end=self.end)
         self.cash = starting_cash
 
@@ -49,30 +49,12 @@ class Portfolio:
 
 
 if __name__ == "__main__":
+    # testing stuff
     from scrapy.crawler import CrawlerProcess
     from scrapy.utils.project import get_project_settings
     # process = CrawlerProcess({'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)'})
     process = CrawlerProcess(get_project_settings())
     # spider = EdgarSpider(symbols='AAPL', startdate='20160101', enddate='20161104')
-    dict = {'symbols': 'AAPL', 'startdate':'20160101', 'enddate': '20161104'}
+    dict = {'symbols': 'AAPL', 'start_date':'20160101', 'end_date': '20161104'}
     process.crawl(EdgarSpider, **dict)
     process.start()
-    # spider._follow_links = True
-    # print(spider.start_urls)
-    # for x in spider.start_urls:
-    #     print(x)
-    # item = spider.start_requests()
-    # for i in item:
-
-        # print(test)
-    # item = spider.parse_10qk()
-    # portfolio = Portfolio(tickers=['AAPL', 'SPY', 'SKX'])
-    # for i in portfolio.asset_dict.values():
-    #     i.simple_median_crossover_signals()
-        # print(i.sma_crossover_signals())
-        # print(i.sma)
-        # print(i.beta)
-    # for i in portfolio.sma():
-    #     print(i.tail())
-
-        # def simple_moving_average(self, period, column):

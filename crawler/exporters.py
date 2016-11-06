@@ -11,6 +11,7 @@ class CsvItemExporter2(CsvItemExporter):
     http://stackoverflow.com/questions/6943778/python-scrapy-how-to-get-csvitemexporter-to-write-columns-in-a-specific-order
 
     '''
+
     def __init__(self, *args, **kwargs):
         kwargs['fields_to_export'] = settings.getlist('EXPORT_FIELDS') or None
         kwargs['encoding'] = settings.get('EXPORT_ENCODING', 'utf-8')
@@ -30,10 +31,9 @@ class CsvItemExporter2(CsvItemExporter):
 
 
 class SymbolListExporter(BaseItemExporter):
-
     def __init__(self, file, **kwargs):
         self._configure(kwargs, dont_fail=True)
         self.file = file
 
     def export_item(self, item):
-        self.file.write('%s\t%s\n' % (item['symbol'], item['name']))
+        self.file.write('{}\t{}\n'.format(item['symbol'], item['name']))

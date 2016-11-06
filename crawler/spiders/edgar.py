@@ -1,6 +1,7 @@
 import os
 from builtins import object
 
+from datetime import datetime
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
@@ -37,22 +38,23 @@ class EdgarSpider(CrawlSpider):
         super(EdgarSpider, self).__init__(**kwargs)
 
         symbols_arg = kwargs.get('symbols')
-        start_date = kwargs.get('startdate', '')
-        end_date = kwargs.get('enddate', '')
-        limit_arg = kwargs.get('limit', '')
+        start_date = kwargs.get('start_date', '')
+        end_date = kwargs.get('end_date', '')
+        # limit_arg = kwargs.get('limit', '')
+        start = int(kwargs.get('start', 0))
+        count = kwargs.get('count', None)
+        if count is not None:
+            count = int(count)
 
-        utils.check_date_arg(start_date, 'startdate')
-        utils.check_date_arg(end_date, 'enddate')
-        start, count = utils.parse_limit_arg(limit_arg)
+        self.check_date_arg(start_date, 'start_date')
+        self.check_date_arg(end_date, 'end_date')
 
         if symbols_arg:
-            if os.path.exists(symbols_arg):
-                # get symbols from a text file
-                symbols = utils.load_symbols(symbols_arg)
+            if isinstance(symbols_arg, list):
+                self.start_urls = URLGenerator(symbols_arg, start_date=start_date, end_date=end_date, start=start, count=count)
             else:
-                # inline symbols in command
-                symbols = symbols_arg.split(',')
-            self.start_urls = URLGenerator(symbols, start_date, end_date, start, count)
+                symbols = [symbols_arg]
+                self.start_urls = URLGenerator(symbols, start_date=start_date, end_date=end_date, start=start, count=count)
             for s in self.start_urls:
                 self.logger.info(s)
         else:
@@ -73,6 +75,17 @@ class EdgarSpider(CrawlSpider):
         if 'doc_type' in item:
             doc_type = item['doc_type']
             if doc_type in ('10-Q', '10-K'):
-                print(item)
                 return item
         return None
+
+
+    @classmethod
+    def check_date_arg(cls, value, arg_name=None):
+        if value:
+            try:
+                if len(value) != 8:
+                    raise ValueError
+                datetime.strptime(value, '%Y%m%d')
+            except ValueError:
+                raise ValueError("Option '{}' must be in YYYYMMDD format, input is '{}'".format(arg_name, value))
+

@@ -1,10 +1,11 @@
 import pandas as pd
+import os
 import numpy as np
 import pandas_datareader.data as web
 import datetime
 
 
-class Stock:
+class Stock(object):
     def __init__(self, ticker, start, end):
         self.ticker = ticker
         if type(start) != datetime.datetime:
@@ -23,6 +24,11 @@ class Stock:
         self.sma = self.simple_moving_average()
         self.beta = self.calculate_beta()
         self.buy_date = self.start
+        if not os.path.isdir(os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper())):
+            os.mkdir(os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper()))
+            self.base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper())
+        else:
+            self.base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper())
 
     def __getattr__(self, item):
         try:
@@ -32,6 +38,20 @@ class Stock:
 
     def __getitem__(self, key):
         return self.series
+
+
+    def get_financial_file_paths(self):
+        for root, dirs, files in os.walk(self.base_file_path):
+            for dir in dirs:
+                pass
+
+        start_year = self.start.year
+        end_year = self.end.year
+        # if start_year != end_year:
+            # years =
+        # TODO: figure out if this is even a good idea.
+        pass
+
 
     def simple_moving_average(self, period=50, column='Adj Close'):
         return pd.Series(self.series[column].rolling(center=False, window=period, min_periods=period - 1).mean(),
@@ -634,3 +654,19 @@ class Stock:
         this method is used for computations in other exponential moving averages
         """
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
+
+
+class StockFundamentals(object):
+    """
+    the idea right now is to have this hold all the attributes that will be retrieved from the JSON file scraped from
+    EDGAR. then QuarterlyStockFundamentals will inherit from this or something.  the stock class will have a list or a
+    dict or something with references to these classes.  Maybe something like
+    quarterly_fundamentals = {'Q1': QuarterlyStockFundamentals(stuff)}
+    yearly_fundamentals = {'2015': StockFundamentals(stuff)}
+
+    idk these are just my ideas.
+
+    """
+
+    def __init__(self):
+        pass
