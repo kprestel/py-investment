@@ -1,5 +1,6 @@
 import os
 from builtins import object
+import logging
 
 from datetime import datetime
 from scrapy.linkextractors import LinkExtractor
@@ -7,6 +8,8 @@ from scrapy.spiders import CrawlSpider, Rule
 
 from crawler import utils
 from crawler.loaders import ReportItemLoader
+
+logger = logging.getLogger(__name__)
 
 
 class URLGenerator(object):
@@ -56,9 +59,12 @@ class EdgarSpider(CrawlSpider):
                 symbols = [symbols_arg]
                 self.start_urls = URLGenerator(symbols, start_date=start_date, end_date=end_date, start=start, count=count)
             for s in self.start_urls:
-                self.logger.info(s)
+                logger.info('Start URL: {}'.format(s))
         else:
+            logger.warn('No start URLs created!')
             self.start_urls = []
+        logger.info('spider created!')
+
 
 
     def parse_10qk(self, response):
@@ -75,7 +81,7 @@ class EdgarSpider(CrawlSpider):
         if 'doc_type' in item:
             doc_type = item['doc_type']
             if doc_type in ('10-Q', '10-K'):
-                print(item)
+                self.logger.info('{} found, returning as item'.format(doc_type))
                 return item
         return None
 

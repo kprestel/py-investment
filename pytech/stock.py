@@ -3,7 +3,9 @@ import os
 import numpy as np
 import pandas_datareader.data as web
 import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 
 class Stock(object):
     def __init__(self, ticker, start, end):
@@ -21,6 +23,7 @@ class Stock(object):
             self.series = web.DataReader(ticker, data_source='yahoo', start=start, end=end)
         except:
             print('Asset ' + str(ticker) + ' not found!')
+
         self.sma = self.simple_moving_average()
         self.beta = self.calculate_beta()
         self.buy_date = self.start
@@ -29,6 +32,8 @@ class Stock(object):
             self.base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper())
         else:
             self.base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper())
+        logger.info('Created {} Stock object'.format(ticker))
+        logger.debug('Base file path: {}'.format(self.base_file_path))
 
     def __getattr__(self, item):
         try:
@@ -38,19 +43,6 @@ class Stock(object):
 
     def __getitem__(self, key):
         return self.series
-
-
-    def get_financial_file_paths(self):
-        for root, dirs, files in os.walk(self.base_file_path):
-            for dir in dirs:
-                pass
-
-        start_year = self.start.year
-        end_year = self.end.year
-        # if start_year != end_year:
-            # years =
-        # TODO: figure out if this is even a good idea.
-        pass
 
 
     def simple_moving_average(self, period=50, column='Adj Close'):
@@ -656,7 +648,7 @@ class Stock(object):
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
 
-class StockFundamentals(object):
+class StockWithFundamentals(Stock):
     """
     the idea right now is to have this hold all the attributes that will be retrieved from the JSON file scraped from
     EDGAR. then QuarterlyStockFundamentals will inherit from this or something.  the stock class will have a list or a
@@ -666,7 +658,77 @@ class StockFundamentals(object):
 
     idk these are just my ideas.
 
+    should there also be a StockWithTechnicals?
+
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, ticker, start, end):
+        """
+        :param ticker:
+        :param start:
+        :param end:
+
+        this is basically useless right now but that is ok!
+        """
+        super(StockWithFundamentals, self).__init__(ticker=ticker, start=start, end=end)
+
+    @classmethod
+    def create_stock_fundamentals_from_list(cls, ticker_list, start, end):
+        from scrapy.crawler import  CrawlerProcess
+        from scrapy.utils.project import get_project_settings
+        from crawler.spiders.edgar import EdgarSpider
+
+        process = CrawlerProcess(get_project_settings())
+        for ticker in ticker_list:
+            temp_dict = {}
+            temp_dict['symbols'] = ticker
+            temp_dict['start_date'] = start
+            temp_dict['end_date'] = end
+            process.crawl(EdgarSpider, **temp_dict)
+        process.start()
+        process.join()
+        # TODO: return the objects and decide if this is really the right approach
+
+
+class Fundamentals(object):
+    """
+    the purpose of the this class to hold one period's worth of fundamental data for a given stock
+    """
+
+    def __init__(self, stock, year, period_focus=None):
+        """
+        :type stock: Stock
+        :param stock:
+        :param year:
+        :param period_focus: defaults to full year. other valid input is Q1, Q2, or Q3
+        """
+        import json
+        logger.info('Getting {} fundamental data'.format(stock.ticker))
+        if period_focus is None:
+            self.file_name = 'FY_{}.json'.format(stock.ticker)
+        else:
+            self.file_name = '{}_{}.json'.format(period_focus, stock.ticker)
+        self.file_path = os.path.join(stock.base_file_path, year, self.file_name)
+        with open(self.file_path) as f:
+            data = json.load(f)
+            logger.debug('{} loaded'.format(self.file_path))
+        # was this report restated/amended
+        self.amended = data.amend
+        self.assets = data.assets
+        self.current_assets = data.cur_assets
+        self.current_liabilities = data.cur_liab
+        self.cash = data.cash
+        self.dividend = data.dividend
+        # TODO: convert to date. need to test if all dates are the same format
+        self.end_date = data.end_date
+        self.eps = data.eps_basic
+        self.eps_diluted = data.eps_diluted
+        self.equity = data.equity
+        self.net_income = data.net_income
+        self.operating_income = data.op_income
+        self.revenues = data.revenues
+        self.investment_revenues = data.investment_revenues
+        self.fin_cash_flow = data.cash_flow_fin
+        self.inv_cash_flow = data.cash_flow_inv
+        self.ops_cash_flow = data.cash_flow_op
+

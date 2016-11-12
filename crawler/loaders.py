@@ -505,7 +505,7 @@ class ReportItemLoader(XmlXPathItemLoader):
             '//*[local-name()="InterestAndDividendIncomeOperating" or local-name()="NoninterestIncome"]',
             '//*[contains(local-name(), "Revenue")]'
         ])
-        self.add_xpath('revenues', '//us-gaap:FinancialServicesRevenue')
+        self.add_xpath('investment_revenues', '//us-gaap:FinancialServicesRevenue')
 
         self.add_xpaths('net_income', [
             '//*[contains(local-name(), "NetLossIncome") and contains(local-name(), "Corporation")]',

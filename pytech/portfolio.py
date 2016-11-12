@@ -50,11 +50,28 @@ class Portfolio(object):
 
 if __name__ == "__main__":
     # testing stuff
-    from scrapy.crawler import CrawlerProcess
+    from scrapy.crawler import CrawlerProcess, Crawler
     from scrapy.utils.project import get_project_settings
+    from twisted.internet import reactor
     # process = CrawlerProcess({'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)'})
     process = CrawlerProcess(get_project_settings())
     # spider = EdgarSpider(symbols='AAPL', startdate='20160101', enddate='20161104')
     dict = {'symbols': 'AAPL', 'start_date':'20160101', 'end_date': '20161104'}
+    dict_one = {'symbols': 'F', 'start_date':'20160101', 'end_date': '20161104'}
+    dict_two = {'symbols': 'SKX', 'start_date':'20160101', 'end_date': '20161104'}
+    to_crawl = [dict, dict_one, dict_two]
+    running = []
+    # for d in to_crawl:
+    #     settings = get_project_settings()
+    #     crawler = Crawler(EdgarSpider, settings=settings)
+    #     running.append(crawler)
+        # crawler.signals.connect(spider)
+        # crawler.configure()
+        # crawler.crawl(EdgarSpider, settings, **d)
+        # crawler.start()
+    # reactor.run()
     process.crawl(EdgarSpider, **dict)
+    process.crawl(EdgarSpider, **dict_one)
+    process.crawl(EdgarSpider, **dict_two)
     process.start()
+    process.join()

@@ -29,7 +29,10 @@ HTTPCACHE_ENABLED = True
 
 HTTPCACHE_POLICY = 'scrapy.extensions.httpcache.RFC2616Policy'
 
-HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.LeveldbCacheStorage'
+# THIS IS BAD BECAUE IT CAUSES IO EXCEPTIONS
+# HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.LeveldbCacheStorage'
+
+HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.DbmCacheStorage'
 
 LOG_LEVEL = 'DEBUG'
 

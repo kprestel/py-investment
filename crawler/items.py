@@ -23,6 +23,7 @@ class ReportItem(Item):
     end_date = Field()
 
     revenues = Field()
+    investment_revenues = Field()
     op_income = Field()
     net_income = Field()
 
