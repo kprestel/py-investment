@@ -23,6 +23,7 @@ __pycache__/
 .idea/*
 financials/*
 .idea/dictionaries/*
+pytech/pytech.db
 
 # Distribution / packaging
 .Python

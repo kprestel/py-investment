@@ -1,11 +1,6 @@
 import pandas as pd
 import pandas_datareader.data as web
 import datetime
-from crawler.spiders.edgar import EdgarSpider, URLGenerator
-
-from pytech.stock import Stock
-from pytech import analysis
-
 
 class Portfolio(object):
     def __init__(self, tickers, start=None, end=None, bench='^GSPC', starting_cash=1000000):
@@ -33,8 +28,8 @@ class Portfolio(object):
         self.benchmark = web.DataReader(bench, 'yahoo', start=self.start, end=self.end)
         self.cash = starting_cash
 
-        for ticker in tickers:
-            self.asset_dict[ticker] = Stock(ticker, self.start, self.end)
+        # for ticker in tickers:
+        #     self.asset_dict[ticker] = Stock(ticker, self.start, self.end)
 
     def buy_shares(self, ticker, num_shares, buy_date):
         if ticker in self.asset_dict:
@@ -53,14 +48,25 @@ if __name__ == "__main__":
     from scrapy.crawler import CrawlerProcess, Crawler
     from scrapy.utils.project import get_project_settings
     from twisted.internet import reactor
+    from pytech import engine
+    from pytech.stock import StockWithFundamentals
+    tickers = ['AAPL', 'F', 'SKX']
+    start = '20160101'
+    end = '20161124'
+    stock_dict = StockWithFundamentals.create_stock_fundamentals_from_list(ticker_list=tickers, start=start, end=end)
+    for k, v in stock_dict.items():
+        for key, val in v.__dict__.items():
+            print('key: {}'.format(key))
+            print('val: {}'.format(val))
+    print(stock_dict)
     # process = CrawlerProcess({'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)'})
-    process = CrawlerProcess(get_project_settings())
+    # process = CrawlerProcess(get_project_settings())
     # spider = EdgarSpider(symbols='AAPL', startdate='20160101', enddate='20161104')
-    dict = {'symbols': 'AAPL', 'start_date':'20160101', 'end_date': '20161104'}
-    dict_one = {'symbols': 'F', 'start_date':'20160101', 'end_date': '20161104'}
-    dict_two = {'symbols': 'SKX', 'start_date':'20160101', 'end_date': '20161104'}
-    to_crawl = [dict, dict_one, dict_two]
-    running = []
+    # dict = {'symbols': 'AAPL', 'start_date':'20160101', 'end_date': '20161104'}
+    # dict_one = {'symbols': 'F', 'start_date':'20160101', 'end_date': '20161104'}
+    # dict_two = {'symbols': 'SKX', 'start_date':'20160101', 'end_date': '20161104'}
+    # to_crawl = [dict, dict_one, dict_two]
+    # running = []
     # for d in to_crawl:
     #     settings = get_project_settings()
     #     crawler = Crawler(EdgarSpider, settings=settings)
@@ -70,8 +76,8 @@ if __name__ == "__main__":
         # crawler.crawl(EdgarSpider, settings, **d)
         # crawler.start()
     # reactor.run()
-    process.crawl(EdgarSpider, **dict)
-    process.crawl(EdgarSpider, **dict_one)
-    process.crawl(EdgarSpider, **dict_two)
-    process.start()
-    process.join()
+    # process.crawl(EdgarSpider, **dict)
+    # process.crawl(EdgarSpider, **dict_one)
+    # process.crawl(EdgarSpider, **dict_two)
+    # process.start()
+    # process.join()

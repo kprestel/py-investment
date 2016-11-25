@@ -5,11 +5,14 @@ import pandas_datareader.data as web
 import datetime
 import logging
 import re
+from dateutil import parser
 
 from sqlalchemy.ext.declarative import as_declarative
-from sqlalchemy.ext.declarative import declarative_base, declared_attr
+from sqlalchemy.ext.declarative import declarative_base, declared_attr, ConcreteBase
 from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
+logging.basicConfig()
+logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 @as_declarative(constructor=None)
@@ -51,11 +54,13 @@ class HasStock(object):
 
 
 class Stock(Base):
+    id = Column(Integer, primary_key=True)
     ticker = Column(String)
     type = Column(String)
 
     __mapper_args__ = {
         'polymorphic_identity': 'stock',
+        # 'concrete': True
         'polymorphic_on': type
     }
     def __init__(self, ticker):
@@ -63,17 +68,23 @@ class Stock(Base):
 
 
 
-class StockWithTechnicals(HasStock, Stock):
+class StockWithTechnicals(Stock):
 
+    # id = Column(Integer, ForeignKey('stock.id'), primary_key=True)
+    # id = Column()
+    id = Column(Integer, ForeignKey('stock.id'), primary_key=True)
     start = Column(DateTime)
     end = Column(DateTime)
+    # type = Column(String)
 
     __mapper_args__ = {
         'polymorphic_identity': 'stock_with_technicals',
+        # 'concrete': True
     }
 
     def __init__(self, ticker, start, end):
-        super().__init__(ticker=ticker)
+        Stock.__init__(ticker=ticker)
+        # self.ticker = ticker
         if type(start) != datetime.datetime:
             raise TypeError('start must be a datetime.datetime')
         else:
@@ -87,6 +98,7 @@ class StockWithTechnicals(HasStock, Stock):
             self.series = web.DataReader(ticker, data_source='yahoo', start=start, end=end)
         except:
             logger.error('Could not create series for ticker: {}. Unknown error occurred.'.format(ticker))
+        # self.type = 'stock_with_technicals'
 
     def __getattr__(self, item):
         try:
@@ -701,26 +713,20 @@ class StockWithTechnicals(HasStock, Stock):
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
 
-class StockWithFundamentals(Base, HasStock, Stock):
+class StockWithFundamentals(Stock):
     """
-    the idea right now is to have this hold all the attributes that will be retrieved from the JSON file scraped from
-    EDGAR. then QuarterlyStockFundamentals will inherit from this or something.  the stock class will have a list or a
-    dict or something with references to these classes.  Maybe something like
-    quarterly_fundamentals = {'Q1': QuarterlyStockFundamentals(stuff)}
-    yearly_fundamentals = {'2015': StockFundamentals(stuff)}
-
-    idk these are just my ideas.
-
-
+    Stock that has fundamental data attached to it in order to do fundamental stock analysis
     """
+    id = Column(Integer, ForeignKey('stock.id'), primary_key=True)
 
     start = Column(DateTime)
     end = Column(DateTime)
-    # period_focus = Column(String)
+    # will be a list of Fundamental objects
     fundamentals = relationship('Fundamental', back_populates='stock')
 
     __mapper_args__ = {
         'polymorphic_identity': 'stock_with_fundamentals',
+        # 'concrete': True
     }
 
     def __init__(self, ticker, start, end):
@@ -733,8 +739,23 @@ class StockWithFundamentals(Base, HasStock, Stock):
         """
         # super(StockWithFundamentals, self).__init__(ticker=ticker, start=start, end=end)
         super().__init__(ticker=ticker)
-        self.start = check_date_format('start', start)
-        self.end = check_date_format('end', end)
+        # self.ticker = ticker
+        try:
+            if type(start) == datetime.datetime:
+                self.start = start
+            else:
+                self.start = parser.parse(start)
+        except ValueError:
+            raise ValueError('start could not be parsed to datetime obj. {} was provided'.format(start))
+        try:
+            if type(end) == datetime:
+                self.end = end
+            else:
+                self.end = parser.parse(end)
+        except ValueError:
+            raise ValueError('end could not be parsed to datetime obj. {} was provided'.format(end))
+        # self.fundamentals = [fundamental]
+
 
 
     @classmethod
@@ -742,6 +763,7 @@ class StockWithFundamentals(Base, HasStock, Stock):
         from scrapy.crawler import  CrawlerProcess
         from scrapy.utils.project import get_project_settings
         from crawler.spiders.edgar import EdgarSpider
+        from pytech import Session
 
         process = CrawlerProcess(get_project_settings())
         for ticker in ticker_list:
@@ -752,6 +774,12 @@ class StockWithFundamentals(Base, HasStock, Stock):
             process.crawl(EdgarSpider, **temp_dict)
         process.start()
         process.join()
+
+        stock_dict = {}
+        session = Session()
+        for ticker in ticker_list:
+            stock_dict[ticker] = session.query(cls).filter(cls.ticker == ticker).first()
+        return stock_dict
         # TODO: return the objects and decide if this is really the right approach
 
 
@@ -760,6 +788,7 @@ class Fundamental(Base):
     the purpose of the this class to hold one period's worth of fundamental data for a given stock
     """
 
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey('stock_with_fundamentals.id'))
     stock = relationship('StockWithFundamentals', back_populates='fundamentals')
     amended = Column(Boolean)
@@ -878,15 +907,16 @@ class Fundamental(Base):
     def from_dict(cls, stock, fundamental_dict):
         allowed = ('amended', 'assets', 'current_assets', 'current_liabilities', 'cash', 'dividend', 'end_date', 'eps',
                    'eps_diluted', 'equity', 'net_income', 'operating_income', 'revenues', 'investment_revenues',
-                   'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus')
-        df = {k : v for k, v in fundamental_dict.iteritems() if k in allowed}
-        return cls(**df)
+                   'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus', 'year')
+        df = {k : v for k, v in fundamental_dict.items() if k in allowed}
+        return cls(stock=stock, **df)
 
 
 
 
 
 class Trade(HasStock, Base):
+    id = Column(Integer, primary_key=True)
     trade_date = Column(DateTime)
     # buy or sell
     action = Column(String)

@@ -3,6 +3,8 @@ from dateutil import parser
 from dateutil.relativedelta import relativedelta
 from datetime import datetime
 import os
+
+from scrapy import Selector
 from scrapy.exceptions import DropItem
 import logging
 from pytech import Session
@@ -87,10 +89,11 @@ class JsonItemPipeline(object):
         pass
 
 
-class FundamentalItemPipeLine(object):
+class FundamentalItemPipeline(object):
     """
     Create a Fundamental object and the corresponding stock (if it doesn't already exist) and add it to the db
     """
+
     def open_spider(self, spider):
         self.session = Session()
         self.stock_dict = {}
@@ -108,8 +111,13 @@ class FundamentalItemPipeLine(object):
             logger.debug('start: {}, end: {}, ticker: {}'.format(stock.start, stock.end, stock.ticker))
         else:
             logger.info('Stock obj not found in FundamentalItemPipeLine\'s dict... Querying database...')
-            stock = self.session.query(StockWithFundamentals).filter(StockWithFundamentals.ticker == item['symbol']).first()
-            self.stock_dict[stock.ticker] = stock
+            stock = self.session.query(StockWithFundamentals).filter(
+                StockWithFundamentals.ticker == item['symbol']).first()
+            try:
+                self.stock_dict[stock.ticker] = stock
+            except AttributeError:
+                logger.warning('stock is None, cannot be found in dict')
+                stock = None
 
         if stock is None:
             logger.info('No stock found in db. Creating stock obj for ticker: {}'.format(item['symbol']))
@@ -131,13 +139,31 @@ class FundamentalItemPipeLine(object):
         fundamental_dict['eps_diluted'] = item['eps_diluted']
         fundamental_dict['equity'] = item['equity']
         fundamental_dict['net_income'] = item['net_income']
-        fundamental_dict['operating_income'] = item['op_income']
+        try:
+            fundamental_dict['operating_income'] = item['op_income']
+            if type(fundamental_dict['operating_income']) == Selector:
+                fundamental_dict['operating_income'] = None
+                logger.warning(
+                    'operating income was of type {} so it could not be used'.format(type(item['op_income'])))
+        except KeyError:
+            logger.warning('op_income could not be found for {}'.format(item['symbol']))
+            fundamental_dict['operating_income'] = None
         fundamental_dict['revenues'] = item['revenues']
-        fundamental_dict['investment_revenues'] = item['investment_revenues']
+        try:
+            fundamental_dict['investment_revenues'] = item['investment_revenues']
+            if type(fundamental_dict['investment_revenues']) == Selector:
+                fundamental_dict['investment_revenues'] = None
+                logger.warning('investment_revenues was of type {} so it could not be used'.format(
+                    type(item['investment_revenues'])))
+        except KeyError:
+            logger.warning('investment_revenues could not be found for {}'.format(item['symbol']))
+            fundamental_dict['investment_revenues'] = None
+
         fundamental_dict['fin_cash_flow'] = item['cash_flow_fin']
         fundamental_dict['inv_cash_flow'] = item['cash_flow_inv']
-        fundamental_dict['ops_cash_flow'] = item['cash_flow_ops']
+        fundamental_dict['ops_cash_flow'] = item['cash_flow_op']
         fundamental_dict['period_focus'] = item['period_focus']
+        fundamental_dict['year'] = item['fiscal_year']
         fundamental = Fundamental.from_dict(stock=stock, fundamental_dict=fundamental_dict)
         logger.info('Created Fundamental obj for ticker: {}'.format(stock.ticker))
         self.session.add(fundamental)
@@ -167,6 +193,7 @@ def get_newer_date(date_one, date_two):
             raise ValueError('could not convert date_two to datetime')
     return max(date_one, date_two)
 
+
 def get_older_date(date_one, date_two):
     """
     :param date_one: str or datetime
@@ -189,6 +216,7 @@ def get_older_date(date_one, date_two):
             raise ValueError('could not convert date_two to datetime')
     return min(date_one, date_two)
 
+
 def guess_start_date(period_focus, end_date):
     """
     :param period_focus: str
@@ -203,12 +231,3 @@ def guess_start_date(period_focus, end_date):
         return end + relativedelta(months=-3)
     else:
         return end + relativedelta(months=-12)
-
-
-
-
-
-
-
-
-
