@@ -4,10 +4,49 @@ import numpy as np
 import pandas_datareader.data as web
 import datetime
 import logging
+import re
 
+from sqlalchemy.ext.declarative import as_declarative
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
+from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey
+from sqlalchemy.orm import relationship
 logger = logging.getLogger(__name__)
 
-class Stock(object):
+@as_declarative(constructor=None)
+class Base(object):
+
+    @declared_attr
+    def __tablename__(cls):
+        name = cls.__name__
+        return (
+            name[0].lower() +
+            re.sub(r'([A-Z])',
+            lambda m: '_' + m.group(0).lower(), name[1:])
+        )
+
+    id = Column(Integer, primary_key=True)
+
+
+class HasStock(object):
+    """
+    Mixin object to create a relation to a stock object
+
+    Any class that inherits from this class will be given a foreign key column that corresponds to the stock object
+    passed to the child class's constructor
+    """
+
+    @declared_attr
+    def stock_id(cls):
+        return Column('stock_id', ForeignKey('stock.id'))
+
+    @declared_attr
+    def stock(cls):
+        return relationship('Stock')
+
+
+class Stock(Base):
+    ticker = Column(String)
+
     def __init__(self, ticker, start, end):
         self.ticker = ticker
         if type(start) != datetime.datetime:
@@ -648,7 +687,7 @@ class Stock(object):
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
 
-class StockWithFundamentals(Stock):
+class StockWithFundamentals(Stock, Base, HasStock):
     """
     the idea right now is to have this hold all the attributes that will be retrieved from the JSON file scraped from
     EDGAR. then QuarterlyStockFundamentals will inherit from this or something.  the stock class will have a list or a
@@ -731,4 +770,60 @@ class Fundamentals(object):
         self.fin_cash_flow = data.cash_flow_fin
         self.inv_cash_flow = data.cash_flow_inv
         self.ops_cash_flow = data.cash_flow_op
+
+
+class Trade(HasStock, Base):
+    trade_date = Column(DateTime)
+    # buy or sell
+    action = Column(String)
+    # long or short
+    position = Column(String)
+    qty = Column(Integer)
+    price_per_share = Column(Numeric(9,2))
+    corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
+    corresponding_trade = relationship('Trade', remote_side=[id])
+
+    def __init__(self, trade_date, qty, price_per_share, stock, action='buy', position=None, corresponding_trade=None):
+        """
+        :param trade_date: datetime.datetime, corresponding to the trade date
+        :param qty: int, number of shares traded
+        :param price_per_share: float, price per individual share in the trade or the average share price in the trade
+        :param stock: Stock, the stock object that was traded
+        :param action: str, buy or sell depending on what kind of trade it was
+        :param position: str, long or short
+        """
+        if type(trade_date) is datetime.datetime:
+            self.trade_date = trade_date
+        else:
+            raise TypeError('trade_date must be of type datetime.datetime. '
+                            '{} is not a datetime.datetime object'.format(trade_date))
+        if action.lower() == 'buy' or action.lower() == 'sell':
+            # TODO: may have to run a query to check if we own the stock or not? and if we do use update?
+            self.action = action.lower()
+        else:
+            raise ValueError('action must be either "buy" or "sell". {} was provided.'.format(action))
+        if position.lower() == 'long' or position.lower() == 'short':
+            self.position = position.lower()
+        elif position is None and corresponding_trade is not None:
+            self.position = position
+        elif position is None and corresponding_trade is None:
+            raise ValueError('position can only be None if a corresponding_trade is also provided and None was provided')
+        else:
+            raise ValueError('position must be either "long" or "short". {} was provided.'.format(position))
+        if isinstance(stock, Stock):
+            self.stock = stock
+        else:
+            raise ValueError('stock must be an instance of the Stock class. {} was provided.'.format(stock))
+        if corresponding_trade is None or isinstance(corresponding_trade, Trade):
+            # TODO: check if the corresponding_trade is actually in the DB yet
+            self.corresponding_trade = corresponding_trade
+        else:
+            raise ValueError('corresponding_trade must either be None or an instance of a Trade object')
+        # TODO: if the position is short shouldn't this be negative?
+        self.qty = qty
+        self.price_per_share = price_per_share
+
+
+
+
 
