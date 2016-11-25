@@ -62,7 +62,8 @@ PASSIVETHROTTLE_ENABLED = True
 DEPTH_STATS_VERBOSE = True
 
 ITEM_PIPELINES = {
-    'crawler.item_pipeline.JsonItemPipeline': 800
+    # 'crawler.item_pipeline.JsonItemPipeline': 800
+    'crawler.item_pipeline.FundamentalItemPipeline': 800
 }
 
 # BASE_OUTPUT_FILE_PATH = ''

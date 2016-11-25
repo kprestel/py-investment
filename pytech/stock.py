@@ -8,7 +8,7 @@ import re
 
 from sqlalchemy.ext.declarative import as_declarative
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
-from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey
+from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,36 @@ class HasStock(object):
         return relationship('Stock')
 
 
+# class HasFundamentals(object):
+#
+#     @declared_attr
+#     def fundamental_id
+
+
 class Stock(Base):
     ticker = Column(String)
+    type = Column(String)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'stock',
+        'polymorphic_on': type
+    }
+    def __init__(self, ticker):
+        self.ticker = ticker
+
+
+
+class StockWithTechnicals(HasStock, Stock):
+
+    start = Column(DateTime)
+    end = Column(DateTime)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'stock_with_technicals',
+    }
 
     def __init__(self, ticker, start, end):
-        self.ticker = ticker
+        super().__init__(ticker=ticker)
         if type(start) != datetime.datetime:
             raise TypeError('start must be a datetime.datetime')
         else:
@@ -61,18 +86,7 @@ class Stock(Base):
         try:
             self.series = web.DataReader(ticker, data_source='yahoo', start=start, end=end)
         except:
-            print('Asset ' + str(ticker) + ' not found!')
-
-        self.sma = self.simple_moving_average()
-        self.beta = self.calculate_beta()
-        self.buy_date = self.start
-        if not os.path.isdir(os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper())):
-            os.mkdir(os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper()))
-            self.base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper())
-        else:
-            self.base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', self.ticker.upper())
-        logger.info('Created {} Stock object'.format(ticker))
-        logger.debug('Base file path: {}'.format(self.base_file_path))
+            logger.error('Could not create series for ticker: {}. Unknown error occurred.'.format(ticker))
 
     def __getattr__(self, item):
         try:
@@ -687,7 +701,7 @@ class Stock(Base):
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
 
-class StockWithFundamentals(Stock, Base, HasStock):
+class StockWithFundamentals(Base, HasStock, Stock):
     """
     the idea right now is to have this hold all the attributes that will be retrieved from the JSON file scraped from
     EDGAR. then QuarterlyStockFundamentals will inherit from this or something.  the stock class will have a list or a
@@ -697,9 +711,17 @@ class StockWithFundamentals(Stock, Base, HasStock):
 
     idk these are just my ideas.
 
-    should there also be a StockWithTechnicals?
 
     """
+
+    start = Column(DateTime)
+    end = Column(DateTime)
+    # period_focus = Column(String)
+    fundamentals = relationship('Fundamental', back_populates='stock')
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'stock_with_fundamentals',
+    }
 
     def __init__(self, ticker, start, end):
         """
@@ -709,7 +731,11 @@ class StockWithFundamentals(Stock, Base, HasStock):
 
         this is basically useless right now but that is ok!
         """
-        super(StockWithFundamentals, self).__init__(ticker=ticker, start=start, end=end)
+        # super(StockWithFundamentals, self).__init__(ticker=ticker, start=start, end=end)
+        super().__init__(ticker=ticker)
+        self.start = check_date_format('start', start)
+        self.end = check_date_format('end', end)
+
 
     @classmethod
     def create_stock_fundamentals_from_list(cls, ticker_list, start, end):
@@ -729,47 +755,135 @@ class StockWithFundamentals(Stock, Base, HasStock):
         # TODO: return the objects and decide if this is really the right approach
 
 
-class Fundamentals(object):
+class Fundamental(Base):
     """
     the purpose of the this class to hold one period's worth of fundamental data for a given stock
     """
 
-    def __init__(self, stock, year, period_focus=None):
+    stock_id = Column(Integer, ForeignKey('stock_with_fundamentals.id'))
+    stock = relationship('StockWithFundamentals', back_populates='fundamentals')
+    amended = Column(Boolean)
+    assets = Column(Numeric(30, 2))
+    current_assets = Column(Numeric(30, 2))
+    current_liabilities = Column(Numeric(30, 2))
+    cash = Column(Numeric(30, 2))
+    dividend = Column(Numeric(10, 2))
+    end_date = Column(DateTime)
+    eps = Column(Numeric(6,2))
+    eps_diluted  = Column(Numeric(6,2))
+    equity = Column(Numeric(30, 2))
+    net_income = Column(Numeric(30, 2))
+    operating_income = Column(Numeric(30, 2))
+    revenues = Column(Numeric(30, 2))
+    investment_revenues = Column(Numeric(30, 2))
+    fin_cash_flow = Column(Numeric(30, 2))
+    inv_cash_flow = Column(Numeric(30, 2))
+    ops_cash_flow = Column(Numeric(30, 2))
+    year = Column(String)
+    period_focus = Column(String)
+
+
+    def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
+                 equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow, ops_cash_flow,
+                 stock, year, period_focus=None):
         """
         :type stock: Stock
         :param stock:
         :param year:
         :param period_focus: defaults to full year. other valid input is Q1, Q2, or Q3
         """
+        if isinstance(stock, StockWithFundamentals):
+            self.stock = stock
+        else:
+            raise TypeError('stock must be an instance of a stock object. {} was provided'.format(type(stock)))
+        # was this report restated/amended
+        self.amended = amended
+        self.assets = assets
+        self.current_assets = current_assets
+        self.current_liabilities = current_liabilities
+        self.cash = cash
+        self.dividend = dividend
+        # TODO: convert to date. need to test if all dates are the same format
+        try:
+            date = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+            self.end_date = date
+        except ValueError:
+            raise ValueError('end_date could not be converted to datetime object. {} was provided'.format(end_date))
+        self.eps = eps
+        self.eps_diluted = eps_diluted
+        self.equity = equity
+        self.net_income = net_income
+        self.operating_income = operating_income
+        self.revenues = revenues
+        self.investment_revenues = investment_revenues
+        self.fin_cash_flow = fin_cash_flow
+        self.inv_cash_flow = inv_cash_flow
+        self.ops_cash_flow = ops_cash_flow
+        self.period_focus = period_focus
+        self.year = year
+
+    @classmethod
+    def from_json_file(cls, stock, year, period_focus=None):
+        """
+        :param stock:
+        :param year:
+        :param period_focus:
+        :return:
+
+        this should probably just get deleted
+        """
         import json
+        if not isinstance(stock, Stock):
+            raise TypeError('stock must be an instance of a stock object. {} was provided'.format(type(stock)))
         logger.info('Getting {} fundamental data'.format(stock.ticker))
         if period_focus is None:
-            self.file_name = 'FY_{}.json'.format(stock.ticker)
+            file_name = 'FY_{}.json'.format(stock.ticker)
         else:
-            self.file_name = '{}_{}.json'.format(period_focus, stock.ticker)
-        self.file_path = os.path.join(stock.base_file_path, year, self.file_name)
-        with open(self.file_path) as f:
+            file_name = '{}_{}.json'.format(period_focus, stock.ticker)
+        if not os.path.isdir(os.path.join(os.path.dirname(__file__), '..', 'financials', stock.ticker.upper())):
+            os.mkdir(os.path.join(os.path.dirname(__file__), '..', 'financials', stock.ticker.upper()))
+            base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', stock.ticker.upper())
+        else:
+            base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', stock.ticker.upper())
+        file_path = os.path.join(base_file_path, year, file_name)
+        with open(file_path) as f:
             data = json.load(f)
-            logger.debug('{} loaded'.format(self.file_path))
+            logger.debug('{} loaded'.format(file_path))
         # was this report restated/amended
-        self.amended = data.amend
-        self.assets = data.assets
-        self.current_assets = data.cur_assets
-        self.current_liabilities = data.cur_liab
-        self.cash = data.cash
-        self.dividend = data.dividend
+        amended = data.amend
+        assets = data.assets
+        current_assets = data.cur_assets
+        current_liabilities = data.cur_liab
+        cash = data.cash
+        dividend = data.dividend
         # TODO: convert to date. need to test if all dates are the same format
-        self.end_date = data.end_date
-        self.eps = data.eps_basic
-        self.eps_diluted = data.eps_diluted
-        self.equity = data.equity
-        self.net_income = data.net_income
-        self.operating_income = data.op_income
-        self.revenues = data.revenues
-        self.investment_revenues = data.investment_revenues
-        self.fin_cash_flow = data.cash_flow_fin
-        self.inv_cash_flow = data.cash_flow_inv
-        self.ops_cash_flow = data.cash_flow_op
+        end_date = data.end_date
+        eps = data.eps_basic
+        eps_diluted = data.eps_diluted
+        equity = data.equity
+        net_income = data.net_income
+        operating_income = data.op_income
+        revenues = data.revenues
+        investment_revenues = data.investment_revenues
+        fin_cash_flow = data.cash_flow_fin
+        inv_cash_flow = data.cash_flow_inv
+        ops_cash_flow = data.cash_flow_op
+        return cls(amended=amended, assets=assets, current_assets=current_assets, current_liabilities=current_liabilities,
+                   cash=cash, dividend=dividend, end_date=end_date, eps=eps, eps_diluted=eps_diluted, equity=equity,
+                   net_income=net_income, operating_income=operating_income, revenues=revenues, investment_revenues=investment_revenues,
+                   fin_cash_flow=fin_cash_flow, inv_cash_flow=inv_cash_flow, ops_cash_flow=ops_cash_flow, stock=stock,
+                   year=year, period_focus=period_focus)
+
+    @classmethod
+    def from_dict(cls, stock, fundamental_dict):
+        allowed = ('amended', 'assets', 'current_assets', 'current_liabilities', 'cash', 'dividend', 'end_date', 'eps',
+                   'eps_diluted', 'equity', 'net_income', 'operating_income', 'revenues', 'investment_revenues',
+                   'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus')
+        df = {k : v for k, v in fundamental_dict.iteritems() if k in allowed}
+        return cls(**df)
+
+
+
 
 
 class Trade(HasStock, Base):
@@ -823,6 +937,18 @@ class Trade(HasStock, Base):
         self.qty = qty
         self.price_per_share = price_per_share
 
+def check_date_format(param_name, date, format_string=None):
+    if format_string is None:
+        format_string = '%Y-%m-%d'
+    try:
+        if type(date) is datetime.datetime:
+            return date
+        else:
+            date = datetime.datetime.strptime(date, format_string)
+            return date
+    except ValueError:
+        raise ValueError('{} must be either a datetime.datetime obj or a date string formatted like "{}".'
+                         '{} was provided'.format(param_name, format_string, date))
 
 
 
