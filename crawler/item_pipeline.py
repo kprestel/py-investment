@@ -8,7 +8,7 @@ from scrapy import Selector
 from scrapy.exceptions import DropItem
 import logging
 from pytech import Session
-from pytech.stock import StockWithFundamentals, Fundamental
+from pytech.stock import Stock, Fundamental
 
 logger = logging.getLogger(__name__)
 
@@ -97,36 +97,44 @@ class FundamentalItemPipeline(object):
     def open_spider(self, spider):
         self.session = Session()
         self.stock_dict = {}
+        stock = self.session.query(Stock).filter(Stock.ticker == spider.symbols_arg).first()
+        if stock is None:
+            self.stock = Stock(ticker=spider.symbols_arg, start_date=spider.start_date, end_date=spider.end_date)
+        else:
+            self.stock = stock
 
     def process_item(self, item, spider):
-        if self.stock_dict.get(item['symbol']):
-            logger.info('Stock obj found in FundamentalItemPipeLine\'s dict')
-            stock = self.stock_dict.get(item['symbol'])
-            temp_start = guess_start_date(item['period_focus'], item['end_date'])
-            start_date = get_older_date(temp_start, stock.start)
-            end_date = get_newer_date(item['end_date'], stock.end)
+        # if self.stock_dict.get(item['symbol']):
+            # look in stock_dict if the stock has been created before and if it has then get it
+            # logger.info('Stock obj found in FundamentalItemPipeLine\'s dict')
+            # stock = self.stock_dict.get(item['symbol'])
+            # temp_start = guess_start_date(item['period_focus'], item['end_date'])
+            # start_date = get_older_date(temp_start, stock.start_date)
+            # end_date = get_newer_date(item['end_date'], stock.end_date)
             # update the stock's attribute to best guess the actual start and end dates
-            setattr(stock, 'start', start_date)
-            setattr(stock, 'end', end_date)
-            logger.debug('start: {}, end: {}, ticker: {}'.format(stock.start, stock.end, stock.ticker))
-        else:
-            logger.info('Stock obj not found in FundamentalItemPipeLine\'s dict... Querying database...')
-            stock = self.session.query(StockWithFundamentals).filter(
-                StockWithFundamentals.ticker == item['symbol']).first()
-            try:
-                self.stock_dict[stock.ticker] = stock
-            except AttributeError:
-                logger.warning('stock is None, cannot be found in dict')
-                stock = None
+            # setattr(stock, 'start', start_date)
+            # setattr(stock, 'end', end_date)
+            # logger.debug('start: {}, end: {}, ticker: {}'.format(stock.start, stock.end, stock.ticker))
+        # else:
+            # if is has not be found before then query the DB to get it
+            # logger.info('Stock obj not found in FundamentalItemPipeLine\'s dict... Querying database...')
+            # stock = self.session.query(Stock).filter(Stock.ticker == item['symbol']).first()
+            # try:
+                # try to put it in the dict. an attribute error will be raised if stock is None
+                # self.stock_dict[stock.ticker] = stock
+            # except AttributeError:
+            #     logger.warning('stock is None, cannot be found in dict')
+                # stock = None
 
-        if stock is None:
-            logger.info('No stock found in db. Creating stock obj for ticker: {}'.format(item['symbol']))
-            start = guess_start_date(period_focus=item['period_focus'], end_date=item['end_date'])
-            stock = StockWithFundamentals(ticker=item['symbol'], start=start, end=item['end_date'])
-            self.stock_dict[stock.ticker] = stock
-            self.session.add(stock)
+        # if stock is None:
+        #     logger.info('No stock found in db. Creating stock obj for ticker: {}'.format(item['symbol']))
+        #     start = guess_start_date(period_focus=item['period_focus'], end_date=item['end_date'])
+        #     stock = Stock(ticker=item['symbol'], start_date=spider.start_date, end_date=spider.end_date)
+            # add the new stock to the session and to the dict
+            # self.stock_dict[stock.ticker] = stock
+            # self.session.add(stock)
 
-        logger.info('Creating fundamental obj for ticker: {}'.format(stock.ticker))
+        logger.info('Creating fundamental obj for ticker: {}'.format(self.stock.ticker))
         fundamental_dict = {}
         fundamental_dict['amended'] = item['amend']
         fundamental_dict['assets'] = item['assets']
@@ -164,12 +172,15 @@ class FundamentalItemPipeline(object):
         fundamental_dict['ops_cash_flow'] = item['cash_flow_op']
         fundamental_dict['period_focus'] = item['period_focus']
         fundamental_dict['year'] = item['fiscal_year']
-        fundamental = Fundamental.from_dict(stock=stock, fundamental_dict=fundamental_dict)
-        logger.info('Created Fundamental obj for ticker: {}'.format(stock.ticker))
-        self.session.add(fundamental)
+        fundamental_dict['ticker'] = item['symbol']
+        # fundamental_dict['period_year'] = item['period_focus'] + '_' + item['year']
+        # self.stock.fundamentals.append(Fundamental.from_dict(fundamental_dict=fundamental_dict))
+        logger.info('Created Fundamental obj for ticker: {}'.format(item['symbol']))
+        self.session.add(Fundamental.from_dict(fundamental_dict=fundamental_dict))
         return item
 
     def close_spider(self, spider):
+        # self.session.add(self.stock)
         self.session.commit()
 
 

@@ -34,7 +34,7 @@ HTTPCACHE_POLICY = 'scrapy.extensions.httpcache.RFC2616Policy'
 
 HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.DbmCacheStorage'
 
-LOG_LEVEL = 'DEBUG'
+LOG_LEVEL = 'INFO'
 
 NEWSPIDER_MODULE = 'crawler.spiders'
 

@@ -40,28 +40,30 @@ class EdgarSpider(CrawlSpider):
     def __init__(self, **kwargs):
         super(EdgarSpider, self).__init__(**kwargs)
 
-        symbols_arg = kwargs.get('symbols')
-        start_date = kwargs.get('start_date', '')
-        end_date = kwargs.get('end_date', '')
+        self.symbols_arg = kwargs.get('symbols')
+        self.start_date = kwargs.get('start_date', '')
+        self.end_date = kwargs.get('end_date', '')
         # limit_arg = kwargs.get('limit', '')
         start = int(kwargs.get('start', 0))
         count = kwargs.get('count', None)
         if count is not None:
             count = int(count)
 
-        self.check_date_arg(start_date, 'start_date')
-        self.check_date_arg(end_date, 'end_date')
+        # self.check_date_arg(start_date, 'start_date')
+        # self.check_date_arg(end_date, 'end_date')
 
-        if symbols_arg:
-            if isinstance(symbols_arg, list):
-                self.start_urls = URLGenerator(symbols_arg, start_date=start_date, end_date=end_date, start=start, count=count)
+        if self.symbols_arg:
+            if isinstance(self.symbols_arg, list):
+                self.start_urls = URLGenerator(self.symbols_arg, start_date=self.start_date, end_date= self.end_date,
+                                               start=start, count=count)
             else:
-                symbols = [symbols_arg]
-                self.start_urls = URLGenerator(symbols, start_date=start_date, end_date=end_date, start=start, count=count)
+                symbols = [self.symbols_arg]
+                self.start_urls = URLGenerator(symbols, start_date=self.start_date, end_date=self.end_date,
+                                               start=start, count=count)
             for s in self.start_urls:
                 logger.info('Start URL: {}'.format(s))
         else:
-            logger.warn('No start URLs created!')
+            logger.warning('No start URLs created!')
             self.start_urls = []
         logger.info('spider created!')
 

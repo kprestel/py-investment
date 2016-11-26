@@ -48,17 +48,20 @@ if __name__ == "__main__":
     from scrapy.crawler import CrawlerProcess, Crawler
     from scrapy.utils.project import get_project_settings
     from twisted.internet import reactor
-    from pytech import engine
-    from pytech.stock import StockWithFundamentals
+    from pytech import Session
+    from pytech.stock import Stock
     tickers = ['AAPL', 'F', 'SKX']
     start = '20160101'
     end = '20161124'
-    stock_dict = StockWithFundamentals.create_stock_fundamentals_from_list(ticker_list=tickers, start=start, end=end)
-    for k, v in stock_dict.items():
-        for key, val in v.__dict__.items():
-            print('key: {}'.format(key))
-            print('val: {}'.format(val))
-    print(stock_dict)
+    session = Session()
+    stock = Stock(ticker='AAPL', start_date=start, end_date=end, get_fundamentals=True)
+    session.add(stock)
+    session.commit()
+    # stock_dict = Stock.create_stock_fundamentals_from_list(ticker_list=tickers, start=start, end=end)
+    # for k, v in stock_dict.items():
+    #     print('key: {}'.format(k))
+    #     print('val: {}'.format(v))
+    # print(stock_dict)
     # process = CrawlerProcess({'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)'})
     # process = CrawlerProcess(get_project_settings())
     # spider = EdgarSpider(symbols='AAPL', startdate='20160101', enddate='20161104')
