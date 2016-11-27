@@ -906,6 +906,9 @@ class Stock(Base):
 class Fundamental(Base, HasStock):
     """
     the purpose of the this class to hold one period's worth of fundamental data for a given stock
+
+    there should be a column for each argument in the constructor and the allowed list should also be updated when
+    new arguments as added and the item_pipeline needs to be updated
     """
 
     id = Column(Integer, primary_key=True)
@@ -928,12 +931,20 @@ class Fundamental(Base, HasStock):
     ops_cash_flow = Column(Numeric(30, 2))
     year = Column(String)
     period_focus = Column(String)
-    # period_year = Column(String)
-
+    property_plant_equipment = Column(Numeric(30, 2))
+    gross_profit = Column(Numeric(30, 2))
+    tax_expense = Column(Numeric(30, 2))
+    net_taxes_paid = Column(Numeric(30, 2))
+    acts_pay_current = Column(Numeric(30, 2))
+    acts_receive_current = Column(Numeric(30, 2))
+    acts_receive_noncurrent = Column(Numeric(30, 2))
+    acts_receive = Column(Numeric(30, 2))
+    accrued_liabilities_current = Column(Numeric(30, 2))
 
     def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow, ops_cash_flow,
-                 ticker, year, period_focus=None):
+                 ticker, year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid, acts_pay_current,
+                 acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current, period_focus=None):
         """
         :param stock:
         :param year:
@@ -963,6 +974,19 @@ class Fundamental(Base, HasStock):
         self.period_focus = period_focus
         self.year = year
         self.ticker = ticker
+        self.gross_profit = gross_profit
+        self.property_plant_equipment = property_plant_equipment
+        self.tax_expense = tax_expense
+        self.net_taxes_paid = net_taxes_paid
+        self.acts_pay_current = acts_pay_current
+        self.acts_receive_current = acts_receive_current
+        self.acts_receive_noncurrent = acts_receive_noncurrent
+        if acts_receive_noncurrent is None or acts_receive_current is None:
+            self.acts_receive = None
+        else:
+            self.acts_receive = acts_receive_noncurrent + acts_receive_current
+        self.accrued_liabilities_current = accrued_liabilities_current
+
         # self.period_year = period_year
 
     @classmethod
@@ -1018,13 +1042,23 @@ class Fundamental(Base, HasStock):
                    investment_revenues=investment_revenues, fin_cash_flow=fin_cash_flow, inv_cash_flow=inv_cash_flow,
                    ops_cash_flow=ops_cash_flow, year=year, period_focus=period_focus, ticker=ticker)
 
+    def current_ratio(self):
+        return self.current_assets / self.current_liabilities
+
     @classmethod
     def from_dict(cls, fundamental_dict):
         # a list of the columns above
         allowed = ('amended', 'assets', 'current_assets', 'current_liabilities', 'cash', 'dividend', 'end_date', 'eps',
                    'eps_diluted', 'equity', 'net_income', 'operating_income', 'revenues', 'investment_revenues',
-                   'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus', 'year', 'ticker')
-        df = {k : v for k, v in fundamental_dict.items() if k in allowed}
+                   'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus', 'year', 'ticker', 'gross_profit',
+                   'property_plant_equipment', 'gross_profit', 'tax_expense', 'net_taxes_paid', 'acts_pay_current',
+                   'acts_receive_current', 'acts_receive_noncurrent', 'accrued_liabilities_current')
+        from scrapy import Selector
+        df = {k : v for k, v in fundamental_dict.items() if k in allowed and type(v) is not Selector}
+        # dd = {}
+        # for k, v in fundamental_dict.items():
+        #     if k in allowed:
+        #         pass
         return cls(**df)
 
 

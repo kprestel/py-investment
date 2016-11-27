@@ -114,6 +114,7 @@ class FundamentalItemPipeline(object):
 
         try:
             fundamental_dict['operating_income'] = item['op_income']
+            # selector means XML tag
             if type(fundamental_dict['operating_income']) == Selector:
                 fundamental_dict['operating_income'] = None
                 logger.warning(
@@ -128,8 +129,8 @@ class FundamentalItemPipeline(object):
             fundamental_dict['investment_revenues'] = item['investment_revenues']
             if type(fundamental_dict['investment_revenues']) == Selector:
                 fundamental_dict['investment_revenues'] = None
-                logger.warning('investment_revenues was of type {} so it could not be used'\
-                               .format( type(item['investment_revenues'])))
+                logger.warning('investment_revenues was of type {} so it could not be used' \
+                               .format(type(item['investment_revenues'])))
         except KeyError:
             logger.warning('investment_revenues could not be found for {}'.format(item['symbol']))
             fundamental_dict['investment_revenues'] = None
@@ -140,6 +141,14 @@ class FundamentalItemPipeline(object):
         fundamental_dict['period_focus'] = item['period_focus']
         fundamental_dict['year'] = item['fiscal_year']
         fundamental_dict['ticker'] = item['symbol']
+        fundamental_dict['property_plant_equipment'] = item.get('property_plant_equipment')
+        fundamental_dict['gross_profit'] = item.get('gross_profit')
+        fundamental_dict['tax_expense'] = item.get('tax_expense')
+        fundamental_dict['net_taxes_paid'] = item.get('net_taxes_paid')
+        fundamental_dict['acts_receive_current'] = item.get('acts_receive_current')
+        fundamental_dict['acts_pay_current'] = item.get('acts_pay_current')
+        fundamental_dict['accrued_liabilities_current'] = item.get('accrued_liabilities_current')
+        fundamental_dict['acts_receive_noncurrent'] = item.get('acts_receive_noncurrent')
         logger.info('Created Fundamental obj for ticker: {}'.format(item['symbol']))
         self.session.add(Fundamental.from_dict(fundamental_dict=fundamental_dict))
         return item
