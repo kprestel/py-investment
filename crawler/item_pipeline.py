@@ -111,6 +111,7 @@ class FundamentalItemPipeline(object):
         fundamental_dict['eps_diluted'] = item['eps_diluted']
         fundamental_dict['equity'] = item['equity']
         fundamental_dict['net_income'] = item['net_income']
+
         try:
             fundamental_dict['operating_income'] = item['op_income']
             if type(fundamental_dict['operating_income']) == Selector:
@@ -120,13 +121,15 @@ class FundamentalItemPipeline(object):
         except KeyError:
             logger.warning('op_income could not be found for {}'.format(item['symbol']))
             fundamental_dict['operating_income'] = None
+
         fundamental_dict['revenues'] = item['revenues']
+
         try:
             fundamental_dict['investment_revenues'] = item['investment_revenues']
             if type(fundamental_dict['investment_revenues']) == Selector:
                 fundamental_dict['investment_revenues'] = None
-                logger.warning('investment_revenues was of type {} so it could not be used'.format(
-                    type(item['investment_revenues'])))
+                logger.warning('investment_revenues was of type {} so it could not be used'\
+                               .format( type(item['investment_revenues'])))
         except KeyError:
             logger.warning('investment_revenues could not be found for {}'.format(item['symbol']))
             fundamental_dict['investment_revenues'] = None

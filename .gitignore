@@ -21,6 +21,7 @@ __pycache__/
 # C extensions
 *.so
 .idea/*
+.idea
 financials/*
 .idea/dictionaries/*
 pytech/pytech.db

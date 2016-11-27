@@ -10,7 +10,7 @@ from scrapy.loader.processors import Compose, MapCompose, TakeFirst
 from scrapy.utils.misc import arg_to_iter
 from scrapy.utils.python import flatten
 
-from crawler.items import ReportItem
+from crawler.items import ReportItem, FullYearReportItem
 import functools
 
 
@@ -87,8 +87,9 @@ class MatchEndDate(object):
         selector = loader_context['selector']
 
         context_id = value.xpath('@contextRef')[0].extract()
+        logger.debug('context_id={}'.format(context_id))
         try:
-            context = selector.xpath('//*[@id="%s"]' % context_id)[0]
+            context = selector.xpath('//*[@id="{}"]'.format(context_id))[0]
         except IndexError:
             try:
                 url = loader_context['response'].url
@@ -111,11 +112,13 @@ class MatchEndDate(object):
                 if self.ignore_date_range or date_range_matches_doc_type(doc_type, start_date, end_date):
                     date = end_date
             except (IndexError, ValueError):
+                logger.error('error...')
                 pass
         else:
             try:
                 instant = datetime.strptime(instant, DATE_FORMAT)
             except ValueError:
+                logger.error('error...')
                 pass
             else:
                 date = instant
@@ -131,7 +134,7 @@ class MatchEndDate(object):
                     pass
                 else:
                     local_name = value.xpath('local-name()')[0].extract()
-                    return IntermediateValue(
+                    return IntermediateValue (
                         local_name, val, text, context, value,
                         start_date=start_date, end_date=end_date, instant=instant
                     )
@@ -719,5 +722,10 @@ class ReportItemLoader(XmlXPathItemLoader):
             return 'Q2'
         elif delta_days <= -225 or (delta_days > 45 and delta_days <= 135):
             return 'Q3'
+        else:
+            return 'FY'
 
-        return 'FY'
+class FullYearReportItemLoader(ReportItemLoader):
+    default_item_class = FullYearReportItem
+
+

@@ -45,6 +45,10 @@ class ReportItem(Item):
     cash_flow_fin = Field()
 
 
+class FullYearReportItem(ReportItem):
+    pass
+
+
 class PriceItem(Item):
     # Trading symbol
     symbol = Field()
