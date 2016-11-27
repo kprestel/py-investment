@@ -10,7 +10,7 @@ from scrapy.loader.processors import Compose, MapCompose, TakeFirst
 from scrapy.utils.misc import arg_to_iter
 from scrapy.utils.python import flatten
 
-from crawler.items import ReportItem, FullYearReportItem
+from crawler.items import ReportItem
 import functools
 
 
@@ -44,12 +44,13 @@ class IntermediateValue(object):
         self.end_date = end_date
         self.instant = instant
 
-    def __cmp__(self, other):
+    def __lt__(self, other):
         if self.value < other.value:
             return -1
-        elif self.value > other.value:
+
+    def __gt__(self, other):
+        if self.value > other.value:
             return 1
-        return 0
 
     def __repr__(self):
         context_id = None
@@ -184,6 +185,22 @@ def get_symbol(values):
 
 
 def imd_max(imd_values):
+    """
+    :param imd_values: list
+    :return: max value in the list
+
+    this method should be used when there are multiple xpaths for an item and the highest one is the 'right' one.
+    ex:
+        self.add_xpaths('assets', [
+            '//us-gaap:Assets',
+            '//us-gaap:AssetsNet',
+            '//us-gaap:LiabilitiesAndStockholdersEquity'
+        ])
+
+        all three of these could possibly be listed in a document and Assets should always equal Liabilities + Equity
+        but if there is an AssetsNet it should be lower than Assets (because of depreciation) so the max value should
+        always be the one that ultimately gets used.
+    """
     if imd_values:
         imd_value = max(imd_values)
         return imd_value.value
@@ -217,6 +234,14 @@ def imd_get_net_income(imd_values):
 
 def imd_get_op_income(imd_values):
     imd_values = [v for v in imd_values if memberness(v.context) < 2]
+    return imd_min(imd_values)
+
+
+def imd_get_gross_profit(imd_values):
+    return imd_min(imd_values)
+
+
+def imd_get_property_plant_equipment(imd_values):
     return imd_min(imd_values)
 
 
@@ -270,6 +295,14 @@ def imd_get_equity(imd_values):
         return values[0].value
 
     return imd_values[0].value
+
+
+def imd_get_acts_receive(imd_values):
+    if not imd_values:
+        return None
+    else:
+        return imd_values[0].value
+
 
 
 def imd_filter_member(imd_values):
@@ -406,6 +439,30 @@ class ReportItemLoader(XmlXPathItemLoader):
     revenues_in = MapCompose(MatchEndDate(float))
     revenues_out = Compose(imd_filter_member, imd_mult, ImdSumMembersOr(imd_get_revenues))
 
+    gross_profit_in = MapCompose(MatchEndDate(float))
+    gross_profit_out = Compose(imd_filter_member, imd_mult, imd_get_gross_profit)
+
+    property_plant_equipment_in = MapCompose(MatchEndDate(float))
+    property_plant_equipment_out = Compose(imd_filter_member, imd_mult, imd_min)
+
+    tax_expense_in = MapCompose(MatchEndDate(float))
+    tax_expense_out = Compose(imd_filter_member, imd_mult, imd_min)
+
+    net_taxes_paid_in = MapCompose(MatchEndDate(float))
+    net_taxes_paid_out = Compose(imd_filter_member, imd_mult, imd_min)
+
+    acts_pay_current_in = MapCompose(MatchEndDate(float))
+    acts_pay_current_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    act_receive_current_in = MapCompose(MatchEndDate(float))
+    act_receive_current_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    act_receive_noncurrent_in = MapCompose(MatchEndDate(float))
+    act_receive_noncurrent_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    accrued_liabilities_current_in = MapCompose(MatchEndDate(float))
+    accrued_liabilities_current_out = Compose(imd_filter_member, imd_mult, imd_max)
+
     net_income_in = MapCompose(MatchEndDate(float))
     net_income_out = Compose(imd_filter_member, imd_mult, imd_get_net_income)
 
@@ -447,6 +504,7 @@ class ReportItemLoader(XmlXPathItemLoader):
 
     def __init__(self, *args, **kwargs):
         response = kwargs.get('response')
+        # kwargs['response'] = self._clean_xml_garbage(response=response)
         if len(response.body) > THRESHOLD_TO_CLEAN:
             # Remove some useless text to reduce memory usage
             body, __ = RE_XML_GARBAGE.subn(lambda m: '><', response.body)
@@ -510,7 +568,43 @@ class ReportItemLoader(XmlXPathItemLoader):
             '//*[local-name()="InterestAndDividendIncomeOperating" or local-name()="NoninterestIncome"]',
             '//*[contains(local-name(), "Revenue")]'
         ])
-        self.add_xpath('investment_revenues', '//us-gaap:FinancialServicesRevenue')
+        self.add_xpath('investment_revenues', [
+            '//us-gaap:FinancialServicesRevenue'
+        ])
+
+        self.add_xpath('gross_profit', [
+            '//us-gaap:GrossProfit'
+        ])
+
+        self.add_xpath('property_plant_equipment', [
+            '//us-gaap:PropertyPlantAndEquipmentGross'
+        ])
+
+        # this has a debit balance, so positive means they paid that much and negative means benefit
+        self.add_xpath('tax_expense', [
+            '//us-gaap:IncomeTaxExpenseBenefit'
+        ])
+
+        self.add_xpath('net_taxes_paid', [
+            '//us-gaap:IncomeTaxesPaidNet'
+        ])
+
+        self.add_xpath('acts_pay_current', [
+            '//us-gaap:AccountsPayableCurrent'
+        ])
+
+        self.add_xpath('accrued_liabilities_current', [
+            '//us-gaap:AccruedLiabilitiesCurrent'
+        ])
+
+        # accounts receivable that are due within a year or less minus doubtful accounts expense
+        self.add_xpath('acts_receive_current', [
+            '//us-gaap:AccountsReceivableNetCurrent'
+        ])
+
+        self.add_xpath('acts_receive_noncurrent', [
+            '//us-gaap:AccountsReceivableNetNoncurrent'
+        ])
 
         self.add_xpaths('net_income', [
             '//*[contains(local-name(), "NetLossIncome") and contains(local-name(), "Corporation")]',
@@ -621,6 +715,12 @@ class ReportItemLoader(XmlXPathItemLoader):
             '//us-gaap:NetCashProvidedByUsedInFinancingActivitiesContinuingOperations'
         ])
 
+    def _clean_xml_garbage(self, response):
+        if len(response.body) > THRESHOLD_TO_CLEAN:
+            # Remove some useless text to reduce memory usage
+            body, __ = RE_XML_GARBAGE.subn(lambda m: '><', response.body)
+            return response.replace(body=body)
+
     def _get_symbol(self):
         try:
             filename = self.context['response'].url.split('/')[-1]
@@ -666,9 +766,9 @@ class ReportItemLoader(XmlXPathItemLoader):
         if days_left is not None:
             fy_date = date + timedelta(days=days_left)
             return fy_date.year
-
-        # TODO: should this actually raise an exception?
-        return None
+        else:
+            # TODO: should this actually raise an exception?
+            return None
 
     def _get_doc_end_date(self):
         # the document end date could come from URL or document content
@@ -725,7 +825,9 @@ class ReportItemLoader(XmlXPathItemLoader):
         else:
             return 'FY'
 
-class FullYearReportItemLoader(ReportItemLoader):
-    default_item_class = FullYearReportItem
+# class FullYearReportItemLoader(ReportItemLoader):
+#
+#     def __init__(self, *args, **kwargs):
+
 
 

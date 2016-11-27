@@ -26,27 +26,34 @@ class ReportItem(Item):
     investment_revenues = Field()
     op_income = Field()
     net_income = Field()
+    gross_profit = Field()
 
     eps_basic = Field()
     eps_diluted = Field()
 
     dividend = Field()
 
+    # Taxes
+    tax_expense = Field()
+    net_taxes_paid = Field()
+
     # Balance sheet stuffs
     assets = Field()
     cur_assets = Field()
+    acts_pay_current = Field()
+    acts_receive_current = Field()
+    acts_receive_noncurrent = Field()
+    accrued_liabilities_current = Field()
     cur_liab = Field()
     equity = Field()
     cash = Field()
+    property_plant_equipment = Field()
+
 
     # Cash flow from operating, investing, and financing
     cash_flow_op = Field()
     cash_flow_inv = Field()
     cash_flow_fin = Field()
-
-
-class FullYearReportItem(ReportItem):
-    pass
 
 
 class PriceItem(Item):

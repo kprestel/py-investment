@@ -104,7 +104,15 @@ class TestFundamental(object):
             'ops_cash_flow': 700.0,
             'period_focus': 'Q3',
             'year': '2016',
-            'ticker': 'AAPL'
+            'ticker': 'AAPL',
+            'property_plant_equipment': 5000.0,
+            'gross_profit': 7000.0,
+            'tax_expense': 700.0,
+            'net_taxes_paid': 400.0,
+            'acts_pay_current': 400.0,
+            'acts_receive_current': 600.0,
+            'acts_receive_noncurrent': 800.0,
+            'accrued_liabilities_current': 500.0
         }
 
         fundamental_from_dict = Fundamental.from_dict(fundamental_dict=fundamental_dict)
@@ -128,6 +136,18 @@ class TestFundamental(object):
         assert fundamental.period_focus == fundamental_from_dict.period_focus
         assert fundamental.year == fundamental_from_dict.year
         assert fundamental.ticker == fundamental_from_dict.ticker
+        assert fundamental.property_plant_equipment == fundamental_from_dict.property_plant_equipment
+        assert fundamental.gross_profit == fundamental_from_dict.gross_profit
+        assert fundamental.tax_expense == fundamental_from_dict.tax_expense
+        assert fundamental.net_taxes_paid == fundamental_from_dict.net_taxes_paid
+        assert fundamental.acts_pay_current == fundamental_from_dict.acts_pay_current
+        assert fundamental.acts_receive_current == fundamental_from_dict.acts_receive_current
+        assert fundamental.acts_receive_noncurrent == fundamental_from_dict.acts_receive_noncurrent
+        assert fundamental.accrued_liabilities_current == fundamental_from_dict.accrued_liabilities_current
+
+
+    def test_current_ratio(self, fundamental: Fundamental):
+        assert fundamental.current_ratio() == 1
 
 
 
