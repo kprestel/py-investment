@@ -35,6 +35,7 @@ requests-file==1.4.1
 Scrapy==1.2.1
 service-identity==16.0.0
 six==1.10.0
+SQLAlchemy==1.1.4
 Twisted==16.5.0
 w3lib==1.15.0
 zope.interface==4.3.2

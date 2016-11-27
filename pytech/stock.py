@@ -6,12 +6,12 @@ import datetime
 import logging
 import re
 from dateutil import parser
+from sqlalchemy import orm
 
 from sqlalchemy.ext.declarative import as_declarative
-from sqlalchemy.ext.declarative import declarative_base, declared_attr, ConcreteBase
+from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship, backref
-from sqlalchemy.orm.collections import attribute_mapped_collection
 
 logging.basicConfig()
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
@@ -49,16 +49,14 @@ class HasStock(object):
         return relationship('Stock')
 
 
-# class HasFundamentals(object):
-#
-#     @declared_attr
-#     def fundamental_id
-
-
 class Stock(Base):
+    """
+    main class that is used to model stocks and may contain technical and fundamental data about the stock
+    """
     ticker = Column(String, unique=True, primary_key=True)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
+    get_ohlc = Column(Boolean)
     fundamentals = relationship('Fundamental', backref='fundamentals',cascade='all, delete-orphan')
 
     def __init__(self, ticker, start_date, end_date, get_fundamentals=False, get_ohlc=False):
@@ -79,6 +77,7 @@ class Stock(Base):
         except ValueError:
             raise ValueError('could not convert end_date to datetime.datetime. {} was provided'.format(end_date))
 
+        self.get_ohlc = get_ohlc
         if get_ohlc:
             self.ohlc = self.get_ohlc_series()
         else:
@@ -88,7 +87,17 @@ class Stock(Base):
         if get_fundamentals:
             self.get_fundamentals()
 
+    @orm.reconstructor
+    def init_on_load(self):
+        """
+        :return:
 
+        if the user wanted the ohlc_series then recreate it when this object is loaded again
+        """
+        if self.get_ohlc:
+            self.ohlc = self.get_ohlc_series()
+        else:
+            self.ohlc = None
 
     # def __getattr__(self, item):
     #     try:
@@ -116,27 +125,36 @@ class Stock(Base):
         :return:
 
         pass the required attributes to the EdgarSpider and it will create the corresponding fundamentals objects
-        for this stock instance as well as write them to the DB
+        for this stock instance as well as write the fundamental object to the DB
         """
         from scrapy.crawler import  CrawlerProcess
         from scrapy.utils.project import get_project_settings
         from crawler.spiders.edgar import EdgarSpider
         from pytech import Session
 
-        process = CrawlerProcess(get_project_settings())
-        # temp_dict = {}
-        spider_dict = {'symbols': self.ticker, 'start_date': self.start_date, 'end_date': self.end_date}
-        # temp_dict['symbols'] = self.ticker
-        # temp_dict['start_date'] = self.start_date
-        # temp_dict['end_date'] = self.end_date
-        process.crawl(EdgarSpider, **spider_dict)
-        process.start()
-        process.join()
-        # TODO: test and make sure that after the process finishes the instance has access to ALL of its fundamentals
         session = Session()
-        self.fundamentals = session.query(Fundamental).filter(Fundamental.ticker == self.ticker).all()
-        session.close()
+        # check to see if the fundamentals already exist
+        # NOTE: there may be an edge case where the start and end dates are different and so not all of the desired
+        # fundamentals will be returned but for now this should work
+        # it will require some sort of date guessing based on the periods and the end dates or something so yeah
+        # that is a problem for another day
+        fundamentals = session.query(Fundamental).filter(Fundamental.ticker == self.ticker).all()
+        if fundamentals:
+            self.fundamentals = fundamentals
+            session.close()
+        else:
+            process = CrawlerProcess(get_project_settings())
+            spider_dict = {'symbols': self.ticker, 'start_date': self.start_date, 'end_date': self.end_date}
+            process.crawl(EdgarSpider, **spider_dict)
+            process.start()
+            process.join()
+            # TODO: test and make sure that after the process finishes the instance has access to ALL of its fundamentals
+            self.fundamentals = session.query(Fundamental).filter(Fundamental.ticker == self.ticker).all()
+            session.close()
 
+    """
+    TECHNICAL INDICATORS/ANALYSIS
+    """
 
     def simple_moving_average(self, period=50, column='Adj Close'):
         return pd.Series(self.ohlc[column].rolling(center=False, window=period, min_periods=period - 1).mean(),
@@ -559,6 +577,36 @@ class Stock(Base):
                             name='negative_dmi')
         return pd.concat([diplus, diminus])
 
+
+    def sma_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
+        """
+        :param slow: int, how many days for the short term moving average
+        :param fast:  int, how many days for the long term moving average
+        :param column: str
+        :return:
+        """
+        slow_ts = self.simple_moving_average(period=slow, column=column)
+        fast_ts = self.simple_moving_average(period=fast, column=column)
+        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.ohlc.index)
+        # if 50 SMA > 200 SMA set action to 1 which means Buy
+        # TODO: figure out a better way to mark buy vs sell
+        # also need to make sure this method works right...
+        self.ohlc['Action'] = np.where(crossover_ts > 0, 1, 0)
+
+    def simple_median_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
+        slow_ts = self.simple_moving_median(period=slow, column=column)
+        fast_ts = self.simple_moving_median(period=fast, column=column)
+        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.ohlc.index)
+        crossover_ts['Action'] = np.where(crossover_ts > 0, 1, 0)
+        print(crossover_ts)
+
+    """
+    PRIVATE CALCULATION METHODS FOR TECHNICAL INDICATORS/ANALYSIS
+
+    NOTE: these should probably not be class methods but that is something for another day!
+    """
+
+    @classmethod
     def _directional_movement_indicator(cls, ts, period):
         """
         :param ts: Series
@@ -591,29 +639,6 @@ class Stock(Base):
         diminus = pd.Series(100 * (temp_df['negative_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(),
                             name='negative_dmi')
         return pd.concat([diplus, diminus])
-
-    def sma_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
-        """
-        :param slow: int, how many days for the short term moving average
-        :param fast:  int, how many days for the long term moving average
-        :param column: str
-        :return:
-        """
-        slow_ts = self.simple_moving_average(period=slow, column=column)
-        fast_ts = self.simple_moving_average(period=fast, column=column)
-        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.ohlc.index)
-        # if 50 SMA > 200 SMA set action to 1 which means Buy
-        # TODO: figure out a better way to mark buy vs sell
-        # also need to make sure this method works right...
-        self.ohlc['Action'] = np.where(crossover_ts > 0, 1, 0)
-
-    def simple_median_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
-        slow_ts = self.simple_moving_median(period=slow, column=column)
-        fast_ts = self.simple_moving_median(period=fast, column=column)
-        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.ohlc.index)
-        crossover_ts['Action'] = np.where(crossover_ts > 0, 1, 0)
-        print(crossover_ts)
-
     @classmethod
     def _true_range_computation(cls, ts, period):
         """
@@ -740,12 +765,54 @@ class Stock(Base):
         """
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
+    """
+    FUNDAMENTAL ANALYSIS
+    """
+
+    def current_ratio(self, full_year=False):
+        current_assets = 0.0
+        current_liabilities = 0.0
+        for fundamental in self.fundamentals:
+
+            if full_year and fundamental.period_focus == 'FY':
+                current_assets += fundamental.current_assets
+                current_liabilities += fundamental.current_liabilities
+            elif fundamental.period_focus != 'FY':
+                current_assets += fundamental.current_assets
+                current_liabilities += fundamental.current_liabilities
+            else:
+                 continue
+        return current_assets / current_liabilities
+
+
+
+    """
+    ALTERNATE CONSTRUCTORS
+    """
+
     @classmethod
-    def create_stock_fundamentals_from_list(cls, ticker_list, start, end):
+    def create_stocks_dict_with_fundamentals_from_list(cls, ticker_list, start, end, get_ohlc=False, session=None,
+                                                       close_session=True):
+        """
+        :param ticker_list: list of str objects, they must correspond to a valid ticker symbol
+        :param start: datetime, start date
+        :param end: datetime, end date
+        :param get_ohlc: boolean, if true then a ohlc time series will be created based on the start and end dates
+        :param session: sqlalchemy session, if None then one will be created and closed
+        :param close_session: boolean, if a user passes a session in and they don't want it to be closed after then set
+        this to false
+        :return: dict, contains stock objects with their corresponding tickers as the key
+
+        create a dict of stocks for a given time period based on the list of ticker symbols passed in
+
+        corresponding Fundamental objects will also be created and inserted into the db for each stock object created
+        """
         from scrapy.crawler import  CrawlerProcess
         from scrapy.utils.project import get_project_settings
         from crawler.spiders.edgar import EdgarSpider
-        from pytech import Session
+        if session is None:
+            from pytech import Session
+            session = Session()
 
         process = CrawlerProcess(get_project_settings())
         for ticker in ticker_list:
@@ -759,82 +826,73 @@ class Stock(Base):
         process.join()
 
         stock_dict = {}
-        session = Session()
         for ticker in ticker_list:
-            # query the DB to get the instance of the stock object corresponding to each ticker in the list
-            stock_dict[ticker] = session.query(cls).filter(cls.ticker == ticker).first()
+            temp_stock = cls(ticker=ticker, start_date=start, end_date=end, get_ohlc=get_ohlc, get_fundamentals=True)
+            stock_dict[ticker] = temp_stock
+            session.add(temp_stock)
+        session.commit()
+        if close_session:
+            session.close()
         return stock_dict
-        # TODO: return the objects and decide if this is really the right approach
 
+    @classmethod
+    def create_stocks_dict_from_list_and_write_to_db(cls, ticker_list, start, end, session=None, get_fundamentals=False,
+                                                     get_ohlc=False, close_session=True):
+        """
+        :param ticker_list: list of str objects, they must correspond to a valid ticker symbol
+        :param start: datetime, start date
+        :param end: datetime, end date
+        :param session: sqlalchemy session, if None then one will be created and closed
+        :param get_fundamentals: boolean, if Fundamental objects should be created then set this to True
+        :param get_ohlc: boolean, if true then an ohlc time series will bce created based on the start and end dates
+        :param close_session: boolean, if a user passes a session in and they don't want it to be closed after then set
+        this to false
+        :return: dict, contains stock objects with their corresponding tickers as the key
 
-# class StockWithFundamentals(Stock):
-#     """
-#     Stock that has fundamental data attached to it in order to do fundamental stock analysis
-#     """
-#     id = Column(Integer, ForeignKey('stock.id'), primary_key=True)
-#
-#     start = Column(DateTime)
-#     end = Column(DateTime)
-#     # will be a list of Fundamental objects
-#     fundamentals = relationship('Fundamental', back_populates='stock')
-#
-#     __mapper_args__ = {
-#         'polymorphic_identity': 'stock_with_fundamentals',
-#         # 'concrete': True
-#     }
-#
-#     def __init__(self, ticker, start_date, end_date):
-#         """
-#         :param ticker:
-#         :param start_date:
-#         :param end_date:
-#
-#         this is basically useless right now but that is ok!
-#         """
-#         # super(StockWithFundamentals, self).__init__(ticker=ticker, start=start, end=end)
-#         super().__init__(ticker=ticker)
-#         # self.ticker = ticker
-#         try:
-#             if type(start_date) == datetime.datetime:
-#                 self.start = start_date
-#             else:
-#                 self.start = parser.parse(start_date)
-#         except ValueError:
-#             raise ValueError('start could not be parsed to datetime obj. {} was provided'.format(start_date))
-#         try:
-#             if type(end_date) == datetime:
-#                 self.end = end_date
-#             else:
-#                 self.end = parser.parse(end_date)
-#         except ValueError:
-#             raise ValueError('end could not be parsed to datetime obj. {} was provided'.format(end_date))
-#         # self.fundamentals = [fundamental]
-#
-#
-#
-#     @classmethod
-#     def create_stock_fundamentals_from_list(cls, ticker_list, start, end):
-#         from scrapy.crawler import  CrawlerProcess
-#         from scrapy.utils.project import get_project_settings
-#         from crawler.spiders.edgar import EdgarSpider
-#         from pytech import Session
-#
-#         process = CrawlerProcess(get_project_settings())
-#         for ticker in ticker_list:
-#             temp_dict = {}
-#             temp_dict['symbols'] = ticker
-#             temp_dict['start_date'] = start
-#             temp_dict['end_date'] = end
-#             process.crawl(EdgarSpider, **temp_dict)
-#         process.start()
-#         process.join()
-#
-#         stock_dict = {}
-#         session = Session()
-#         for ticker in ticker_list:
-#             stock_dict[ticker] = session.query(cls).filter(cls.ticker == ticker).first()
-#         return stock_dict
-#         # TODO: return the objects and decide if this is really the right approach
+        create a dict of stocks for a given time period based on the list of ticker symbols passed in
+        """
+        if session is None:
+            from pytech import Session
+            session = Session()
+        if get_fundamentals:
+            return cls.create_stocks_dict_with_fundamentals_from_list(ticker_list=ticker_list, start=start, end=end,
+                                                                      session=session, get_ohlc=get_ohlc,
+                                                                      close_session=close_session)
+        stock_dict = {}
+        for ticker in ticker_list:
+            temp_stock = cls(ticker=ticker, start_date=start, end_date=end, get_ohlc=get_ohlc)
+            stock_dict[ticker] = temp_stock
+            session.add(temp_stock)
+        session.commit()
+        if close_session:
+            session.close()
+        return stock_dict
+
+    @classmethod
+    def create_stocks_dict_from_list(cls, ticker_list, start, end, get_fundamentals=False, get_ohlc=False, session=None):
+        """
+        :param session: sqlalchemy session, if None is provided then the stocks will not be written to the DB
+        :param ticker_list: list of str objects that have corresponding tickers
+        :param start: datetime
+        :param end: datetime
+        :param get_fundamentals: boolean
+        :param get_ohlc: boolean
+        :return: dict
+
+        create a dictionary of stock objects with their tickers as keys and write them to the DB if a session is provided
+        NOTE: if get_fundamentals is True then stocks have to be written to the DB
+        """
+        if get_fundamentals:
+            return cls.create_stocks_dict_with_fundamentals_from_list(ticker_list=ticker_list, start=start, end=end,
+                                                                      get_ohlc=get_ohlc, session=session)
+        elif session is not None:
+            return cls.create_stocks_dict_from_list_and_write_to_db(ticker_list=ticker_list, start=start, end=end,
+                                                                    session=session, get_fundamentals=get_fundamentals,
+                                                                    get_ohlc=get_ohlc)
+        stock_dict = {}
+        for ticker in ticker_list:
+            stock_dict[ticker] = cls(ticker=ticker, start_date=start, end_date=end, get_ohlc=get_ohlc)
+        return stock_dict
 
 
 class Fundamental(Base, HasStock):
@@ -842,9 +900,6 @@ class Fundamental(Base, HasStock):
     the purpose of the this class to hold one period's worth of fundamental data for a given stock
     """
 
-    # this just doesn't feel right and there should be a better way of handling this
-    # see Stock.get_fundamentals() to see why this is needed
-    # ticker = Column(String)
     id = Column(Integer, primary_key=True)
     amended = Column(Boolean)
     assets = Column(Numeric(30, 2))
@@ -872,16 +927,10 @@ class Fundamental(Base, HasStock):
                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow, ops_cash_flow,
                  ticker, year, period_focus=None):
         """
-        :type stock: Stock
         :param stock:
         :param year:
         :param period_focus: defaults to full year. other valid input is Q1, Q2, or Q3
         """
-        # if isinstance(stock, Stock):
-        #     self.stock = stock
-        # else:
-        #     raise TypeError('stock must be an instance of a stock object. {} was provided'.format(type(stock)))
-        # was this report restated/amended
         self.amended = amended
         self.assets = assets
         self.current_assets = current_assets
@@ -1025,20 +1074,3 @@ class Trade(HasStock, Base):
         # TODO: if the position is short shouldn't this be negative?
         self.qty = qty
         self.price_per_share = price_per_share
-
-def check_date_format(param_name, date, format_string=None):
-    if format_string is None:
-        format_string = '%Y-%m-%d'
-    try:
-        if type(date) is datetime.datetime:
-            return date
-        else:
-            date = datetime.datetime.strptime(date, format_string)
-            return date
-    except ValueError:
-        raise ValueError('{} must be either a datetime.datetime obj or a date string formatted like "{}".'
-                         '{} was provided'.format(param_name, format_string, date))
-
-
-
-

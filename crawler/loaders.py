@@ -94,7 +94,7 @@ class MatchEndDate(object):
                 url = loader_context['response'].url
             except KeyError:
                 url = None
-            logger.msg(u'Cannot find context: {} in {}'.format(context_id, url), logger.WARNING)
+            logger.warning(u'Cannot find context: {} in {}'.format(context_id, url))
             return None
 
         date = instant = start_date = end_date = None
@@ -133,7 +133,8 @@ class MatchEndDate(object):
                     local_name = value.xpath('local-name()')[0].extract()
                     return IntermediateValue(
                         local_name, val, text, context, value,
-                        start_date=start_date, end_date=end_date, instant=instant)
+                        start_date=start_date, end_date=end_date, instant=instant
+                    )
 
         return None
 
@@ -458,6 +459,7 @@ class ReportItemLoader(XmlXPathItemLoader):
 
         # ignore document that is not 10-Q or 10-K
         if not (doc_type and doc_type.split('/')[0] in ('10-Q', '10-K')):
+            logger.info('ignoring document with a doc_type of {}'.format(doc_type))
             return
 
         # some documents set their amendment flag in DocumentType, e.g., '10-Q/A',
@@ -657,12 +659,12 @@ class ReportItemLoader(XmlXPathItemLoader):
         }
         days_left = days_left_table.get(period_focus)
 
-        # Other cases, assume end_date.year of its FY report equals to
-        # its fiscal_year
+        # Other cases, assume end_date.year of its FY report equals to its fiscal_year
         if days_left is not None:
             fy_date = date + timedelta(days=days_left)
             return fy_date.year
 
+        # TODO: should this actually raise an exception?
         return None
 
     def _get_doc_end_date(self):
