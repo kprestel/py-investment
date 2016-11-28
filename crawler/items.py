@@ -49,7 +49,6 @@ class ReportItem(Item):
     cash = Field()
     property_plant_equipment = Field()
 
-
     # Cash flow from operating, investing, and financing
     cash_flow_op = Field()
     cash_flow_inv = Field()
