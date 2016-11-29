@@ -306,6 +306,17 @@ def imd_get_acts_receive(imd_values):
 
 
 def imd_filter_member(imd_values):
+    """
+    :param imd_values: list
+    :return: list
+
+    make a best guess as to what the desired field/value
+
+    ex:
+        SalesRevenue is made up of multiple 'members' like NorthAmericaSales, ChinaSales, etc.
+        these are simply just inputs to the final value of SalesRevenue so we drop them out and only return the
+        'non_members' because that is the actual desired value
+    """
     if imd_values:
         with_memberness = [(v, memberness(v.context)) for v in imd_values]
         with_memberness = sorted(with_memberness, key=functools.cmp_to_key(lambda a, b: a[1] - b[1]))
@@ -340,6 +351,10 @@ def imd_mult(imd_values):
 
 
 def memberness(context):
+    """
+    :param context: IntermediateValue.context
+    :return: int, represents the likely hood that the context is a memeber
+    """
     '''The likelihood that the context is a "member".'''
     if context:
         texts = context.xpath('.//*[local-name()="explicitMember"]/text()').extract()
@@ -454,11 +469,11 @@ class ReportItemLoader(XmlXPathItemLoader):
     acts_pay_current_in = MapCompose(MatchEndDate(float))
     acts_pay_current_out = Compose(imd_filter_member, imd_mult, imd_max)
 
-    act_receive_current_in = MapCompose(MatchEndDate(float))
-    act_receive_current_out = Compose(imd_filter_member, imd_mult, imd_max)
+    acts_receive_current_in = MapCompose(MatchEndDate(float))
+    acts_receive_current_out = Compose(imd_filter_member, imd_mult, imd_max)
 
-    act_receive_noncurrent_in = MapCompose(MatchEndDate(float))
-    act_receive_noncurrent_out = Compose(imd_filter_member, imd_mult, imd_max)
+    acts_receive_noncurrent_in = MapCompose(MatchEndDate(float))
+    acts_receive_noncurrent_out = Compose(imd_filter_member, imd_mult, imd_max)
 
     accrued_liabilities_current_in = MapCompose(MatchEndDate(float))
     accrued_liabilities_current_out = Compose(imd_filter_member, imd_mult, imd_max)
@@ -771,8 +786,10 @@ class ReportItemLoader(XmlXPathItemLoader):
             return None
 
     def _get_doc_end_date(self):
-        # the document end date could come from URL or document content
-        # we need to guess which one is correct
+        """
+        :return: str, the correct end date for the document
+        the document end date could come from URL or document content we need to guess which one is correct
+        """
         url_date_str = self.context['response'].url.split('-')[-1].split('.')[0]
         url_date = datetime.strptime(url_date_str, '%Y%m%d')
         url_date_str = url_date.strftime(DATE_FORMAT)

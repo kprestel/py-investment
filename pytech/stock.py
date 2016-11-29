@@ -62,28 +62,30 @@ class Stock(Base):
     def __init__(self, ticker, start_date, end_date, get_fundamentals=False, get_ohlcv=False):
         self.ticker = ticker
         try:
-            if type(start_date) == datetime.datetime:
-                self.start_date = start_date
-            else:
                 self.start_date = parser.parse(start_date)
         except ValueError:
             raise ValueError('could not convert start_date to datetime.datetime. {} was provided'.format(start_date))
+        except TypeError:
+            # thrown when a datetime is passed in
+            self.start_date = start_date
 
         try:
-            if type(end_date) == datetime.datetime:
-                self.end_date = end_date
-            else:
-                self.end_date = parser.parse(end_date)
+            self.end_date = parser.parse(end_date)
         except ValueError:
             raise ValueError('could not convert end_date to datetime.datetime. {} was provided'.format(end_date))
+        except TypeError:
+            # thrown when a datetime is passed in
+            self.end_date = end_date
 
         if self.start_date >= self.end_date:
             raise ValueError('start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
                                                                                                           str(end_date)))
         if self.start_date >= datetime.datetime.now():
             raise ValueError('start_date must be at least older than the current time')
+
         if self.end_date > datetime.datetime.now():
             raise ValueError('end_date must be at least older than or equal to the current time')
+
         self.get_ohlcv = get_ohlcv
         if get_ohlcv:
             self.ohlcv = self.get_ohlc_series()
@@ -151,7 +153,11 @@ class Stock(Base):
             session.close()
         else:
             process = CrawlerProcess(get_project_settings())
-            spider_dict = {'symbols': self.ticker, 'start_date': self.start_date, 'end_date': self.end_date}
+            spider_dict = {
+                'symbols': self.ticker,
+                'start_date': self.start_date.strftime('%Y%m%d'),
+                'end_date': self.end_date.strftime('%Y%m%d')
+            }
             process.crawl(EdgarSpider, **spider_dict)
             process.start()
             process.join()
@@ -773,28 +779,6 @@ class Stock(Base):
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
     """
-    FUNDAMENTAL ANALYSIS
-    """
-
-    def current_ratio(self, full_year=False):
-        # TODO: move this to fundamentals
-        current_assets = 0.0
-        current_liabilities = 0.0
-        for fundamental in self.fundamentals:
-
-            if full_year and fundamental.period_focus == 'FY':
-                current_assets += fundamental.current_assets
-                current_liabilities += fundamental.current_liabilities
-            elif fundamental.period_focus != 'FY':
-                current_assets += fundamental.current_assets
-                current_liabilities += fundamental.current_liabilities
-            else:
-                 continue
-        return current_assets / current_liabilities
-
-
-
-    """
     ALTERNATE CONSTRUCTORS
     """
 
@@ -961,6 +945,9 @@ class Fundamental(Base, HasStock):
             self.end_date = parser.parse(end_date)
         except ValueError:
             raise ValueError('end_date could not be converted to datetime object. {} was provided'.format(end_date))
+        except TypeError:
+            # thrown when a datetime object is passed into the parser
+            self.end_date = end_date
         self.eps = eps
         self.eps_diluted = eps_diluted
         self.equity = equity
