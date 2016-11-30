@@ -7,6 +7,7 @@ import logging
 import re
 from dateutil import parser
 from sqlalchemy import orm
+from pytech.portfolio import PortfolioAsset
 
 from sqlalchemy.ext.declarative import as_declarative
 from sqlalchemy.ext.declarative import declared_attr
@@ -48,8 +49,13 @@ class HasStock(object):
     def stock(cls):
         return relationship('Stock')
 
+class Asset(object):
+    """
+    This is just an empty class acting as a placeholder for my idea that we will later add more than just stock assets
+    """
+    pass
 
-class Stock(Base):
+class Stock(PortfolioAsset, Base):
     """
     main class that is used to model stocks and may contain technical and fundamental data about the stock
     """
@@ -62,28 +68,30 @@ class Stock(Base):
     def __init__(self, ticker, start_date, end_date, get_fundamentals=False, get_ohlcv=False):
         self.ticker = ticker
         try:
-            if type(start_date) == datetime.datetime:
-                self.start_date = start_date
-            else:
                 self.start_date = parser.parse(start_date)
         except ValueError:
-            raise ValueError('could not convert start_date to datetime.datetime. {} was provided'.format(start_date))
+            raise ValueError('Error parsing start_date to date. {} was provided'.format(start_date))
+        except TypeError:
+            # thrown when a datetime is passed in
+            self.start_date = start_date
 
         try:
-            if type(end_date) == datetime.datetime:
-                self.end_date = end_date
-            else:
-                self.end_date = parser.parse(end_date)
+            self.end_date = parser.parse(end_date)
         except ValueError:
             raise ValueError('could not convert end_date to datetime.datetime. {} was provided'.format(end_date))
+        except TypeError:
+            # thrown when a datetime is passed in
+            self.end_date = end_date
 
         if self.start_date >= self.end_date:
             raise ValueError('start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
                                                                                                           str(end_date)))
         if self.start_date >= datetime.datetime.now():
             raise ValueError('start_date must be at least older than the current time')
+
         if self.end_date > datetime.datetime.now():
             raise ValueError('end_date must be at least older than or equal to the current time')
+
         self.get_ohlcv = get_ohlcv
         if get_ohlcv:
             self.ohlcv = self.get_ohlc_series()
@@ -151,7 +159,11 @@ class Stock(Base):
             session.close()
         else:
             process = CrawlerProcess(get_project_settings())
-            spider_dict = {'symbols': self.ticker, 'start_date': self.start_date, 'end_date': self.end_date}
+            spider_dict = {
+                'symbols': self.ticker,
+                'start_date': self.start_date.strftime('%Y%m%d'),
+                'end_date': self.end_date.strftime('%Y%m%d')
+            }
             process.crawl(EdgarSpider, **spider_dict)
             process.start()
             process.join()
@@ -773,28 +785,6 @@ class Stock(Base):
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
     """
-    FUNDAMENTAL ANALYSIS
-    """
-
-    def current_ratio(self, full_year=False):
-        # TODO: move this to fundamentals
-        current_assets = 0.0
-        current_liabilities = 0.0
-        for fundamental in self.fundamentals:
-
-            if full_year and fundamental.period_focus == 'FY':
-                current_assets += fundamental.current_assets
-                current_liabilities += fundamental.current_liabilities
-            elif fundamental.period_focus != 'FY':
-                current_assets += fundamental.current_assets
-                current_liabilities += fundamental.current_liabilities
-            else:
-                 continue
-        return current_assets / current_liabilities
-
-
-
-    """
     ALTERNATE CONSTRUCTORS
     """
 
@@ -961,6 +951,9 @@ class Fundamental(Base, HasStock):
             self.end_date = parser.parse(end_date)
         except ValueError:
             raise ValueError('end_date could not be converted to datetime object. {} was provided'.format(end_date))
+        except TypeError:
+            # thrown when a datetime object is passed into the parser
+            self.end_date = end_date
         self.eps = eps
         self.eps_diluted = eps_diluted
         self.equity = equity
@@ -973,6 +966,7 @@ class Fundamental(Base, HasStock):
         self.ops_cash_flow = ops_cash_flow
         self.period_focus = period_focus
         self.year = year
+        # foreign key to stock
         self.ticker = ticker
         self.gross_profit = gross_profit
         self.property_plant_equipment = property_plant_equipment
@@ -1062,57 +1056,15 @@ class Fundamental(Base, HasStock):
         return cls(**df)
 
 
+# class FinancialRatios(Fundamental, HasStock, Base):
+#     """
+#     Holds and calculates all financial ratios and can optionally persist them in the DB
+#     """
+#     id = Column(Integer, primary_key=True)
+#     current_ratio = Column(Numeric(30,6))
 
 
 
-class Trade(HasStock, Base):
-    id = Column(Integer, primary_key=True)
-    trade_date = Column(DateTime)
-    # buy or sell
-    action = Column(String)
-    # long or short
-    position = Column(String)
-    qty = Column(Integer)
-    price_per_share = Column(Numeric(9,2))
-    corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
-    corresponding_trade = relationship('Trade', remote_side=[id])
 
-    def __init__(self, trade_date, qty, price_per_share, stock, action='buy', position=None, corresponding_trade=None):
-        """
-        :param trade_date: datetime.datetime, corresponding to the trade date
-        :param qty: int, number of shares traded
-        :param price_per_share: float, price per individual share in the trade or the average share price in the trade
-        :param stock: Stock, the stock object that was traded
-        :param action: str, buy or sell depending on what kind of trade it was
-        :param position: str, long or short
-        """
-        if type(trade_date) is datetime.datetime:
-            self.trade_date = trade_date
-        else:
-            raise TypeError('trade_date must be of type datetime.datetime. '
-                            '{} is not a datetime.datetime object'.format(trade_date))
-        if action.lower() == 'buy' or action.lower() == 'sell':
-            # TODO: may have to run a query to check if we own the stock or not? and if we do use update?
-            self.action = action.lower()
-        else:
-            raise ValueError('action must be either "buy" or "sell". {} was provided.'.format(action))
-        if position.lower() == 'long' or position.lower() == 'short':
-            self.position = position.lower()
-        elif position is None and corresponding_trade is not None:
-            self.position = position
-        elif position is None and corresponding_trade is None:
-            raise ValueError('position can only be None if a corresponding_trade is also provided and None was provided')
-        else:
-            raise ValueError('position must be either "long" or "short". {} was provided.'.format(position))
-        if isinstance(stock, Stock):
-            self.stock = stock
-        else:
-            raise ValueError('stock must be an instance of the Stock class. {} was provided.'.format(stock))
-        if corresponding_trade is None or isinstance(corresponding_trade, Trade):
-            # TODO: check if the corresponding_trade is actually in the DB yet
-            self.corresponding_trade = corresponding_trade
-        else:
-            raise ValueError('corresponding_trade must either be None or an instance of a Trade object')
-        # TODO: if the position is short shouldn't this be negative?
-        self.qty = qty
-        self.price_per_share = price_per_share
+
+

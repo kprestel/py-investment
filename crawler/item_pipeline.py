@@ -100,47 +100,26 @@ class FundamentalItemPipeline(object):
     def process_item(self, item, spider):
         logger.info('Creating fundamental obj for ticker: {}'.format(item['symbol']))
         fundamental_dict = {}
-        fundamental_dict['amended'] = item['amend']
-        fundamental_dict['assets'] = item['assets']
-        fundamental_dict['current_assets'] = item['cur_assets']
-        fundamental_dict['current_liabilities'] = item['cur_liab']
-        fundamental_dict['cash'] = item['cash']
-        fundamental_dict['dividend'] = item['dividend']
-        fundamental_dict['end_date'] = item['end_date']
-        fundamental_dict['eps'] = item['eps_basic']
-        fundamental_dict['eps_diluted'] = item['eps_diluted']
-        fundamental_dict['equity'] = item['equity']
-        fundamental_dict['net_income'] = item['net_income']
-
-        try:
-            fundamental_dict['operating_income'] = item['op_income']
-            # selector means XML tag
-            if type(fundamental_dict['operating_income']) == Selector:
-                fundamental_dict['operating_income'] = None
-                logger.warning(
-                    'operating income was of type {} so it could not be used'.format(type(item['op_income'])))
-        except KeyError:
-            logger.warning('op_income could not be found for {}'.format(item['symbol']))
-            fundamental_dict['operating_income'] = None
-
-        fundamental_dict['revenues'] = item['revenues']
-
-        try:
-            fundamental_dict['investment_revenues'] = item['investment_revenues']
-            if type(fundamental_dict['investment_revenues']) == Selector:
-                fundamental_dict['investment_revenues'] = None
-                logger.warning('investment_revenues was of type {} so it could not be used' \
-                               .format(type(item['investment_revenues'])))
-        except KeyError:
-            logger.warning('investment_revenues could not be found for {}'.format(item['symbol']))
-            fundamental_dict['investment_revenues'] = None
-
-        fundamental_dict['fin_cash_flow'] = item['cash_flow_fin']
-        fundamental_dict['inv_cash_flow'] = item['cash_flow_inv']
-        fundamental_dict['ops_cash_flow'] = item['cash_flow_op']
-        fundamental_dict['period_focus'] = item['period_focus']
-        fundamental_dict['year'] = item['fiscal_year']
-        fundamental_dict['ticker'] = item['symbol']
+        fundamental_dict['amended'] = item.get('amend')
+        fundamental_dict['assets'] = item.get('assets')
+        fundamental_dict['current_assets'] = item.get('cur_assets')
+        fundamental_dict['current_liabilities'] = item.get('cur_liab')
+        fundamental_dict['cash'] = item.get('cash')
+        fundamental_dict['dividend'] = item.get('dividend')
+        fundamental_dict['end_date'] = item.get('end_date')
+        fundamental_dict['eps'] = item.get('eps_basic')
+        fundamental_dict['eps_diluted'] = item.get('eps_diluted')
+        fundamental_dict['equity'] = item.get('equity')
+        fundamental_dict['net_income'] = item.get('net_income')
+        fundamental_dict['operating_income'] = item.get('op_income')
+        fundamental_dict['revenues'] = item.get('revenues')
+        fundamental_dict['investment_revenues'] = item.get('investment_revenues')
+        fundamental_dict['fin_cash_flow'] = item.get('cash_flow_fin')
+        fundamental_dict['inv_cash_flow'] = item.get('cash_flow_inv')
+        fundamental_dict['ops_cash_flow'] = item.get('cash_flow_op')
+        fundamental_dict['period_focus'] = item.get('period_focus')
+        fundamental_dict['year'] = item.get('fiscal_year')
+        fundamental_dict['ticker'] = item.get('symbol')
         fundamental_dict['property_plant_equipment'] = item.get('property_plant_equipment')
         fundamental_dict['gross_profit'] = item.get('gross_profit')
         fundamental_dict['tax_expense'] = item.get('tax_expense')
@@ -156,63 +135,3 @@ class FundamentalItemPipeline(object):
     def close_spider(self, spider):
         self.session.commit()
         self.session.close()
-
-
-def get_newer_date(date_one, date_two):
-    """
-    :param date_one: str or datetime
-    :param date_two: str or datetime
-    :return: datetime
-
-    returns the newer of two dates, as in the date that is closer to today
-    """
-    if type(date_one) != datetime:
-        try:
-            date_one = parser.parse(date_one)
-        except ValueError:
-            raise ValueError('could not convert date_one to datetime')
-    if type(date_two) != datetime:
-        try:
-            date_two = parser.parse(date_two)
-        except ValueError:
-            raise ValueError('could not convert date_two to datetime')
-    return max(date_one, date_two)
-
-
-def get_older_date(date_one, date_two):
-    """
-    :param date_one: str or datetime
-    :param date_two: str or datetime
-    :return: datetime
-
-    returns the older of two dates, as in the date that is further away from today
-    """
-    if type(date_one) != datetime:
-        try:
-            date_one = parser.parse(date_one)
-            # date_one = datetime.strptime(date_one, '%Y-%m-%d')
-        except ValueError:
-            raise ValueError('could not convert date_one to datetime')
-    if type(date_two) != datetime:
-        try:
-            date_two = parser.parse(date_two)
-            # date_two = datetime.strptime(date_two, '%Y-%m-%d')
-        except ValueError:
-            raise ValueError('could not convert date_two to datetime')
-    return min(date_one, date_two)
-
-
-def guess_start_date(period_focus, end_date):
-    """
-    :param period_focus: str
-    :param end_date: str or datetime
-    :return: datetime
-
-    attempts to best guess the start date by subtracting 3 months if the period_focus is quarterly and 12 months if it
-    is a full year
-    """
-    end = parser.parse(end_date)
-    if period_focus != 'FY':
-        return end + relativedelta(months=-3)
-    else:
-        return end + relativedelta(months=-12)
