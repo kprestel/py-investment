@@ -4,26 +4,12 @@ from datetime import date, timedelta
 from dateutil import parser
 from sqlalchemy import orm
 
-from pytech.stock import Base, HasStock
+from pytech.stock import HasStock, Base, Stock
 from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.orm.collections import attribute_mapped_collection
 
-class PortfolioAsset(object):
-    """
-    Mixin object to create a one to many relationship with Portfolio
-
-    Any class that inherits from this class may be added to a Portfolio's asset_list which will place a foreign key
-    in that asset class and create a relationship between it and the Portfolio that owns it
-    """
-
-    @declared_attr
-    def portfolio_id(cls):
-        return Column('ticker', ForeignKey('portfolio.id'))
-
-    @declared_attr
-    def portfolio(cls):
-        return relationship('Portfolio')
 
 class Portfolio(Base):
     """
@@ -39,13 +25,35 @@ class Portfolio(Base):
         How else can we handle this?
     """
 
-    id = Column(Integer, primary_key=True)
+    # id = Column(Integer, primary_key=True)
     cash = Column(Numeric(30, 2))
-    benchmark = Column(String)
+    benchmark_ticker = Column(String)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
+    assets = relationship('Stock',
+                        collection_class=attribute_mapped_collection('ticker'),
+                        cascade='all, delete-orphan')
 
-    def __init__(self, tickers, start_date=None, end_date=None, benchmark='^GSPC', starting_cash=1000000):
+    def __init__(self, tickers, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000,
+                 get_fundamentals=False, get_ohlcv=True):
+        """
+        :param tickers: list, containing all the tickers in the portfolio. This list will be used to create the Stock
+            objects that they correspond to, there cannot be any duplicates
+        :param start_date: date, the start date of the analysis.
+            This will be passed to each Stock object created and the ohlcv data frame loaded will start at this date.
+            start_date will default to today - 365 days if nothing is passed in
+        :param end_date: date, the end date of the analysis.
+            This will be passed in each Stock object created and the ohlcv data frame as well.
+            end_date defaults to today
+        :param benchmark_ticker: str, the ticker of the market index or benchmark to compare the portfolio against.
+            benchmark_ticker defaults to the S&P 500
+        :param starting_cash: float, the amount of dollars to allocate to the portfolio initially
+        :param get_fundamentals: boolean, if True the fundamentals of each Stock will be retrieved
+            NOTE: if a lot of stocks are loaded this may take a little bit of time
+            get_fundamentals defaults to False
+        :param get_ohlcv: boolean, if True an ohlcv data frame will be created for each stock
+            get_ohlcv defaults to True
+        """
         if type(tickers) != list:
             # make sure tickers is a list
             tickers = [tickers]
@@ -54,29 +62,37 @@ class Portfolio(Base):
         # I don't like the way this is done but don't have a better idea right now
         if start_date is None:
             # default to 1 year
-            self.start = date.today() - timedelta(days=365)
+            self.start_date = date.today() - timedelta(days=365)
         else:
             try:
-                self.start = parser.parse(start_date).date()
+                self.start_date = parser.parse(start_date).date()
             except ValueError:
                 raise ValueError('Error parsing start_date to date. {} was provided')
             except TypeError:
-                self.start = start_date.date()
+                self.start_date = start_date.date()
 
         if end_date is None:
             # default to today
-            self.end = date.today()
+            self.end_date = date.today()
         else:
             try:
-                self.end = parser.parse(end_date).date()
+                self.end_date = parser.parse(end_date).date()
             except ValueError:
                 raise ValueError('Error parsing end_date to date. {} was provided')
             except TypeError:
-                self.end = end_date.date()
+                self.end_date = end_date.date()
 
-        self.asset_dict = {}
-        # benchmark defaults to the S&P 500
-        self.benchmark = web.DataReader(benchmark, 'yahoo', start=self.start, end=self.end)
+        self.assets = {}
+        if get_fundamentals:
+            stocks = Stock.stocks_with_fundamentals_from_list(ticker_list=tickers, start=start_date, end=end_date,
+                                                              get_ohlcv=get_ohlcv)
+            for stock in stocks:
+                self.assets[stock.ticker] = stock
+
+        # benchmark_ticker default to the S&P 500
+        self.benchmark_ticker = benchmark_ticker
+
+        self.benchmark = web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         self.cash = starting_cash
 
     @orm.reconstructor
@@ -86,25 +102,21 @@ class Portfolio(Base):
 
         recreate the benchmark series on load from DB
         """
-        # TODO: THIS
-        pass
-
-        # for ticker in tickers:
-        #     self.asset_dict[ticker] = Stock(ticker, self.start, self.end)
+        self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
     def buy_shares(self, ticker, num_shares, buy_date):
-        if ticker in self.asset_dict:
+        if ticker in self.assets:
             pass
 
     def portfolio_return(self):
         pass
 
     def sma(self):
-        for ticker, stock in self.asset_dict.items():
+        for ticker, stock in self.assets.items():
             yield stock.simple_moving_average()
 
 class Trade(HasStock, Base):
-    id = Column(Integer, primary_key=True)
+    # id = Column(Integer, primary_key=True)
     trade_date = Column(DateTime)
     # 'buy' or 'sell'
     action = Column(String)
@@ -112,8 +124,8 @@ class Trade(HasStock, Base):
     position = Column(String)
     qty = Column(Integer)
     price_per_share = Column(Numeric(9,2))
-    corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
-    corresponding_trade = relationship('Trade', remote_side=[id])
+    # corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
+    # corresponding_trade = relationship('Trade', remote_side=[id])
 
     def __init__(self, trade_date, qty, price_per_share, stock, action='buy', position=None, corresponding_trade=None):
         """
@@ -161,20 +173,20 @@ class Trade(HasStock, Base):
         self.qty = qty
         self.price_per_share = price_per_share
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # testing stuff
     from scrapy.crawler import CrawlerProcess, Crawler
     from scrapy.utils.project import get_project_settings
     from twisted.internet import reactor
-    from pytech import Session
-    from pytech.stock import Stock
-    tickers = ['AAPL', 'F', 'SKX']
-    start = '20160101'
-    end = '20161124'
-    session = Session()
-    stock = Stock(ticker='AAPL', start_date=start, end_date=end, get_fundamentals=True)
-    session.add(stock)
-    session.commit()
+    # from pytech import Session
+    # from pytech.stock import Stock
+    # tickers = ['AAPL', 'F', 'SKX']
+    # start = '20160101'
+    # end = '20161124'
+    # session = Session()
+    # stock = Stock(ticker='AAPL', start_date=start, end_date=end, get_fundamentals=True)
+    # session.add(stock)
+    # session.commit()
     # stock_dict = Stock.create_stock_fundamentals_from_list(ticker_list=tickers, start=start, end=end)
     # for k, v in stock_dict.items():
     #     print('key: {}'.format(k))

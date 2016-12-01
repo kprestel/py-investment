@@ -2,6 +2,7 @@ import pytest
 import pandas as pd
 from datetime import datetime
 from pytech.stock import Stock, Fundamental
+from pytech.portfolio import Portfolio
 
 class TestStock(object):
 
@@ -30,30 +31,41 @@ class TestStock(object):
         assert stock.ticker == 'AAPL'
         assert stock.start_date == test_start_date
         assert stock.end_date == test_end_date
-        assert stock.get_ohlcv == False
-        assert stock.fundamentals == []
+        assert stock.get_ohlcv == True
+        assert stock.fundamentals == {}
 
     def test_stock_fixture(self, stock: Stock):
         assert stock.ticker == 'AAPL'
         assert stock.start_date == datetime(year=2016, month=9, day=1)
         assert stock.end_date == datetime(year=2016, month=11, day=1)
-        assert stock.get_ohlcv == False
-        assert stock.fundamentals == []
+        assert stock.get_ohlcv == True
+        assert stock.fundamentals == {}
 
-    def test_stock_with_fundamentals_fixture(self, stock_with_fundamentals: Stock):
-        assert stock_with_fundamentals.ticker == 'AAPL'
-        assert stock_with_fundamentals.start_date == datetime(year=2016, month=9, day=1)
-        assert stock_with_fundamentals.end_date == datetime(year=2016, month=11, day=1)
-        assert stock_with_fundamentals.get_ohlcv == False
-        assert len(stock_with_fundamentals.fundamentals) != 0
+    # def test_stock_with_fundamentals_fixture(self, stock_with_fundamentals: Stock):
+    #     assert stock_with_fundamentals.ticker == 'AAPL'
+    #     assert stock_with_fundamentals.start_date == datetime(year=2016, month=9, day=1)
+    #     assert stock_with_fundamentals.end_date == datetime(year=2016, month=11, day=1)
+    #     assert stock_with_fundamentals.get_ohlcv == True
+    #     assert len(stock_with_fundamentals.fundamentals) != 0
 
     def test_stock_with_ohlcv_fixture(self, stock_with_ohlcv: Stock):
         assert stock_with_ohlcv.ticker == 'AAPL'
         assert stock_with_ohlcv.start_date == datetime(year=2016, month=9, day=1)
         assert stock_with_ohlcv.end_date == datetime(year=2016, month=11, day=1)
         assert stock_with_ohlcv.get_ohlcv == True
-        assert stock_with_ohlcv.fundamentals == []
+        assert stock_with_ohlcv.fundamentals == {}
         assert type(stock_with_ohlcv.ohlcv) == pd.DataFrame
+
+class TestPortfolio(object):
+
+    def test_portfolio_with_fundamentals(self):
+        tickers = ['AAPL', 'MSFT']
+        portfolio = Portfolio(tickers=tickers, start_date='20160601', end_date='20161124',
+                              get_fundamentals=True, get_ohlcv=False)
+        for k, stock in portfolio.assets.items():
+            assert isinstance(stock, Stock)
+
+
 
 
 class TestFundamental(object):
@@ -81,7 +93,6 @@ class TestFundamental(object):
         assert fundamental.ops_cash_flow == 700.0
         assert fundamental.period_focus == 'Q3'
         assert fundamental.year == '2016'
-        assert fundamental.ticker == 'AAPL'
 
     def test_creating_fundamental_from_dict(self, fundamental: Fundamental):
         fundamental_dict = {

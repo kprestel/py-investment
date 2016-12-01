@@ -16,7 +16,7 @@ sys.path.append('/home/kp/CodeFiles/StockPicker/')
 
 def main():
     portfolio = Portfolio(tickers=['AAPL', 'SPY'])
-    universe_dict = portfolio.asset_dict
+    universe_dict = portfolio.assets
     # universe_dict = get_stock_universe(stock_list=['AAPL', 'SPY'])
     for i in simple_moving_average(universe_dict):
         print(i.tail())

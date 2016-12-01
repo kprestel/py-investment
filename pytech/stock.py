@@ -7,12 +7,13 @@ import logging
 import re
 from dateutil import parser
 from sqlalchemy import orm
-from pytech.portfolio import PortfolioAsset
+# from pytech.portfolio import PortfolioAsset
 
 from sqlalchemy.ext.declarative import as_declarative
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm.collections import attribute_mapped_collection
 
 logging.basicConfig()
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
@@ -30,8 +31,25 @@ class Base(object):
             lambda m: '_' + m.group(0).lower(), name[1:])
         )
 
-    # id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)
 
+class PortfolioAsset(object):
+    """
+    Mixin object to create a one to many relationship with Portfolio
+
+    Any class that inherits from this class may be added to a Portfolio's asset_list which will place a foreign key
+    in that asset class and create a relationship between it and the Portfolio that owns it
+    """
+
+    @declared_attr
+    def portfolio_id(cls):
+        return Column('portfolio_id', ForeignKey('portfolio.id'))
+
+        # @declared_attr
+        # def portfolio(cls):
+        #     return relationship('Portfolio',
+        #                         collection_class=attribute_mapped_collection('ticker'),
+        #                         cascade='all, delete-orphan')
 
 class HasStock(object):
     """
@@ -43,11 +61,11 @@ class HasStock(object):
 
     @declared_attr
     def ticker(cls):
-        return Column('ticker', ForeignKey('stock.ticker'))
+        return Column('stock_id', ForeignKey('stock.id'))
 
-    @declared_attr
-    def stock(cls):
-        return relationship('Stock')
+    # @declared_attr
+    # def stock(cls):
+    #     return relationship('Stock')
 
 class Asset(object):
     """
@@ -59,13 +77,16 @@ class Stock(PortfolioAsset, Base):
     """
     main class that is used to model stocks and may contain technical and fundamental data about the stock
     """
-    ticker = Column(String, unique=True, primary_key=True)
+    ticker = Column(String, unique=True)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
     get_ohlcv = Column(Boolean)
-    fundamentals = relationship('Fundamental', backref='fundamentals',cascade='all, delete-orphan')
+    load_fundamentals = Column(Boolean)
+    fundamentals = relationship('Fundamental',
+                                collection_class=attribute_mapped_collection('access_key'),
+                                cascade='all, delete-orphan')
 
-    def __init__(self, ticker, start_date, end_date, get_fundamentals=False, get_ohlcv=False):
+    def __init__(self, ticker, start_date, end_date, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
         try:
                 self.start_date = parser.parse(start_date)
@@ -98,7 +119,8 @@ class Stock(PortfolioAsset, Base):
         else:
             self.ohlcv = None
 
-        self.fundamentals = []
+        self.fundamentals = {}
+        self.load_fundamentals = get_fundamentals
         if get_fundamentals:
             self.get_fundamentals()
 
@@ -121,6 +143,12 @@ class Stock(PortfolioAsset, Base):
     #         raise AttributeError(str(item) + ' is not an attribute?')
 
     def __getitem__(self, key):
+        """
+        :param key:
+        :return:
+
+        I forgot why this is here and am scared to delete it
+        """
         return self.ohlcv
 
     def get_ohlc_series(self, data_source='yahoo'):
@@ -153,9 +181,11 @@ class Stock(PortfolioAsset, Base):
         # fundamentals will be returned but for now this should work
         # it will require some sort of date guessing based on the periods and the end dates or something so yeah
         # that is a problem for another day
-        fundamentals = session.query(Fundamental).filter(Fundamental.ticker == self.ticker).all()
-        if fundamentals:
-            self.fundamentals = fundamentals
+        result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
+        if result:
+            for row in result:
+                self.fundamentals[row.access_key] = row
+            # self.fundamentals = fundamentals
             session.close()
         else:
             process = CrawlerProcess(get_project_settings())
@@ -168,7 +198,9 @@ class Stock(PortfolioAsset, Base):
             process.start()
             process.join()
             # TODO: test and make sure that after the process finishes the instance has access to ALL of its fundamentals
-            self.fundamentals = session.query(Fundamental).filter(Fundamental.ticker == self.ticker).all()
+            result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
+            for row in result:
+                self.fundamentals[row.access_key] = row
             session.close()
 
     """
@@ -789,13 +821,13 @@ class Stock(PortfolioAsset, Base):
     """
 
     @classmethod
-    def create_stocks_dict_with_fundamentals_from_list(cls, ticker_list, start, end, get_ohlc=False, session=None,
-                                                       close_session=True):
+    def stocks_with_fundamentals_from_list(cls, ticker_list, start, end, get_ohlcv=False, session=None,
+                                           close_session=True):
         """
         :param ticker_list: list of str objects, they must correspond to a valid ticker symbol
         :param start: datetime, start date
         :param end: datetime, end date
-        :param get_ohlc: boolean, if true then a ohlc time series will be created based on the start and end dates
+        :param get_ohlcv: boolean, if true then a ohlc time series will be created based on the start and end dates
         :param session: sqlalchemy session, if None then one will be created and closed
         :param close_session: boolean, if a user passes a session in and they don't want it to be closed after then set
         this to false
@@ -808,9 +840,9 @@ class Stock(PortfolioAsset, Base):
         from scrapy.crawler import  CrawlerProcess
         from scrapy.utils.project import get_project_settings
         from crawler.spiders.edgar import EdgarSpider
-        if session is None:
-            from pytech import Session
-            session = Session()
+        # if session is None:
+        #     from pytech import Session
+        #     session = Session()
 
         process = CrawlerProcess(get_project_settings())
         for ticker in ticker_list:
@@ -823,15 +855,16 @@ class Stock(PortfolioAsset, Base):
         process.start()
         process.join()
 
-        stock_dict = {}
+        # stock_dict = {}
         for ticker in ticker_list:
-            temp_stock = cls(ticker=ticker, start_date=start, end_date=end, get_ohlc=get_ohlc, get_fundamentals=True)
-            stock_dict[ticker] = temp_stock
-            session.add(temp_stock)
-        session.commit()
-        if close_session:
-            session.close()
-        return stock_dict
+            yield cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv, get_fundamentals=False)
+        #     temp_stock = cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv, get_fundamentals=True)
+        #     stock_dict[ticker] = temp_stock
+        #     session.add(temp_stock)
+        # session.commit()
+        # if close_session:
+        #     session.close()
+        # return stock_dict
 
     @classmethod
     def create_stocks_dict_from_list_and_write_to_db(cls, ticker_list, start, end, session=None, get_fundamentals=False,
@@ -901,7 +934,9 @@ class Fundamental(Base, HasStock):
     new arguments as added and the item_pipeline needs to be updated
     """
 
-    id = Column(Integer, primary_key=True)
+    # id = Column(Integer, primary_key=True)
+    # key to the corresponding Stock's dictionary
+    access_key = Column(String, unique=True)
     amended = Column(Boolean)
     assets = Column(Numeric(30, 2))
     current_assets = Column(Numeric(30, 2))
@@ -933,7 +968,7 @@ class Fundamental(Base, HasStock):
 
     def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow, ops_cash_flow,
-                 ticker, year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid, acts_pay_current,
+                 year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid, acts_pay_current,
                  acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current, period_focus=None):
         """
         :param stock:
@@ -967,7 +1002,7 @@ class Fundamental(Base, HasStock):
         self.period_focus = period_focus
         self.year = year
         # foreign key to stock
-        self.ticker = ticker
+        # self.ticker = ticker
         self.gross_profit = gross_profit
         self.property_plant_equipment = property_plant_equipment
         self.tax_expense = tax_expense
@@ -980,6 +1015,8 @@ class Fundamental(Base, HasStock):
         else:
             self.acts_receive = acts_receive_noncurrent + acts_receive_current
         self.accrued_liabilities_current = accrued_liabilities_current
+        self.access_key = year + '_' + period_focus
+
 
         # self.period_year = period_year
 
@@ -1044,7 +1081,7 @@ class Fundamental(Base, HasStock):
         # a list of the columns above
         allowed = ('amended', 'assets', 'current_assets', 'current_liabilities', 'cash', 'dividend', 'end_date', 'eps',
                    'eps_diluted', 'equity', 'net_income', 'operating_income', 'revenues', 'investment_revenues',
-                   'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus', 'year', 'ticker', 'gross_profit',
+                   'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus', 'year', 'gross_profit',
                    'property_plant_equipment', 'gross_profit', 'tax_expense', 'net_taxes_paid', 'acts_pay_current',
                    'acts_receive_current', 'acts_receive_noncurrent', 'accrued_liabilities_current')
         from scrapy import Selector

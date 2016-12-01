@@ -3,6 +3,7 @@ from os.path import dirname, join
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
+from pytech.portfolio import Portfolio
 from pytech.stock import Base
 
 PROJECT_DIR = dirname(__file__)
