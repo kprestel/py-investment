@@ -23,6 +23,15 @@ class Portfolio(Base):
             Use the Trade table as an association table?
         How else can price/qty be tracked for a specific Stock -> Portfolio?
         How else can we handle this?
+
+        The portfolio class ideally is the only class that will interact with the database. By that I mean that no other
+        class should be 'committing' anything the only way anything gets committed to the db is when the Portfolio they
+        are all directly or indirectly associated with. I'm not 100% sure this will be possible or the best design
+        pattern but it kinda seems like the right idea right now.
+
+    your's truly:
+        KP.
+
     """
 
     # id = Column(Integer, primary_key=True)
@@ -66,7 +75,9 @@ class Portfolio(Base):
             tickers = [tickers]
 
         # ensure start_date and end_date are proper type
-        # I don't like the way this is done but don't have a better idea right now
+        # I don't like the way this is done but don't have a better idea right nowAnother way to tag commits is with a lightweight tag. This is basically the commit checksum stored in a file – no other information is kept. To create a lightweight tag, don’t supply the -a, -s, or -m option:
+
+
         if start_date is None:
             # default to 1 year
             self.start_date = date.today() - timedelta(days=365)

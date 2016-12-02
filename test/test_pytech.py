@@ -41,12 +41,12 @@ class TestStock(object):
         assert stock.get_ohlcv == True
         assert stock.fundamentals == {}
 
-    # def test_stock_with_fundamentals_fixture(self, stock_with_fundamentals: Stock):
-    #     assert stock_with_fundamentals.ticker == 'AAPL'
-    #     assert stock_with_fundamentals.start_date == datetime(year=2016, month=9, day=1)
-    #     assert stock_with_fundamentals.end_date == datetime(year=2016, month=11, day=1)
-    #     assert stock_with_fundamentals.get_ohlcv == True
-    #     assert len(stock_with_fundamentals.fundamentals) != 0
+    def test_stock_with_fundamentals_fixture(self, stock_with_fundamentals: Stock):
+        assert stock_with_fundamentals.ticker == 'AAPL'
+        assert stock_with_fundamentals.start_date == datetime(year=2016, month=9, day=1)
+        assert stock_with_fundamentals.end_date == datetime(year=2016, month=11, day=1)
+        assert stock_with_fundamentals.get_ohlcv == True
+        assert len(stock_with_fundamentals.fundamentals) != 0
 
     def test_stock_with_ohlcv_fixture(self, stock_with_ohlcv: Stock):
         assert stock_with_ohlcv.ticker == 'AAPL'

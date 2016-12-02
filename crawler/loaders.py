@@ -186,8 +186,10 @@ def get_symbol(values):
 
 def imd_max(imd_values):
     """
-    :param imd_values: list
-    :return: max value in the list
+    :param imd_values:
+        a list
+    :return:
+        max value in the list
 
     this method should be used when there are multiple xpaths for an item and the highest one is the 'right' one.
     ex:

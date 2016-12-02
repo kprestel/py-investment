@@ -52,10 +52,11 @@ class URLGeneratorTest(TestCaseBase):
 
 class EdgarSpiderTest(TestCaseBase):
 
+    # @pytest.mark.skip(reason='this should not be a thing.')
     def test_empty_creation(self):
-        with pytest.raises(ValueError):
-            spider = EdgarSpider()
-            self.assertEqual(spider.start_urls, [])
+        # with pytest.raises(ValueError):
+        spider = EdgarSpider()
+        self.assertEqual(spider.start_urls, [])
 
     @pytest.mark.skip(reason='not really needed anymore')
     def test_symbol_file(self):
@@ -76,10 +77,10 @@ class EdgarSpiderTest(TestCaseBase):
 
     def test_invalid_dates(self):
         with pytest.raises(ValueError):
-            EdgarSpider(startdate='12345678')
+            EdgarSpider(start_date='not a date boy')
 
         with pytest.raises(ValueError):
-            EdgarSpider(enddate='12345678')
+            EdgarSpider(end_date='still not a date boi, come at me.')
 
     @pytest.mark.skip(reason='not really needed anymore')
     def test_symbol_file_and_dates(self):
@@ -88,7 +89,7 @@ class EdgarSpiderTest(TestCaseBase):
         f.write('# Comment\nT\nCBS\nWMT\n')
         f.close()
 
-        spider = EdgarSpider(symbols=f.name, startdate='20110101', enddate='20130630')
+        spider = EdgarSpider(symbols=f.name, start_date='20110101', end_date='20130630')
         urls = list(spider.start_urls)
 
         self.assertEqual(urls, [

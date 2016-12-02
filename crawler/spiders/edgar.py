@@ -4,6 +4,7 @@ import logging
 from dateutil import parser
 
 from datetime import datetime
+from datetime import timedelta
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
@@ -41,8 +42,16 @@ class EdgarSpider(CrawlSpider):
         super(EdgarSpider, self).__init__(**kwargs)
 
         self.symbols_arg = kwargs.get('symbols')
-        start_date = kwargs.get('start_date', '')
-        end_date = kwargs.get('end_date', '')
+        if 'start_date' in kwargs:
+            start_date = kwargs.get('start_date')
+        else:
+            start_date = datetime().today() - timedelta(days=365)
+            start_date = start_date.date()
+        if 'end_date' in kwargs:
+            end_date = kwargs.get('end_date')
+        else:
+            end_date = datetime().today()
+
         try:
             start_date = parser.parse(start_date)
         except ValueError:
