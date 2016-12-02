@@ -1,12 +1,12 @@
 import os
 from builtins import object
 import logging
+from dateutil import parser
 
 from datetime import datetime
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
-from crawler import utils
 from crawler.loaders import ReportItemLoader
 
 logger = logging.getLogger(__name__)
@@ -41,16 +41,26 @@ class EdgarSpider(CrawlSpider):
         super(EdgarSpider, self).__init__(**kwargs)
 
         self.symbols_arg = kwargs.get('symbols')
-        self.start_date = kwargs.get('start_date', '')
-        self.end_date = kwargs.get('end_date', '')
+        start_date = kwargs.get('start_date', '')
+        end_date = kwargs.get('end_date', '')
+        try:
+            start_date = parser.parse(start_date)
+        except ValueError:
+            raise ValueError('Error parsing start_date. {} was provided.'.format(start_date))
+        else:
+            self.start_date = start_date.strftime('%Y%m%d')
+        try:
+            end_date = parser.parse(end_date)
+        except ValueError:
+            raise ValueError('Error parsing start_date. {} was provided.'.format(start_date))
+        else:
+            self.end_date = end_date.strftime('%Y%m%d')
+
         # limit_arg = kwargs.get('limit', '')
         start = int(kwargs.get('start', 0))
         count = kwargs.get('count', None)
         if count is not None:
             count = int(count)
-
-        # self.check_date_arg(start_date, 'start_date')
-        # self.check_date_arg(end_date, 'end_date')
 
         if self.symbols_arg:
             if isinstance(self.symbols_arg, list):

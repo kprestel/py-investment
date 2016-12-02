@@ -37,21 +37,28 @@ class Portfolio(Base):
     def __init__(self, tickers, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000,
                  get_fundamentals=False, get_ohlcv=True):
         """
-        :param tickers: list, containing all the tickers in the portfolio. This list will be used to create the Stock
+        :param tickers:
+            a list, containing all the tickers in the portfolio. This list will be used to create the Stock
             objects that they correspond to, there cannot be any duplicates
-        :param start_date: date, the start date of the analysis.
-            This will be passed to each Stock object created and the ohlcv data frame loaded will start at this date.
+        :param start_date:
+            a date, the start date of the analysis.
+            This will be passed to each :class: Stock created and the ohlcv data frame loaded will start at this date.
             start_date will default to today - 365 days if nothing is passed in
-        :param end_date: date, the end date of the analysis.
-            This will be passed in each Stock object created and the ohlcv data frame as well.
+        :param end_date:
+            a date, the end date of the analysis.
+            This will be passed in each :class: Stock created and the ohlcv data frame as well.
             end_date defaults to today
-        :param benchmark_ticker: str, the ticker of the market index or benchmark to compare the portfolio against.
+        :param benchmark_ticker:
+            a string, the ticker of the market index or benchmark to compare the portfolio against.
             benchmark_ticker defaults to the S&P 500
-        :param starting_cash: float, the amount of dollars to allocate to the portfolio initially
-        :param get_fundamentals: boolean, if True the fundamentals of each Stock will be retrieved
+        :param starting_cash:
+            float, the amount of dollars to allocate to the portfolio initially
+        :param get_fundamentals:
+            a boolean, if True the fundamentals of each Stock will be retrieved
             NOTE: if a lot of stocks are loaded this may take a little bit of time
             get_fundamentals defaults to False
-        :param get_ohlcv: boolean, if True an ohlcv data frame will be created for each stock
+        :param get_ohlcv:
+            a boolean, if True an ohlcv data frame will be created for each :class: stock
             get_ohlcv defaults to True
         """
         if type(tickers) != list:
@@ -129,12 +136,18 @@ class Trade(HasStock, Base):
 
     def __init__(self, trade_date, qty, price_per_share, stock, action='buy', position=None, corresponding_trade=None):
         """
-        :param trade_date: datetime.datetime, corresponding to the trade date
-        :param qty: int, number of shares traded
-        :param price_per_share: float, price per individual share in the trade or the average share price in the trade
-        :param stock: Stock, the stock object that was traded
-        :param action: str, buy or sell depending on what kind of trade it was
-        :param position: str, long or short
+        :param trade_date:
+            a datetime, corresponding to the date and time of the trade date
+        :param qty:
+            an int, number of shares traded
+        :param price_per_share:
+            a float, price per individual share in the trade or the average share price in the trade
+        :param stock:
+            a :class: Stock, the stock object that was traded
+        :param action:
+        a string, must be 'buy' or 'sell' depending on what kind of trade it was
+        :param position:
+        a string, must be 'long' or 'short'
         """
         try:
             self.trade_date = parser.parse(trade_date).date()

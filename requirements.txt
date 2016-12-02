@@ -2,6 +2,7 @@ attrs==16.2.0
 beautifulsoup4==4.5.1
 cffi==1.8.3
 constantly==15.1.0
+coverage==4.2
 cryptography==1.5.2
 cssselect==1.0.0
 cycler==0.10.0
@@ -26,6 +27,7 @@ PyDispatcher==2.0.5
 pyOpenSSL==16.2.0
 pyparsing==2.1.10
 pytest==3.0.3
+pytest-cov==2.4.0
 python-dateutil==2.5.3
 pytz==2016.7
 QuantPy==0.1
