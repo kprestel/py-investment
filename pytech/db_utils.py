@@ -7,17 +7,11 @@ from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 from functools import wraps
 # from pytech import DATABASE_LOCATION
-# from pytech.stock import Base
 # from pytech.portfolio import Portfolio
+from pytech.base import Base
+from pytech import Session
 
-PROJECT_DIR = dirname(__file__)
-
-DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.db')
-cs = 'sqlite+pysqlite:///{}'.format(DATABASE_LOCATION)
-engine = create_engine(cs, connect_args={'check_same_thread':False}, poolclass=StaticPool)
-Session = sessionmaker(bind=engine)
 # Base.metadata.drop_all(engine)
-# Base.metadata.create_all(engine)
 @contextmanager
 def query_session():
     session = Session()

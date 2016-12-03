@@ -88,7 +88,6 @@ class MatchEndDate(object):
         selector = loader_context['selector']
 
         context_id = value.xpath('@contextRef')[0].extract()
-        logger.debug('context_id={}'.format(context_id))
         try:
             context = selector.xpath('//*[@id="{}"]'.format(context_id))[0]
         except IndexError:
@@ -480,6 +479,45 @@ class ReportItemLoader(XmlXPathItemLoader):
     accrued_liabilities_current_in = MapCompose(MatchEndDate(float))
     accrued_liabilities_current_out = Compose(imd_filter_member, imd_mult, imd_max)
 
+    inventory_net_in = MapCompose(MatchEndDate(float))
+    inventory_net_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    interest_expense_in = MapCompose(MatchEndDate(float))
+    interest_expense_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    total_liabilities_in = MapCompose(MatchEndDate(float))
+    total_liabilities_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    total_liabilities_equity_in = MapCompose(MatchEndDate(float))
+    total_liabilities_equity_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    shares_outstanding_in = MapCompose(MatchEndDate(float))
+    shares_outstanding_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    shares_outstanding_diluted_in = MapCompose(MatchEndDate(float))
+    shares_outstanding_diluted_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    common_stock_outstanding_in = MapCompose(MatchEndDate(float))
+    common_stock_outstanding_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    depreciation_amortization_in = MapCompose(MatchEndDate(float))
+    depreciation_amortization_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    cogs_in = MapCompose(MatchEndDate(float))
+    cogs_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    comprehensive_income_net_of_tax_in = MapCompose(MatchEndDate(float))
+    comprehensive_income_net_of_tax_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    research_and_dev_expense_in = MapCompose(MatchEndDate(float))
+    research_and_dev_expense_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    warranty_accrual_in = MapCompose(MatchEndDate(float))
+    warranty_accrual_out = Compose(imd_filter_member, imd_mult, imd_max)
+
+    warranty_accrual_payments_in = MapCompose(MatchEndDate(float))
+    warranty_accrual_payments_out = Compose(imd_filter_member, imd_mult, imd_max)
+
     net_income_in = MapCompose(MatchEndDate(float))
     net_income_out = Compose(imd_filter_member, imd_mult, imd_get_net_income)
 
@@ -622,6 +660,64 @@ class ReportItemLoader(XmlXPathItemLoader):
         self.add_xpath('acts_receive_noncurrent', [
             '//us-gaap:AccountsReceivableNetNoncurrent'
         ])
+
+        self.add_xpath('inventory_net',[
+            '//us-gaap:InventoryNet'
+        ])
+
+        self.add_xpath('interest_expense',[
+            '//us-gaap:InterestExpense'
+        ])
+
+        self.add_xpath('total_liabilities',[
+            '//us-gaap:Liabilities'
+        ])
+
+        self.add_xpath('total_liabilities_equity',[
+            '//us-gaap:LiabilitiesAndStockHoldersEquity'
+        ])
+
+        # how many shares do they have to give away to employees and things like that
+        self.add_xpath('shares_outstanding',[
+            '//us-gaap:WeightedAverageNumberOfSharesOutstandingBasic'
+        ])
+
+        self.add_xpath('shares_outstanding_diluted',[
+            '//us-gaap:WeightedAverageNumberOfDilutedSharesOutstandingBasic'
+        ])
+
+        self.add_xpath('common_stock_outstanding',[
+            '//us-gaap:CommonStockSharesOutstanding'
+        ])
+
+        self.add_xpath('depreciation_amortization',[
+            '//us-gaap:DepreciationAmortizationAndAccretionNet'
+        ])
+
+        # cost of goods sold
+        self.add_xpath('cogs', [
+            '//us-gaap:CostOfGoodsAndServicesSold'
+        ])
+
+        # net of tax how much did shareholders equity change
+        self.add_xpath('comprehensive_income_net_of_tax', [
+            '//us-gaap:ComprehensiveIncomeNetOfTax'
+        ])
+
+        self.add_xpath('research_and_dev_expense',[
+            '//us-gaap:ResearchAndDevelopmentExpense'
+        ])
+
+        # how much they expect to pay in warranties
+        self.add_xpath('warranty_accrual',[
+            '//us-gaap:StandardProductWarrantyAccrual'
+        ])
+        #how much they actually paid
+        self.add_xpath('warranty_accrual_payments',[
+            '//us-gaap:StandardProductWarrantyAccrualPayments'
+        ])
+
+        # self.add_xpath('long_term_debt')
 
         self.add_xpaths('net_income', [
             '//*[contains(local-name(), "NetLossIncome") and contains(local-name(), "Corporation")]',

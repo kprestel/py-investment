@@ -1,5 +1,6 @@
 # from pytech import Session
-import pytech.db_utils as db
+from pytech.base import Base
+from collections import namedtuple
 import pandas as pd
 import os
 import numpy as np
@@ -20,23 +21,14 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
+import pytech.db_utils as db
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
-@as_declarative(constructor=None)
-class Base(object):
 
-    @declared_attr
-    def __tablename__(cls):
-        name = cls.__name__
-        return (
-            name[0].lower() +
-            re.sub(r'([A-Z])',
-            lambda m: '_' + m.group(0).lower(), name[1:])
-        )
-
-    id = Column(Integer, primary_key=True)
+# Base = Base()
+# Base.metadata.create_all(db.engine)
 
 class PortfolioAsset(object):
     """
@@ -52,9 +44,14 @@ class PortfolioAsset(object):
 
         # @declared_attr
         # def portfolio(cls):
+        #     return relationship('Portfolio', )
+
+        # @declared_attr
+        # def portfolio(cls):
         #     return relationship('Portfolio',
         #                         collection_class=attribute_mapped_collection('ticker'),
         #                         cascade='all, delete-orphan')
+
 
 class HasStock(object):
     """
@@ -68,15 +65,17 @@ class HasStock(object):
     def ticker(cls):
         return Column('stock_id', ForeignKey('stock.id'))
 
-    # @declared_attr
-    # def stock(cls):
-    #     return relationship('Stock')
+        # @declared_attr
+        # def stock(cls):
+        #     return relationship('Stock')
+
 
 class Asset(object):
     """
     This is just an empty class acting as a placeholder for my idea that we will later add more than just stock assets
     """
     pass
+
 
 class Stock(PortfolioAsset, Base):
     """
@@ -87,6 +86,9 @@ class Stock(PortfolioAsset, Base):
     end_date = Column(DateTime)
     get_ohlcv = Column(Boolean)
     load_fundamentals = Column(Boolean)
+    beta = Column(Numeric)
+    start_price = Column(Numeric)
+    end_price = Column(Numeric)
     fundamentals = relationship('Fundamental',
                                 collection_class=attribute_mapped_collection('access_key'),
                                 cascade='all, delete-orphan')
@@ -94,7 +96,7 @@ class Stock(PortfolioAsset, Base):
     def __init__(self, ticker, start_date, end_date, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
         try:
-                self.start_date = parser.parse(start_date)
+            self.start_date = parser.parse(start_date)
         except ValueError:
             raise ValueError('Error parsing start_date to date. {} was provided'.format(start_date))
         except TypeError:
@@ -110,8 +112,9 @@ class Stock(PortfolioAsset, Base):
             self.end_date = end_date
 
         if self.start_date >= self.end_date:
-            raise ValueError('start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
-                                                                                                          str(end_date)))
+            raise ValueError(
+                'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
+                                                                                             str(end_date)))
         if self.start_date >= datetime.datetime.now():
             raise ValueError('start_date must be at least older than the current time')
 
@@ -121,8 +124,12 @@ class Stock(PortfolioAsset, Base):
         self.get_ohlcv = get_ohlcv
         if get_ohlcv:
             self.ohlcv = self.get_ohlc_series()
+            self.beta = self.calculate_beta()
+            self.start_price = self.ohlcv[['Adj Close']].head(1).iloc[0]['Adj Close']
+            self.end_price = self.ohlcv[['Adj Close']].tail(1).iloc[0]['Adj Close']
         else:
             self.ohlcv = None
+            self.beta = None
 
         self.fundamentals = {}
         self.load_fundamentals = get_fundamentals
@@ -175,7 +182,6 @@ class Stock(PortfolioAsset, Base):
         pass the required attributes to the EdgarSpider and it will create the corresponding fundamentals objects
         for this stock instance as well as write the fundamental object to the DB
         """
-        # from pytech import Session
 
         # session = Session()
         with db.query_session() as session:
@@ -201,7 +207,6 @@ class Stock(PortfolioAsset, Base):
                 result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
                 for row in result:
                     self.fundamentals[row.access_key] = row
-            # session.close()
 
     """
     TECHNICAL INDICATORS/ANALYSIS
@@ -569,25 +574,84 @@ class Stock(PortfolioAsset, Base):
         b_bandwidth = pd.Series((upper_bband - lower_bband) / middle_band, name='b_bandwidth')
         return pd.concat([upper_bband, middle_band, lower_bband, b_bandwidth, percent_b], axis=1)
 
-    def calculate_beta(self):
-        market_df = web.DataReader('SPY', 'yahoo', start=self.start_date, end=self.end_date)
-        stock_df = self.ohlcv
-        market_start_price = market_df[['Adj Close']].head(1).iloc[0]['Adj Close']
-        market_end_price = market_df[['Adj Close']].tail(1).iloc[0]['Adj Close']
-        stock_start_price = stock_df[['Adj Close']].head(1).iloc[0]['Adj Close']
-        stock_end_price = stock_df[['Adj Close']].tail(1).iloc[0]['Adj Close']
+    def _get_portfolio_benchmark(self):
+        """
+        Helper method to get the :class: Portfolio's benchmark ticker symbol
+        :return: TimeSeries
+        """
+        from pytech.portfolio import Portfolio
+
+        with db.query_session() as session:
+            benchmark_ticker = \
+                session.query(Portfolio.benchmark_ticker) \
+                    .filter(Portfolio.id == self.portfolio_id) \
+                    .first()
+        if not benchmark_ticker:
+            return web.DataReader('^GSPC', 'yahoo', start=self.start_date, end=self.end_date)
+        else:
+            return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
+
+    def _get_pct_change(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+        """
+        Get the percentage change over the :class: Stock's start and end dates for both the stock as well as the market
+
+        :param use_portfolio_benchmark: boolean
+            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
+        :param market_ticker: str
+            Any valid ticker symbol to use as the market.
+        :return: TimeSeries
+        """
+        pct_change = namedtuple('Pct_Change', 'market_pct_change stock_pct_change')
+        if use_portfolio_benchmark:
+            market_df = self._get_portfolio_benchmark()
+        else:
+            market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         market_pct_change = pd.Series(market_df['Adj Close'].pct_change(periods=1))
-        stock_pct_change = pd.Series(stock_df['Adj Close'].pct_change(periods=1))
-        covar = stock_pct_change.cov(market_pct_change)
-        variance = market_pct_change.var()
-        beta = covar / variance
-        correlation = stock_pct_change.corr(market_pct_change)
-        market_return = ((market_end_price - market_start_price) / market_start_price) * 100
-        stock_return = ((stock_end_price - stock_start_price) / stock_start_price) * 100
-        risk_free_rate = web.DataReader('TB1YR', 'fred', start=self.start_date, end=self.end_date).tail(1).iloc[0]['TB1YR']
-        market_adj_return = market_return - risk_free_rate
-        stock_adj_return = stock_return - risk_free_rate
-        return beta
+        stock_pct_change = pd.Series(self.ohlcv['Adj Close'].pct_change(periods=1))
+        return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
+
+    def calculate_beta(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+        """
+        Compute the beta for the :class: Stock
+
+        :param use_portfolio_benchmark: boolean
+            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
+        :param market_ticker:
+            Any valid ticker symbol to use as the market.
+        :return: float
+            The beta for the given Stock
+        """
+        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
+        covar = pct_change.stock_pct_change.cov(pct_change.market_pct_change)
+        variance = pct_change.market_pct_change.var()
+        return covar / variance
+
+    def market_correlation(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+        """
+        Compute the correlation between a :class: Stock's return and the market return.
+        :param use_portfolio_benchmark:
+            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
+        :param market_ticker:
+            Any valid ticker symbol to use as the market.
+        :return:
+
+        Best used to gauge the accuracy of the beta.
+        """
+        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
+        return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
+
+    def adj_return(self, risk_free_rate_ticker='TB1YR'):
+        risk_free_rate = web.DataReader(risk_free_rate_ticker, 'fred', start=self.start_date, end=self.end_date) \
+            .tail(1).iloc[0][risk_free_rate_ticker]
+        stock_return = ((self.end_price - self.start_price) / self.start_price) * 100
+        return stock_return - risk_free_rate
+
+    def roi(self):
+        """
+        Compute the return on investment for a :class: Stock
+        :return: float
+        """
+        return ((self.end_price - self.start_price) / self.start_price) * 100
 
     def directional_movement_indicator(self, period=14):
         """
@@ -627,7 +691,6 @@ class Stock(PortfolioAsset, Base):
         diminus = pd.Series(100 * (temp_df['negative_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(),
                             name='negative_dmi')
         return pd.concat([diplus, diminus])
-
 
     def sma_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
         """
@@ -690,6 +753,7 @@ class Stock(PortfolioAsset, Base):
         diminus = pd.Series(100 * (temp_df['negative_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(),
                             name='negative_dmi')
         return pd.concat([diplus, diminus])
+
     @classmethod
     def _true_range_computation(cls, ts, period):
         """
@@ -807,12 +871,12 @@ class Stock(PortfolioAsset, Base):
     @classmethod
     def _ewma_computation(cls, ts, period=50, column='Adj Close'):
         """
+        this method is used for computations in other exponential moving averages
+
         :param ohlc: Timeseries
         :param period: int, number of days
         :param column: string
         :return: Timeseries
-
-        this method is used for computations in other exponential moving averages
         """
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
@@ -821,20 +885,22 @@ class Stock(PortfolioAsset, Base):
     """
 
     @classmethod
-    def stocks_with_fundamentals_from_list(cls, ticker_list, start, end, get_ohlcv=False):
+    def from_ticker_list(cls, ticker_list, start, end, get_ohlcv=False, get_fundamentals=False):
         """
-        :param ticker_list: list of str objects, they must correspond to a valid ticker symbol
-        :param start: datetime, start date
-        :param end: datetime, end date
-        :param get_ohlcv: boolean, if true then a ohlc time series will be created based on the start and end dates
-        :param session: sqlalchemy session, if None then one will be created and closed
-        :param close_session: boolean, if a user passes a session in and they don't want it to be closed after then set
-        this to false
-        :return: dict, contains stock objects with their corresponding tickers as the key
+        Create a dict of stocks for a given time period based on the list of ticker symbols passed in
 
-        create a dict of stocks for a given time period based on the list of ticker symbols passed in
-
-        corresponding Fundamental objects will also be created and inserted into the db for each stock object created
+        :param ticker_list: list of str
+            must they must correspond to a valid ticker symbol. They will be used to create the :class: Stock objects
+        :param start: date or str date formatted YYYYMMDD
+            when to load the ohlcv and the :class: Fundamental as of
+        :param end: date or str date formatted YYYYMMDD
+            when to load the ohlcv and the :class: Fundamental as of
+        :param get_ohlcv: boolean
+            if true then a ohlc time series will be created based on the start and end dates
+        :param get_fundamentals: boolean
+            if true then :class: Fundamentals will be created and added to the db
+        :return: generator
+            contains one :class: Stock per ticker in the ticker list
         """
 
         configure_logging()
@@ -851,7 +917,8 @@ class Stock(PortfolioAsset, Base):
         reactor.run()
 
         for ticker in ticker_list:
-            yield cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv, get_fundamentals=False)
+            yield cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv,
+                      get_fundamentals=get_fundamentals)
 
     @classmethod
     def create_stocks_dict_from_list_and_write_to_db(cls, ticker_list, start, end, session=None, get_fundamentals=False,
@@ -887,7 +954,8 @@ class Stock(PortfolioAsset, Base):
         return stock_dict
 
     @classmethod
-    def create_stocks_dict_from_list(cls, ticker_list, start, end, get_fundamentals=False, get_ohlc=False, session=None):
+    def create_stocks_dict_from_list(cls, ticker_list, start, end, get_fundamentals=False, get_ohlc=False,
+                                     session=None):
         """
         :param session: sqlalchemy session, if None is provided then the stocks will not be written to the DB
         :param ticker_list: list of str objects that have corresponding tickers
@@ -921,8 +989,7 @@ class Fundamental(Base, HasStock):
     new arguments as added and the item_pipeline needs to be updated
     """
 
-    # id = Column(Integer, primary_key=True)
-    # key to the corresponding Stock's dictionary
+    # key to the corresponding Stock's dictionary must be 'period_focus_year'
     access_key = Column(String, unique=True)
     amended = Column(Boolean)
     assets = Column(Numeric(30, 2))
@@ -931,8 +998,8 @@ class Fundamental(Base, HasStock):
     cash = Column(Numeric(30, 2))
     dividend = Column(Numeric(10, 2))
     end_date = Column(DateTime)
-    eps = Column(Numeric(6,2))
-    eps_diluted  = Column(Numeric(6,2))
+    eps = Column(Numeric(6, 2))
+    eps_diluted = Column(Numeric(6, 2))
     equity = Column(Numeric(30, 2))
     net_income = Column(Numeric(30, 2))
     operating_income = Column(Numeric(30, 2))
@@ -952,15 +1019,70 @@ class Fundamental(Base, HasStock):
     acts_receive_noncurrent = Column(Numeric(30, 2))
     acts_receive = Column(Numeric(30, 2))
     accrued_liabilities_current = Column(Numeric(30, 2))
+    inventory_net = Column(Numeric)
+    interest_expense = Column(Numeric)
+    total_liabilities = Column(Numeric)
+    total_liabilities_equity = Column(Numeric)
+    shares_outstanding = Column(Numeric)
+    shares_outstanding_diluted = Column(Numeric)
+    depreciation_amortization = Column(Numeric)
+    cogs = Column(Numeric)
+    comprehensive_income_net_of_tax = Column(Numeric)
+    research_and_dev_expense = Column(Numeric)
+    common_stock_outstanding = Column(Numeric)
+    warranty_accrual = Column(Numeric)
+    warranty_accrual_payments = Column(Numeric)
 
     def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
-                 equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow, ops_cash_flow,
-                 year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid, acts_pay_current,
-                 acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current, period_focus=None):
+                 equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,
+                 ops_cash_flow, year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid,
+                 acts_pay_current, acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current,
+                 period_focus, inventory_net, interest_expense, total_liabilities, total_liabilities_equity,
+                 shares_outstanding, shares_outstanding_diluted, common_stock_outstanding, depreciation_amortization,
+                 cogs, comprehensive_income_net_of_tax, research_and_dev_expense, warranty_accrual,
+                 warranty_accrual_payments):
         """
-        :param stock:
+        This :class: should never really be instantiated directly.  It is intended to be instantiated by the
+        :class: EdgarSpider after it has finished scraping the XBRL page that it will be associated with
+        because that is where the data will come from that populates the class.
+
+        :param amended: str
+            were the finical statements amended
+        :param assets: float
+            total assets
+        :param current_assets: float
+            total current assets
+        :param current_liabilities: float
+            total current liabilities
+        :param cash: float
+            total cash and cash equivalents
+        :param dividend: float
+            if a dividend was paid how much was it
+        :param end_date: date
+            end of the fiscal period
+        :param eps: float
+            earnings per share
+        :param eps_diluted: float
+            diluted earnings per share
+        :param equity: float
+            total equity
+        :param net_income:
+        :param operating_income:
+        :param revenues:
+        :param investment_revenues:
+        :param fin_cash_flow:
+        :param inv_cash_flow:
+        :param ops_cash_flow:
         :param year:
-        :param period_focus: defaults to full year. other valid input is Q1, Q2, or Q3
+        :param property_plant_equipment:
+        :param gross_profit:
+        :param tax_expense:
+        :param net_taxes_paid:
+        :param acts_pay_current:
+        :param acts_receive_current:
+        :param acts_receive_noncurrent:
+        :param accrued_liabilities_current:
+        :param period_focus:
         """
         self.amended = amended
         self.assets = assets
@@ -988,8 +1110,6 @@ class Fundamental(Base, HasStock):
         self.ops_cash_flow = ops_cash_flow
         self.period_focus = period_focus
         self.year = year
-        # foreign key to stock
-        # self.ticker = ticker
         self.gross_profit = gross_profit
         self.property_plant_equipment = property_plant_equipment
         self.tax_expense = tax_expense
@@ -1003,9 +1123,29 @@ class Fundamental(Base, HasStock):
             self.acts_receive = acts_receive_noncurrent + acts_receive_current
         self.accrued_liabilities_current = accrued_liabilities_current
         self.access_key = str(year) + '_' + period_focus
+        self.inventory_net = inventory_net
+        self.interest_expense = interest_expense
+        self.total_liabilities = total_liabilities
+        self.total_liabilities_equity = total_liabilities_equity
+        self.shares_outstanding = shares_outstanding
+        self.shares_outstanding_diluted = shares_outstanding_diluted
+        self.common_stock_outstanding = common_stock_outstanding
+        self.depreciation_amortization = depreciation_amortization
+        self.cogs = cogs
+        self.comprehensive_income_net_of_tax = comprehensive_income_net_of_tax
+        self.research_and_dev_expense = research_and_dev_expense
+        self.warranty_accrual = warranty_accrual
+        self.warranty_accrual_payments = warranty_accrual_payments
 
 
-        # self.period_year = period_year
+    def current_ratio(self):
+        return self.current_assets / self.current_liabilities
+
+    def return_on_assets(self):
+        return self.net_income / self.assets
+
+    def debt_ratio(self):
+        return self.assets / self.total_liabilities
 
     @classmethod
     def from_json_file(cls, stock, year, period_focus=None):
@@ -1054,31 +1194,30 @@ class Fundamental(Base, HasStock):
         inv_cash_flow = data.cash_flow_inv
         ops_cash_flow = data.cash_flow_op
         ticker = data.symbol
-        return cls(amended=amended, assets=assets, current_assets=current_assets, current_liabilities=current_liabilities,
+        return cls(amended=amended, assets=assets, current_assets=current_assets,
+                   current_liabilities=current_liabilities,
                    cash=cash, dividend=dividend, end_date=end_date, eps=eps, eps_diluted=eps_diluted, equity=equity,
                    net_income=net_income, operating_income=operating_income, revenues=revenues,
                    investment_revenues=investment_revenues, fin_cash_flow=fin_cash_flow, inv_cash_flow=inv_cash_flow,
                    ops_cash_flow=ops_cash_flow, year=year, period_focus=period_focus, ticker=ticker)
 
-    def current_ratio(self):
-        return self.current_assets / self.current_liabilities
 
     @classmethod
     def from_dict(cls, fundamental_dict):
         # a list of the columns above
-        allowed = ('amended', 'assets', 'current_assets', 'current_liabilities', 'cash', 'dividend', 'end_date', 'eps',
-                   'eps_diluted', 'equity', 'net_income', 'operating_income', 'revenues', 'investment_revenues',
-                   'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus', 'year', 'gross_profit',
-                   'property_plant_equipment', 'gross_profit', 'tax_expense', 'net_taxes_paid', 'acts_pay_current',
-                   'acts_receive_current', 'acts_receive_noncurrent', 'accrued_liabilities_current')
-        from scrapy import Selector
-        df = {k : v for k, v in fundamental_dict.items() if k in allowed and type(v) is not Selector}
+        # allowed = ('amended', 'assets', 'current_assets', 'current_liabilities', 'cash', 'dividend', 'end_date', 'eps',
+        #            'eps_diluted', 'equity', 'net_income', 'operating_income', 'revenues', 'investment_revenues',
+        #            'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus', 'year', 'gross_profit',
+        #            'property_plant_equipment', 'gross_profit', 'tax_expense', 'net_taxes_paid', 'acts_pay_current',
+        #            'acts_receive_current', 'acts_receive_noncurrent', 'accrued_liabilities_current')
+        # from scrapy import Selector
+        # df = {k : v for k, v in fundamental_dict.items() if k in allowed and type(v) is not Selector}
+        df = {k: v for k, v in fundamental_dict.items() if k in cls.__dict__}
         # dd = {}
         # for k, v in fundamental_dict.items():
         #     if k in allowed:
         #         pass
         return cls(**df)
-
 
 # class FinancialRatios(Fundamental, HasStock, Base):
 #     """
@@ -1086,9 +1225,3 @@ class Fundamental(Base, HasStock):
 #     """
 #     id = Column(Integer, primary_key=True)
 #     current_ratio = Column(Numeric(30,6))
-
-
-
-
-
-

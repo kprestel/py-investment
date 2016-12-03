@@ -1,11 +1,14 @@
 # from pytech import Session
 import pandas as pd
+from pytech.base import Base
 import pandas_datareader.data as web
 from datetime import date, timedelta
 from dateutil import parser
+from sqlalchemy import ForeignKey
 from sqlalchemy import orm
 
-from pytech.stock import HasStock, Base, Stock
+import pytech.db_utils as db
+from pytech.stock import HasStock, Stock
 from sqlalchemy import Column, Numeric, String, DateTime, Integer
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
@@ -44,7 +47,7 @@ class Portfolio(Base):
     benchmark_ticker = Column(String)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
-    assets = relationship('Stock',
+    assets = relationship('Stock', backref="portfolio",
                         collection_class=attribute_mapped_collection('ticker'),
                         cascade='all, delete-orphan')
 
@@ -106,12 +109,11 @@ class Portfolio(Base):
 
         self.assets = {}
         if get_fundamentals:
-            stocks = Stock.stocks_with_fundamentals_from_list(ticker_list=tickers, start=start_date, end=end_date,
-                                                              get_ohlcv=get_ohlcv)
+            stocks = Stock.from_ticker_list(ticker_list=tickers, start=start_date, end=end_date,
+                                            get_ohlcv=get_ohlcv)
             for stock in stocks:
                 self.assets[stock.ticker] = stock
 
-        # benchmark_ticker default to the S&P 500
         self.benchmark_ticker = benchmark_ticker
 
         self.benchmark = web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
@@ -145,7 +147,7 @@ class Trade(HasStock, Base):
     position = Column(String)
     qty = Column(Integer)
     price_per_share = Column(Numeric(9,2))
-    # corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
+    corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
     # corresponding_trade = relationship('Trade', remote_side=[id])
 
     def __init__(self, trade_date, qty, price_per_share, stock, action='buy', position=None, corresponding_trade=None):
