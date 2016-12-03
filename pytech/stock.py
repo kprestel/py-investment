@@ -1,3 +1,5 @@
+# from pytech import Session
+import pytech.db_utils as db
 import pandas as pd
 import os
 import numpy as np
@@ -173,33 +175,33 @@ class Stock(PortfolioAsset, Base):
         pass the required attributes to the EdgarSpider and it will create the corresponding fundamentals objects
         for this stock instance as well as write the fundamental object to the DB
         """
-        from pytech import Session
+        # from pytech import Session
 
-        session = Session()
-        # check to see if the fundamentals already exist
-        # NOTE: there may be an edge case where the start and end dates are different and so not all of the desired
-        # fundamentals will be returned but for now this should work
-        # it will require some sort of date guessing based on the periods and the end dates or something so yeah
-        # that is a problem for another day
-        result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
-        if result:
-            for row in result:
-                self.fundamentals[row.access_key] = row
-            session.close()
-        else:
-            configure_logging()
-            runner = CrawlerRunner(settings=get_project_settings())
-            spider_dict = {
-                'symbols': self.ticker,
-                'start_date': self.start_date.strftime('%Y%m%d'),
-                'end_date': self.end_date.strftime('%Y%m%d')
-            }
-            runner.crawl(EdgarSpider, **spider_dict)
-            reactor.run()
+        # session = Session()
+        with db.query_session() as session:
+            # check to see if the fundamentals already exist
+            # NOTE: there may be an edge case where the start and end dates are different and so not all of the desired
+            # fundamentals will be returned but for now this should work
+            # it will require some sort of date guessing based on the periods and the end dates or something so yeah
+            # that is a problem for another day
             result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
-            for row in result:
-                self.fundamentals[row.access_key] = row
-            session.close()
+            if result:
+                for row in result:
+                    self.fundamentals[row.access_key] = row
+            else:
+                configure_logging()
+                runner = CrawlerRunner(settings=get_project_settings())
+                spider_dict = {
+                    'symbols': self.ticker,
+                    'start_date': self.start_date.strftime('%Y%m%d'),
+                    'end_date': self.end_date.strftime('%Y%m%d')
+                }
+                runner.crawl(EdgarSpider, **spider_dict)
+                reactor.run()
+                result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
+                for row in result:
+                    self.fundamentals[row.access_key] = row
+            # session.close()
 
     """
     TECHNICAL INDICATORS/ANALYSIS
@@ -819,8 +821,7 @@ class Stock(PortfolioAsset, Base):
     """
 
     @classmethod
-    def stocks_with_fundamentals_from_list(cls, ticker_list, start, end, get_ohlcv=False, session=None,
-                                           close_session=True):
+    def stocks_with_fundamentals_from_list(cls, ticker_list, start, end, get_ohlcv=False):
         """
         :param ticker_list: list of str objects, they must correspond to a valid ticker symbol
         :param start: datetime, start date

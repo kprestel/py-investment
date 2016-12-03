@@ -1,3 +1,4 @@
+# from pytech import Session
 import pandas as pd
 import pandas_datareader.data as web
 from datetime import date, timedelta
