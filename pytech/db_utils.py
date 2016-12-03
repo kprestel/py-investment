@@ -1,17 +1,7 @@
-from distutils import dirname
-
-from os.path import join
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
-from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 from functools import wraps
-# from pytech import DATABASE_LOCATION
-# from pytech.portfolio import Portfolio
-from pytech.base import Base
 from pytech import Session
 
-# Base.metadata.drop_all(engine)
 @contextmanager
 def query_session():
     session = Session()

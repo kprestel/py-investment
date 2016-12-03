@@ -5,7 +5,8 @@ import pandas as pd
 import os
 import numpy as np
 import pandas_datareader.data as web
-import datetime
+# import datetime
+from datetime import datetime, date
 import logging
 import re
 from dateutil import parser
@@ -65,9 +66,9 @@ class HasStock(object):
     def ticker(cls):
         return Column('stock_id', ForeignKey('stock.id'))
 
-        # @declared_attr
-        # def stock(cls):
-        #     return relationship('Stock')
+    @declared_attr
+    def stock(cls):
+        return relationship('OwnedStock')
 
 
 class Asset(object):
@@ -77,7 +78,7 @@ class Asset(object):
     pass
 
 
-class Stock(PortfolioAsset, Base):
+class Stock(Base):
     """
     main class that is used to model stocks and may contain technical and fundamental data about the stock
     """
@@ -89,12 +90,18 @@ class Stock(PortfolioAsset, Base):
     beta = Column(Numeric)
     start_price = Column(Numeric)
     end_price = Column(Numeric)
+    owned = Column(Boolean)
     fundamentals = relationship('Fundamental',
                                 collection_class=attribute_mapped_collection('access_key'),
                                 cascade='all, delete-orphan')
+    __mapper_args__ = {
+        'polymorphic_on': owned,
+        'polymorphic_identity': False
+    }
 
-    def __init__(self, ticker, start_date, end_date, get_fundamentals=False, get_ohlcv=True):
+    def __init__(self, ticker, start_date, end_date=None, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
+        self.owned = False
         try:
             self.start_date = parser.parse(start_date)
         except ValueError:
@@ -103,23 +110,26 @@ class Stock(PortfolioAsset, Base):
             # thrown when a datetime is passed in
             self.start_date = start_date
 
-        try:
-            self.end_date = parser.parse(end_date)
-        except ValueError:
-            raise ValueError('could not convert end_date to datetime.datetime. {} was provided'.format(end_date))
-        except TypeError:
-            # thrown when a datetime is passed in
-            self.end_date = end_date
+        if end_date is None:
+            self.end_date = datetime.now()
+        else:
+            try:
+                self.end_date = parser.parse(end_date)
+            except ValueError:
+                raise ValueError('could not convert end_date to datetime.datetime. {} was provided'.format(end_date))
+            except TypeError:
+                # thrown when a datetime is passed in
+                self.end_date = end_date
 
         if self.start_date >= self.end_date:
             raise ValueError(
                 'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
                                                                                              str(end_date)))
-        if self.start_date >= datetime.datetime.now():
-            raise ValueError('start_date must be at least older than the current time')
-
-        if self.end_date > datetime.datetime.now():
-            raise ValueError('end_date must be at least older than or equal to the current time')
+        # if self.start_date >= datetime.now():
+        #     raise ValueError('start_date must be at least older than the current time')
+        #
+        # if self.end_date > datetime.now():
+        #     raise ValueError('end_date must be at least older than or equal to the current time')
 
         self.get_ohlcv = get_ohlcv
         if get_ohlcv:
@@ -921,6 +931,11 @@ class Stock(PortfolioAsset, Base):
                       get_fundamentals=get_fundamentals)
 
     @classmethod
+    def from_dict(cls, stock_dict):
+        d = {k: v for k, v in stock_dict.items() if k in cls.__dict__}
+        return cls(**d)
+
+    @classmethod
     def create_stocks_dict_from_list_and_write_to_db(cls, ticker_list, start, end, session=None, get_fundamentals=False,
                                                      get_ohlc=False, close_session=True):
         """
@@ -980,13 +995,69 @@ class Stock(PortfolioAsset, Base):
             stock_dict[ticker] = cls(ticker=ticker, start_date=start, end_date=end, get_ohlc=get_ohlc)
         return stock_dict
 
+class OwnedStock(PortfolioAsset, Stock):
+    """
+    Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
+    """
+    purchase_date = Column(DateTime)
+    average_share_price = Column(Numeric)
+    shares_owned = Column(Numeric)
+    total_position_value = Column(Numeric)
+
+    __mapper_args__ = {
+        'polymorphic_identity': True
+    }
+    def __init__(self, ticker, shares_owned, average_share_price, purchase_date=None, get_fundamentals=True,
+                 get_ohlcv=True):
+        if purchase_date is None:
+            self.purchase_date = datetime.now()
+        else:
+            try:
+                self.purchase_date = parser.parse(purchase_date)
+            except ValueError:
+                raise ValueError('Could not parse purchase_date to datetime. {} was provided'.format(purchase_date))
+            except TypeError:
+                self.purchase_date = purchase_date
+        self.average_share_price = average_share_price
+        self.shares_owned = shares_owned
+        self.total_position_value = average_share_price * shares_owned
+        super().__init__(ticker=ticker, start_date=self.purchase_date, get_fundamentals=get_fundamentals,
+                         get_ohlcv=get_ohlcv)
+
+    def make_trade(self, qty, average_price):
+        """
+        Update the position of the :class:`Stock`
+
+        :param qty: int, positive if buying more shares and negative if selling shares
+        :param average_price: float, the average price per share in the trade
+        :return: self
+        """
+        self.total_position_value = qty * average_price
+        self.shares_owned += qty
+        try:
+            self.average_share_price = self.total_position_value / self.shares_owned
+        except ZeroDivisionError:
+            self.average_share_price = 0
+            self.owned = False
+            with db.transactional_session as session:
+                post_trade_stock = super().from_dict(self.__dict__)
+                session.delete(self)
+                session.add(post_trade_stock)
+            return None
+        else:
+            with db.transactional_session as session:
+                session.add(self)
+            return self
+
 
 class Fundamental(Base, HasStock):
     """
-    the purpose of the this class to hold one period's worth of fundamental data for a given stock
+    The purpose of the this class to hold one period's worth of fundamental data for a given stock
 
-    there should be a column for each argument in the constructor and the allowed list should also be updated when
-    new arguments as added and the item_pipeline needs to be updated
+    NOTE: If the period focus is Q1, Q2, Q3 then all cumulative measures will be QTD and if its FY they will be YTD
+
+    Would it be a good idea to break this class out into period measures, like sales, expenses, etc and then instant
+    measures like accounts pay, balance sheet stuff?
     """
 
     # key to the corresponding Stock's dictionary must be 'period_focus_year'
@@ -1032,6 +1103,8 @@ class Fundamental(Base, HasStock):
     common_stock_outstanding = Column(Numeric)
     warranty_accrual = Column(Numeric)
     warranty_accrual_payments = Column(Numeric)
+    ebit = Column(Numeric)
+    ebitda = Column(Numeric)
 
     def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,
@@ -1136,16 +1209,57 @@ class Fundamental(Base, HasStock):
         self.research_and_dev_expense = research_and_dev_expense
         self.warranty_accrual = warranty_accrual
         self.warranty_accrual_payments = warranty_accrual_payments
+        self.ebit = self._ebit()
+        self.ebitda = self._ebitda()
 
 
-    def current_ratio(self):
-        return self.current_assets / self.current_liabilities
 
     def return_on_assets(self):
         return self.net_income / self.assets
 
     def debt_ratio(self):
         return self.assets / self.total_liabilities
+
+    # LIQUIDITY RATIOS
+
+    def current_ratio(self):
+        """
+        Also known as working capital ratio
+        :return:
+        """
+        return self.current_assets / self.current_liabilities
+
+    def quick_ratio(self):
+        """
+        Liquidity ratio. Current ratio - inventory
+        :return: float
+        """
+        return (self.current_assets - self.inventory_net) / self.current_liabilities
+
+    def cash_ratio(self):
+        """
+        Most conservative of the liquidity ratios
+        :return:
+        """
+        return self.cash / self.current_liabilities
+
+    # METHODS FOR THE CONSTRUCTOR
+    # There should not be any reason for you to call these methods directly because you can access the results directly
+    # from the :class:`Fundamental` object itself
+
+    def _ebitda(self):
+        """
+        Earnings before interest, tax, depreciation and amortization
+        :return: float
+        """
+        return self.net_income + self.tax_expense + self.interest_expense + self.depreciation_amortization
+
+    def _ebit(self):
+        """
+        Earnings before interest, tax
+        :return: float
+        """
+        return self.net_income + self.tax_expense + self.interest_expense
 
     @classmethod
     def from_json_file(cls, stock, year, period_focus=None):
@@ -1204,24 +1318,32 @@ class Fundamental(Base, HasStock):
 
     @classmethod
     def from_dict(cls, fundamental_dict):
-        # a list of the columns above
-        # allowed = ('amended', 'assets', 'current_assets', 'current_liabilities', 'cash', 'dividend', 'end_date', 'eps',
-        #            'eps_diluted', 'equity', 'net_income', 'operating_income', 'revenues', 'investment_revenues',
-        #            'fin_cash_flow', 'inv_cash_flow', 'ops_cash_flow', 'period_focus', 'year', 'gross_profit',
-        #            'property_plant_equipment', 'gross_profit', 'tax_expense', 'net_taxes_paid', 'acts_pay_current',
-        #            'acts_receive_current', 'acts_receive_noncurrent', 'accrued_liabilities_current')
-        # from scrapy import Selector
-        # df = {k : v for k, v in fundamental_dict.items() if k in allowed and type(v) is not Selector}
+        """
+        This should be the only way the :class: `Fundamental` is instantiated.
+
+        :param fundamental_dict: dict, created by the :class:`~crawler.spiders.EdgarSpider` which passes an item to the
+            :class:`~crawler.item_pipeline.FundamentalItemPipeline` that creates the dict and then passes it to this method
+        :return: :class:`Fundamental` object
+        """
         df = {k: v for k, v in fundamental_dict.items() if k in cls.__dict__}
-        # dd = {}
-        # for k, v in fundamental_dict.items():
-        #     if k in allowed:
-        #         pass
         return cls(**df)
 
-# class FinancialRatios(Fundamental, HasStock, Base):
-#     """
-#     Holds and calculates all financial ratios and can optionally persist them in the DB
-#     """
-#     id = Column(Integer, primary_key=True)
-#     current_ratio = Column(Numeric(30,6))
+# class QFourFundamental(Fundamental):
+#
+#     def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
+#                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,
+#                  ops_cash_flow, year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid,
+#                  acts_pay_current, acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current,
+#                  period_focus, inventory_net, interest_expense, total_liabilities, total_liabilities_equity,
+#                  shares_outstanding, shares_outstanding_diluted, common_stock_outstanding, depreciation_amortization,
+#                  cogs, comprehensive_income_net_of_tax, research_and_dev_expense, warranty_accrual,
+#                  warranty_accrual_payments):
+#         super().__init__(amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
+#                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,
+#                  ops_cash_flow, year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid,
+#                  acts_pay_current, acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current,
+#                  period_focus, inventory_net, interest_expense, total_liabilities, total_liabilities_equity,
+#                  shares_outstanding, shares_outstanding_diluted, common_stock_outstanding, depreciation_amortization,
+#                  cogs, comprehensive_income_net_of_tax, research_and_dev_expense, warranty_accrual,
+#                  warranty_accrual_payments)
+

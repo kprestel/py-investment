@@ -112,13 +112,13 @@ class MatchEndDate(object):
                 if self.ignore_date_range or date_range_matches_doc_type(doc_type, start_date, end_date):
                     date = end_date
             except (IndexError, ValueError):
-                logger.error('error...')
+                logger.error('error...', exc_info=1)
                 pass
         else:
             try:
                 instant = datetime.strptime(instant, DATE_FORMAT)
             except ValueError:
-                logger.error('error...')
+                logger.error('error...', exc_info=1)
                 pass
             else:
                 date = instant

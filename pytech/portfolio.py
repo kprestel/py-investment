@@ -2,19 +2,27 @@
 import pandas as pd
 from pytech.base import Base
 import pandas_datareader.data as web
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from dateutil import parser
 from sqlalchemy import ForeignKey
 from sqlalchemy import orm
 
 import pytech.db_utils as db
-from pytech.stock import HasStock, Stock
+from pytech.stock import HasStock, Stock, OwnedStock
 from sqlalchemy import Column, Numeric, String, DateTime, Integer
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class AssetUniverse(Base):
+
+    watched_assets = relationship('Stock', backref='asset_universe',
+                          collection_class=attribute_mapped_collection('ticker'),
+                          cascade='all, delete-orphan')
+
 
 
 class Portfolio(Base):
@@ -47,7 +55,7 @@ class Portfolio(Base):
     benchmark_ticker = Column(String)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
-    assets = relationship('Stock', backref="portfolio",
+    assets = relationship('OwnedStock', backref="portfolio",
                         collection_class=attribute_mapped_collection('ticker'),
                         cascade='all, delete-orphan')
 
@@ -71,11 +79,11 @@ class Portfolio(Base):
         :param starting_cash:
             float, the amount of dollars to allocate to the portfolio initially
         :param get_fundamentals:
-            a boolean, if True the fundamentals of each Stock will be retrieved
+            a boolean, if True the fundamentals of each :class:`Stock` will be retrieved
             NOTE: if a lot of stocks are loaded this may take a little bit of time
             get_fundamentals defaults to False
         :param get_ohlcv:
-            a boolean, if True an ohlcv data frame will be created for each :class: stock
+            a boolean, if True an ohlcv data frame will be created for each :class:`Stock`
             get_ohlcv defaults to True
         """
         if type(tickers) != list:
@@ -140,37 +148,38 @@ class Portfolio(Base):
             yield stock.simple_moving_average()
 
 class Trade(HasStock, Base):
+    """
+    This class is used to make trades and keep trade of past trades
+    """
     trade_date = Column(DateTime)
-    # 'buy' or 'sell'
     action = Column(String)
-    # 'long' or 'short'
     position = Column(String)
     qty = Column(Integer)
     price_per_share = Column(Numeric(9,2))
     corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
     # corresponding_trade = relationship('Trade', remote_side=[id])
 
-    def __init__(self, trade_date, qty, price_per_share, stock, action='buy', position=None, corresponding_trade=None):
+    def __init__(self, trade_date, qty, average_price, stock, action='buy', position=None, corresponding_trade=None):
         """
-        :param trade_date:
-            a datetime, corresponding to the date and time of the trade date
-        :param qty:
-            an int, number of shares traded
-        :param price_per_share:
-            a float, price per individual share in the trade or the average share price in the trade
+        :param trade_date: datetime, corresponding to the date and time of the trade date
+        :param qty: int, number of shares traded
+        :param average_price: float
+            price per individual share in the trade or the average share price in the trade
         :param stock:
             a :class: Stock, the stock object that was traded
-        :param action:
-        a string, must be 'buy' or 'sell' depending on what kind of trade it was
-        :param position:
-        a string, must be 'long' or 'short'
+        :param action: str, must be *buy* or *sell* depending on what kind of trade it was
+        :param position: str, must be *long* or *short*
         """
         try:
-            self.trade_date = parser.parse(trade_date).date()
+            self.trade_date = parser.parse(trade_date)
         except ValueError:
-            raise ValueError('Error parsing trade_date into a date. {} was provided'.format(trade_date))
+            raise ValueError('Error parsing trade_date into a date. {} was provided.'.format(trade_date))
         except TypeError:
-            self.trade_date = trade_date.date()
+            if type(trade_date) == datetime:
+                self.trade_date = trade_date
+            else:
+                raise TypeError('trade_date must be a datetime object or a string. '
+                                '{} was provided'.format(type(trade_date)))
 
         if action.lower() == 'buy' or action.lower() == 'sell':
             # TODO: may have to run a query to check if we own the stock or not? and if we do use update?
@@ -185,19 +194,25 @@ class Trade(HasStock, Base):
         elif position is None and corresponding_trade is None:
             raise ValueError('position can only be None if a corresponding_trade is also provided and None was provided')
         else:
-            raise ValueError('position must be either "long" or "short". {} was provided.'.format(position))
+            raise ValueError('Nice try buy, position must be either "long" or "short". {} was provided.'.format(position))
 
-        if isinstance(stock, Stock):
-            self.stock = stock
-        else:
-            raise ValueError('stock must be an instance of the Stock class. {} was provided.'.format(stock))
+        try:
+            self.stock = stock.make_trade(qty=qty, average_price=average_price)
+        except AttributeError:
+            try:
+                self.stock = OwnedStock(ticker=stock.ticker, shares_owned=qty, average_share_price=average_price,
+                                   purchase_date=self.trade_date)
+            except AttributeError:
+                raise AttributeError('stock must be a Stock object. {} was provided'.format(type(stock)))
 
         if corresponding_trade is None or isinstance(corresponding_trade, Trade):
             # TODO: check if the corresponding_trade is actually in the DB yet
             self.corresponding_trade = corresponding_trade
         else:
-            raise ValueError('corresponding_trade must either be None or an instance of a Trade object')
+            raise ValueError('corresponding_trade must either be None or an instance of a Trade object.'
+                             '{} was provided'.format(type(corresponding_trade)))
 
-        # TODO: if the position is short shouldn't this be negative?
+        # TODO: if the position is short shouldn't this be negative? and does this really belong here?
         self.qty = qty
-        self.price_per_share = price_per_share
+        self.price_per_share = average_price
+
