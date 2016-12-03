@@ -50,6 +50,7 @@ class URLGeneratorTest(TestCaseBase):
         ])
 
 
+# @pytest.mark.skip(reason='its slow af')
 class EdgarSpiderTest(TestCaseBase):
 
     # @pytest.mark.skip(reason='this should not be a thing.')

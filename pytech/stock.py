@@ -7,15 +7,18 @@ import logging
 import re
 from dateutil import parser
 from sqlalchemy import orm
-# from pytech.portfolio import PortfolioAsset
+from crawler.spiders.edgar import EdgarSpider
+from twisted.internet import reactor
+from scrapy.crawler import CrawlerRunner
+from scrapy.utils.project import get_project_settings
+from scrapy.utils.log import configure_logging
 
 from sqlalchemy.ext.declarative import as_declarative
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
-logging.basicConfig()
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -170,13 +173,6 @@ class Stock(PortfolioAsset, Base):
         pass the required attributes to the EdgarSpider and it will create the corresponding fundamentals objects
         for this stock instance as well as write the fundamental object to the DB
         """
-        from twisted.internet import reactor
-        from scrapy.crawler import  CrawlerProcess, CrawlerRunner
-        from scrapy.utils.project import get_project_settings
-        from scrapy.utils.log import configure_logging
-        from scrapy.xlib.pydispatch import dispatcher
-        from scrapy import signals
-        from crawler.spiders.edgar import EdgarSpider
         from pytech import Session
 
         session = Session()
@@ -189,28 +185,17 @@ class Stock(PortfolioAsset, Base):
         if result:
             for row in result:
                 self.fundamentals[row.access_key] = row
-            # self.fundamentals = fundamentals
             session.close()
         else:
-            def stop_reactor():
-                reactor.stop()
-            dispatcher.connect(stop_reactor, signal=signals.spider_closed)
             configure_logging()
-            runner = CrawlerRunner()
-            # process = CrawlerProcess(get_project_settings())
+            runner = CrawlerRunner(settings=get_project_settings())
             spider_dict = {
                 'symbols': self.ticker,
                 'start_date': self.start_date.strftime('%Y%m%d'),
                 'end_date': self.end_date.strftime('%Y%m%d')
             }
             runner.crawl(EdgarSpider, **spider_dict)
-            # d = runner.join()
-            # d.addBoth(lambda _: reactor.stop())
             reactor.run()
-            # process.crawl(EdgarSpider, **spider_dict)
-            # process.start()
-            # process.join()
-            # TODO: test and make sure that after the process finishes the instance has access to ALL of its fundamentals
             result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
             for row in result:
                 self.fundamentals[row.access_key] = row
@@ -850,67 +835,22 @@ class Stock(PortfolioAsset, Base):
 
         corresponding Fundamental objects will also be created and inserted into the db for each stock object created
         """
-        from twisted.internet import reactor, defer
-        from scrapy.crawler import  CrawlerProcess, CrawlerRunner
-        from scrapy.utils.project import get_project_settings
-        from scrapy.utils.log import configure_logging
-        from scrapy import signals
-        from scrapy.xlib.pydispatch import dispatcher
-        from crawler.spiders.edgar import EdgarSpider
-        # if session is None:
-        #     from pytech import Session
-        #     session = Session()
-
-        def stop_reactor():
-            reactor.stop()
-
-        dispatcher.connect(stop_reactor, signal=signals.spider_closed)
 
         configure_logging()
-        runner = CrawlerRunner()
+        runner = CrawlerRunner(settings=get_project_settings())
 
-        # process = CrawlerProcess(get_project_settings())
-        spiders = []
         spider_dict = {
             'symbols': ticker_list,
             'start_date': start,
             'end_date': end
         }
         runner.crawl(EdgarSpider, **spider_dict)
-        # d = runner.join()
-        # d.addBoth(lambda _: reactor.stop())
+        d = runner.join()
+        d.addBoth(lambda _: reactor.stop())
         reactor.run()
 
-        # for ticker in ticker_list:
-            # create a temp dictionary containing the arguments required to create the spider
-            # temp_dict = {}
-            # temp_dict['symbols'] = ticker
-            # temp_dict['start_date'] = start
-            # temp_dict['end_date'] = end
-            # spiders.append(EdgarSpider(**temp_dict))
-
-        # @defer.inlineCallbacks
-        # def _crawl(spiders):
-        #     for spider in spiders:
-        #         yield runner.crawl(spider)
-        #         reactor.stop()
-        # _crawl(spiders)
-        # reactor.run()
-
-        # process.crawl(EdgarSpider, **temp_dict)
-        # process.start()
-        # process.join()
-
-        # stock_dict = {}
         for ticker in ticker_list:
             yield cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv, get_fundamentals=False)
-        #     temp_stock = cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv, get_fundamentals=True)
-        #     stock_dict[ticker] = temp_stock
-        #     session.add(temp_stock)
-        # session.commit()
-        # if close_session:
-        #     session.close()
-        # return stock_dict
 
     @classmethod
     def create_stocks_dict_from_list_and_write_to_db(cls, ticker_list, start, end, session=None, get_fundamentals=False,

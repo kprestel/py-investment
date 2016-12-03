@@ -119,7 +119,6 @@ class FundamentalItemPipeline(object):
         fundamental_dict['ops_cash_flow'] = item.get('cash_flow_op')
         fundamental_dict['period_focus'] = item.get('period_focus')
         fundamental_dict['year'] = item.get('fiscal_year')
-        # fundamental_dict['ticker'] = item.get('symbol')
         fundamental_dict['property_plant_equipment'] = item.get('property_plant_equipment')
         fundamental_dict['gross_profit'] = item.get('gross_profit')
         fundamental_dict['tax_expense'] = item.get('tax_expense')

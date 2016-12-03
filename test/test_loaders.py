@@ -43,7 +43,7 @@ def parse_xml(url):
     loader = ReportItemLoader(response=response)
     return loader.load_item()
 
-
+@pytest.mark.skip(reason='its slow as cold syrup')
 class ReportItemLoaderTest(TestCaseBase):
 
     def test_a_20110131(self):

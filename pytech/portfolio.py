@@ -5,10 +5,12 @@ from dateutil import parser
 from sqlalchemy import orm
 
 from pytech.stock import HasStock, Base, Stock
-from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
-from sqlalchemy.orm import relationship, backref
-from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy import Column, Numeric, String, DateTime, Integer
+from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Portfolio(Base):
@@ -27,14 +29,16 @@ class Portfolio(Base):
         The portfolio class ideally is the only class that will interact with the database. By that I mean that no other
         class should be 'committing' anything the only way anything gets committed to the db is when the Portfolio they
         are all directly or indirectly associated with. I'm not 100% sure this will be possible or the best design
-        pattern but it kinda seems like the right idea right now.
+        pattern but it kinda seems like the right idea right now.  Except for the whole spider thing... so we will
+        see where the future takes us.
+
+        One thing I know for sure, its gonna be a bumpy ride.
 
     your's truly:
         KP.
 
     """
 
-    # id = Column(Integer, primary_key=True)
     cash = Column(Numeric(30, 2))
     benchmark_ticker = Column(String)
     start_date = Column(DateTime)
@@ -75,8 +79,7 @@ class Portfolio(Base):
             tickers = [tickers]
 
         # ensure start_date and end_date are proper type
-        # I don't like the way this is done but don't have a better idea right nowAnother way to tag commits is with a lightweight tag. This is basically the commit checksum stored in a file – no other information is kept. To create a lightweight tag, don’t supply the -a, -s, or -m option:
-
+        # I don't like the way this is done but don't have a better idea right now
 
         if start_date is None:
             # default to 1 year
@@ -134,7 +137,6 @@ class Portfolio(Base):
             yield stock.simple_moving_average()
 
 class Trade(HasStock, Base):
-    # id = Column(Integer, primary_key=True)
     trade_date = Column(DateTime)
     # 'buy' or 'sell'
     action = Column(String)
@@ -196,45 +198,3 @@ class Trade(HasStock, Base):
         # TODO: if the position is short shouldn't this be negative?
         self.qty = qty
         self.price_per_share = price_per_share
-
-# if __name__ == "__main__":
-    # testing stuff
-    from scrapy.crawler import CrawlerProcess, Crawler
-    from scrapy.utils.project import get_project_settings
-    from twisted.internet import reactor
-    # from pytech import Session
-    # from pytech.stock import Stock
-    # tickers = ['AAPL', 'F', 'SKX']
-    # start = '20160101'
-    # end = '20161124'
-    # session = Session()
-    # stock = Stock(ticker='AAPL', start_date=start, end_date=end, get_fundamentals=True)
-    # session.add(stock)
-    # session.commit()
-    # stock_dict = Stock.create_stock_fundamentals_from_list(ticker_list=tickers, start=start, end=end)
-    # for k, v in stock_dict.items():
-    #     print('key: {}'.format(k))
-    #     print('val: {}'.format(v))
-    # print(stock_dict)
-    # process = CrawlerProcess({'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)'})
-    # process = CrawlerProcess(get_project_settings())
-    # spider = EdgarSpider(symbols='AAPL', startdate='20160101', enddate='20161104')
-    # dict = {'symbols': 'AAPL', 'start_date':'20160101', 'end_date': '20161104'}
-    # dict_one = {'symbols': 'F', 'start_date':'20160101', 'end_date': '20161104'}
-    # dict_two = {'symbols': 'SKX', 'start_date':'20160101', 'end_date': '20161104'}
-    # to_crawl = [dict, dict_one, dict_two]
-    # running = []
-    # for d in to_crawl:
-    #     settings = get_project_settings()
-    #     crawler = Crawler(EdgarSpider, settings=settings)
-    #     running.append(crawler)
-        # crawler.signals.connect(spider)
-        # crawler.configure()
-        # crawler.crawl(EdgarSpider, settings, **d)
-        # crawler.start()
-    # reactor.run()
-    # process.crawl(EdgarSpider, **dict)
-    # process.crawl(EdgarSpider, **dict_one)
-    # process.crawl(EdgarSpider, **dict_two)
-    # process.start()
-    # process.join()
