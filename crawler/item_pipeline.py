@@ -112,7 +112,7 @@ class FundamentalItemPipeline(object):
             access_key = str(item.get('year')) + '_' + item.get('period_focus')
 
             q = session.query(Fundamental).filter(Fundamental.access_key == access_key)
-            if q:
+            if q is not None:
                 raise DropItem
             fundamental_dict = {}
             fundamental_dict['amended'] = item.get('amend')

@@ -1,5 +1,6 @@
 # from pytech import Session
 import pandas as pd
+import pytech.utils as utils
 from pytech.base import Base
 import pandas_datareader.data as web
 from datetime import date, timedelta, datetime
@@ -19,9 +20,27 @@ logger = logging.getLogger(__name__)
 
 class AssetUniverse(Base):
 
+    # stock_id = Column('stock_id', ForeignKey('stock.id'))
     watched_assets = relationship('Stock', backref='asset_universe',
                           collection_class=attribute_mapped_collection('ticker'),
                           cascade='all, delete-orphan')
+
+    def __init__(self, ticker_list, start_watch_date=None, get_fundamentals=True, get_ohlcv=True):
+        self.ticker_list = ticker_list
+        if start_watch_date is None:
+            self.start_watch_date = datetime.now() - timedelta(days=365)
+        else:
+            self.start_watch_date = utils.parse_date(start_watch_date)
+        self.end_date = datetime.now()
+
+        self.watched_assets = {}
+        if get_fundamentals:
+            watched_stocks = Stock.from_ticker_list(ticker_list=ticker_list, start=self.start_watch_date,
+                                                    end=self.end_date, get_ohlcv=get_ohlcv)
+            for stock in watched_stocks:
+                self.watched_assets[stock.ticker] = stock
+
+
 
 
 
@@ -55,7 +74,7 @@ class Portfolio(Base):
     benchmark_ticker = Column(String)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
-    assets = relationship('OwnedStock', backref="portfolio",
+    assets = relationship('OwnedStock', backref='portfolio',
                         collection_class=attribute_mapped_collection('ticker'),
                         cascade='all, delete-orphan')
 
@@ -97,27 +116,29 @@ class Portfolio(Base):
             # default to 1 year
             self.start_date = date.today() - timedelta(days=365)
         else:
-            try:
-                self.start_date = parser.parse(start_date).date()
-            except ValueError:
-                raise ValueError('Error parsing start_date to date. {} was provided')
-            except TypeError:
-                self.start_date = start_date.date()
+            self.start_date = utils.parse_date(start_date)
+            # try:
+            #     self.start_date = parser.parse(start_date).date()
+            # except ValueError:
+            #     raise ValueError('Error parsing start_date to date. {} was provided')
+            # except TypeError:
+            #     self.start_date = start_date.date()
 
         if end_date is None:
             # default to today
             self.end_date = date.today()
         else:
-            try:
-                self.end_date = parser.parse(end_date).date()
-            except ValueError:
-                raise ValueError('Error parsing end_date to date. {} was provided')
-            except TypeError:
-                self.end_date = end_date.date()
+            self.end_date = utils.parse_date(end_date)
+            # try:
+            #     self.end_date = parser.parse(end_date).date()
+            # except ValueError:
+            #     raise ValueError('Error parsing end_date to date. {} was provided')
+            # except TypeError:
+            #     self.end_date = end_date.date()
 
         self.assets = {}
         if get_fundamentals:
-            stocks = Stock.from_ticker_list(ticker_list=tickers, start=start_date, end=end_date,
+            stocks = OwnedStock.from_ticker_list(ticker_list=tickers, start=start_date, end=end_date,
                                             get_ohlcv=get_ohlcv)
             for stock in stocks:
                 self.assets[stock.ticker] = stock
@@ -151,6 +172,7 @@ class Trade(HasStock, Base):
     """
     This class is used to make trades and keep trade of past trades
     """
+    # id = Column(Integer, primary_key=True)
     trade_date = Column(DateTime)
     action = Column(String)
     position = Column(String)

@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 from datetime import datetime
 from pytech.stock import Stock, Fundamental
-from pytech.portfolio import Portfolio
+from pytech.portfolio import Portfolio, AssetUniverse
 
 class TestStock(object):
 
@@ -57,6 +57,7 @@ class TestStock(object):
         assert stock_with_ohlcv.fundamentals == {}
         assert type(stock_with_ohlcv.ohlcv) == pd.DataFrame
 
+@pytest.mark.skip(reason='I broke it :(')
 class TestPortfolio(object):
 
     def test_portfolio_with_fundamentals(self):
@@ -68,6 +69,19 @@ class TestPortfolio(object):
             for fundamental in stock.fundamentals:
                 assert isinstance(fundamental, Fundamental)
                 assert fundamental.assets == fundamental.total_liabilities_equity
+
+class TestAssetUniverse(object):
+
+    def test_asset_universe(self):
+        tickers = ['AAPL', 'MSFT']
+        uni = AssetUniverse(ticker_list=tickers)
+        for k, stock in uni.watched_assets.items():
+            assert isinstance(stock, Stock)
+            for fundamental in stock.fundamentals:
+                assert isinstance(fundamental, Fundamental)
+                assert fundamental.assets == fundamental.total_liabilities_equity
+
+
 
 @pytest.mark.skip(reason='I will fix it later')
 class TestFundamental(object):

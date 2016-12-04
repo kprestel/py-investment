@@ -14,16 +14,7 @@ engine = create_engine(cs, connect_args={'check_same_thread':False}, poolclass=S
 Session = sessionmaker(bind=engine)
 from pytech.base import Base
 from pytech.portfolio import Portfolio, Trade
-from pytech.stock import Stock, Fundamental, HasStock, PortfolioAsset
-Base.metadata.create_all(engine)
-# PROJECT_DIR = dirname(__file__)
-#
-# DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.db')
-
-logging.basicConfig(level=logging.DEBUG)
-
-# cs = 'sqlite+pysqlite:///{}'.format(DATABASE_LOCATION)
-# engine = create_engine(cs, connect_args={'check_same_thread':False}, poolclass=StaticPool)
-# Session = sessionmaker(bind=engine)
+from pytech.stock import Stock, Fundamental, HasStock, PortfolioAsset, OwnedStock
 # Base.metadata.drop_all(engine)
-# Base.metadata.create_all(engine)
+Base.metadata.create_all(engine)
+logging.basicConfig(level=logging.DEBUG)

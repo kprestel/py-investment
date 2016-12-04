@@ -1,4 +1,5 @@
 # from pytech import Session
+import pytech.utils as utils
 from pytech.base import Base
 from collections import namedtuple
 import pandas as pd
@@ -53,6 +54,12 @@ class PortfolioAsset(object):
         #                         collection_class=attribute_mapped_collection('ticker'),
         #                         cascade='all, delete-orphan')
 
+class WatchedAsset(object):
+    @declared_attr
+    def asset_universe_id(cls):
+        return Column('asset_universe_id', ForeignKey('asset_universe.id'))
+
+
 
 class HasStock(object):
     """
@@ -63,11 +70,20 @@ class HasStock(object):
     """
 
     @declared_attr
-    def ticker(cls):
+    def stock_id(cls):
         return Column('stock_id', ForeignKey('stock.id'))
 
+    # @declared_attr
+    # def stock(cls):
+    #     return relationship('Stock')
+
+
+class OwnsStock(object):
     @declared_attr
-    def stock(cls):
+    def owned_stock_id(cls):
+        return Column('owned_stock_id', ForeignKey('owned_stock.id'))
+    @declared_attr
+    def owned_stock(cls):
         return relationship('OwnedStock')
 
 
@@ -78,7 +94,7 @@ class Asset(object):
     pass
 
 
-class Stock(Base):
+class Stock(WatchedAsset, Base):
     """
     main class that is used to model stocks and may contain technical and fundamental data about the stock
     """
@@ -90,47 +106,27 @@ class Stock(Base):
     beta = Column(Numeric)
     start_price = Column(Numeric)
     end_price = Column(Numeric)
-    owned = Column(Boolean)
+    # owned = Column(Boolean)
     fundamentals = relationship('Fundamental',
                                 collection_class=attribute_mapped_collection('access_key'),
                                 cascade='all, delete-orphan')
-    __mapper_args__ = {
-        'polymorphic_on': owned,
-        'polymorphic_identity': False
-    }
+    # __mapper_args__ = {
+    #     'polymorphic_on': owned,
+    #     'polymorphic_identity': False
+    # }
 
     def __init__(self, ticker, start_date, end_date=None, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
-        self.owned = False
-        try:
-            self.start_date = parser.parse(start_date)
-        except ValueError:
-            raise ValueError('Error parsing start_date to date. {} was provided'.format(start_date))
-        except TypeError:
-            # thrown when a datetime is passed in
-            self.start_date = start_date
-
+        self.start_date = utils.parse_date(start_date)
         if end_date is None:
             self.end_date = datetime.now()
         else:
-            try:
-                self.end_date = parser.parse(end_date)
-            except ValueError:
-                raise ValueError('could not convert end_date to datetime.datetime. {} was provided'.format(end_date))
-            except TypeError:
-                # thrown when a datetime is passed in
-                self.end_date = end_date
+            self.end_date = utils.parse_date(end_date)
 
         if self.start_date >= self.end_date:
             raise ValueError(
                 'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
                                                                                              str(end_date)))
-        # if self.start_date >= datetime.now():
-        #     raise ValueError('start_date must be at least older than the current time')
-        #
-        # if self.end_date > datetime.now():
-        #     raise ValueError('end_date must be at least older than or equal to the current time')
-
         self.get_ohlcv = get_ohlcv
         if get_ohlcv:
             self.ohlcv = self.get_ohlc_series()
@@ -200,21 +196,22 @@ class Stock(Base):
             # fundamentals will be returned but for now this should work
             # it will require some sort of date guessing based on the periods and the end dates or something so yeah
             # that is a problem for another day
-            result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
+            result = session.query(Fundamental).filter(Fundamental.stock_id == self.id).all()
             if result:
                 for row in result:
                     self.fundamentals[row.access_key] = row
             else:
-                configure_logging()
-                runner = CrawlerRunner(settings=get_project_settings())
-                spider_dict = {
-                    'symbols': self.ticker,
-                    'start_date': self.start_date.strftime('%Y%m%d'),
-                    'end_date': self.end_date.strftime('%Y%m%d')
-                }
-                runner.crawl(EdgarSpider, **spider_dict)
-                reactor.run()
-                result = session.query(Fundamental).filter(Fundamental.ticker == self.id).all()
+                # configure_logging()
+                # runner = CrawlerRunner(settings=get_project_settings())
+                # spider_dict = {
+                #     'symbols': self.ticker,
+                #     'start_date': self.start_date.strftime('%Y%m%d'),
+                #     'end_date': self.end_date.strftime('%Y%m%d')
+                # }
+                # runner.crawl(EdgarSpider, **spider_dict)
+                # reactor.run()
+                self._init_spiders([self.ticker], end_date=self.end_date, start_date=self.start_date)
+                result = session.query(Fundamental).filter(Fundamental.stock_id == self.id).all()
                 for row in result:
                     self.fundamentals[row.access_key] = row
 
@@ -601,7 +598,7 @@ class Stock(Base):
         else:
             return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
-    def _get_pct_change(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+    def _get_pct_change(self, market_ticker='^GSPC'):
         """
         Get the percentage change over the :class: Stock's start and end dates for both the stock as well as the market
 
@@ -612,10 +609,7 @@ class Stock(Base):
         :return: TimeSeries
         """
         pct_change = namedtuple('Pct_Change', 'market_pct_change stock_pct_change')
-        if use_portfolio_benchmark:
-            market_df = self._get_portfolio_benchmark()
-        else:
-            market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
+        market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         market_pct_change = pd.Series(market_df['Adj Close'].pct_change(periods=1))
         stock_pct_change = pd.Series(self.ohlcv['Adj Close'].pct_change(periods=1))
         return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
@@ -631,7 +625,7 @@ class Stock(Base):
         :return: float
             The beta for the given Stock
         """
-        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
+        pct_change = self._get_pct_change(market_ticker=market_ticker)
         covar = pct_change.stock_pct_change.cov(pct_change.market_pct_change)
         variance = pct_change.market_pct_change.var()
         return covar / variance
@@ -647,7 +641,7 @@ class Stock(Base):
 
         Best used to gauge the accuracy of the beta.
         """
-        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
+        pct_change = self._get_pct_change(market_ticker=market_ticker)
         return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
 
     def adj_return(self, risk_free_rate_ticker='TB1YR'):
@@ -890,12 +884,27 @@ class Stock(Base):
         """
         return pd.Series(ts[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
 
+    @staticmethod
+    def _init_spiders(ticker_list, start_date, end_date):
+        configure_logging()
+        runner = CrawlerRunner(settings=get_project_settings())
+
+        spider_dict = {
+            'symbols': ticker_list,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        runner.crawl(EdgarSpider, **spider_dict)
+        d = runner.join()
+        d.addBoth(lambda _: reactor.stop())
+        reactor.run()
+
     """
     ALTERNATE CONSTRUCTORS
     """
 
     @classmethod
-    def from_ticker_list(cls, ticker_list, start, end, get_ohlcv=False, get_fundamentals=False):
+    def from_ticker_list(cls, ticker_list, start, end, get_ohlcv=False):
         """
         Create a dict of stocks for a given time period based on the list of ticker symbols passed in
 
@@ -907,28 +916,27 @@ class Stock(Base):
             when to load the ohlcv and the :class: Fundamental as of
         :param get_ohlcv: boolean
             if true then a ohlc time series will be created based on the start and end dates
-        :param get_fundamentals: boolean
-            if true then :class: Fundamentals will be created and added to the db
         :return: generator
-            contains one :class: Stock per ticker in the ticker list
+            contains one :class:`Stock` per ticker in the ticker list
         """
 
-        configure_logging()
-        runner = CrawlerRunner(settings=get_project_settings())
-
-        spider_dict = {
-            'symbols': ticker_list,
-            'start_date': start,
-            'end_date': end
-        }
-        runner.crawl(EdgarSpider, **spider_dict)
-        d = runner.join()
-        d.addBoth(lambda _: reactor.stop())
-        reactor.run()
+        # configure_logging()
+        # runner = CrawlerRunner(settings=get_project_settings())
+        #
+        # spider_dict = {
+        #     'symbols': ticker_list,
+        #     'start_date': start,
+        #     'end_date': end
+        # }
+        # runner.crawl(EdgarSpider, **spider_dict)
+        # d = runner.join()
+        # d.addBoth(lambda _: reactor.stop())
+        # reactor.run()
+        cls._init_spiders(ticker_list=ticker_list, start_date=start, end_date=end)
 
         for ticker in ticker_list:
             yield cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv,
-                      get_fundamentals=get_fundamentals)
+                      get_fundamentals=False)
 
     @classmethod
     def from_dict(cls, stock_dict):
@@ -999,28 +1007,44 @@ class OwnedStock(PortfolioAsset, Stock):
     """
     Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
     """
+    __tablename__ = 'owned_stock'
+    id = Column(Integer, primary_key=True)
     purchase_date = Column(DateTime)
     average_share_price = Column(Numeric)
     shares_owned = Column(Numeric)
     total_position_value = Column(Numeric)
+    ticker = Column(String, unique=True)
+    start_date = Column(DateTime)
+    end_date = Column(DateTime)
+    get_ohlcv = Column(Boolean)
+    load_fundamentals = Column(Boolean)
+    beta = Column(Numeric)
+    start_price = Column(Numeric)
+    end_price = Column(Numeric)
+    # owned = Column(Boolean)
+    fundamentals = relationship('Fundamental',
+                                collection_class=attribute_mapped_collection('access_key'),
+                                cascade='all, delete-orphan')
 
     __mapper_args__ = {
-        'polymorphic_identity': True
+        'concrete': True
     }
     def __init__(self, ticker, shares_owned, average_share_price, purchase_date=None, get_fundamentals=True,
                  get_ohlcv=True):
         if purchase_date is None:
             self.purchase_date = datetime.now()
         else:
-            try:
-                self.purchase_date = parser.parse(purchase_date)
-            except ValueError:
-                raise ValueError('Could not parse purchase_date to datetime. {} was provided'.format(purchase_date))
-            except TypeError:
-                self.purchase_date = purchase_date
+            self.purchase_date = utils.parse_date(purchase_date)
+            # try:
+            #     self.purchase_date = parser.parse(purchase_date)
+            # except ValueError:
+            #     raise ValueError('Could not parse purchase_date to datetime. {} was provided'.format(purchase_date))
+            # except TypeError:
+            #     self.purchase_date = purchase_date
         self.average_share_price = average_share_price
         self.shares_owned = shares_owned
         self.total_position_value = average_share_price * shares_owned
+        self.owned = True
         super().__init__(ticker=ticker, start_date=self.purchase_date, get_fundamentals=get_fundamentals,
                          get_ohlcv=get_ohlcv)
 
@@ -1049,8 +1073,79 @@ class OwnedStock(PortfolioAsset, Stock):
                 session.add(self)
             return self
 
+    def market_correlation(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+        """
+        Compute the correlation between a :class: Stock's return and the market return.
+        :param use_portfolio_benchmark:
+            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
+        :param market_ticker:
+            Any valid ticker symbol to use as the market.
+        :return:
 
-class Fundamental(Base, HasStock):
+        Best used to gauge the accuracy of the beta.
+        """
+        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
+        return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
+    def calculate_beta(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+        """
+        Compute the beta for the :class: Stock
+
+        :param use_portfolio_benchmark: boolean
+            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
+        :param market_ticker:
+            Any valid ticker symbol to use as the market.
+        :return: float
+            The beta for the given Stock
+        """
+        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
+        covar = pct_change.stock_pct_change.cov(pct_change.market_pct_change)
+        variance = pct_change.market_pct_change.var()
+        return covar / variance
+
+    def _get_pct_change(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+        """
+        Get the percentage change over the :class: Stock's start and end dates for both the stock as well as the market
+
+        :param use_portfolio_benchmark: boolean
+            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
+        :param market_ticker: str
+            Any valid ticker symbol to use as the market.
+        :return: TimeSeries
+        """
+        pct_change = namedtuple('Pct_Change', 'market_pct_change stock_pct_change')
+        if use_portfolio_benchmark:
+            market_df = self._get_portfolio_benchmark()
+        else:
+            market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
+        market_pct_change = pd.Series(market_df['Adj Close'].pct_change(periods=1))
+        stock_pct_change = pd.Series(self.ohlcv['Adj Close'].pct_change(periods=1))
+        return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
+
+    def _get_portfolio_benchmark(self):
+        """
+        Helper method to get the :class: Portfolio's benchmark ticker symbol
+        :return: TimeSeries
+        """
+        from pytech.portfolio import Portfolio
+
+        with db.query_session() as session:
+            benchmark_ticker = \
+                session.query(Portfolio.benchmark_ticker) \
+                    .filter(Portfolio.id == self.portfolio_id) \
+                    .first()
+        if not benchmark_ticker:
+            return web.DataReader('^GSPC', 'yahoo', start=self.start_date, end=self.end_date)
+        else:
+            return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
+
+    # @classmethod
+    # def from_ticker_list(cls, ticker_list, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
+    #     super()._init_spiders(ticker_list=ticker_list, start_date=purchase_date, end_date=end)
+        # for ticker in ticker_list:
+        #     yield cls(ticker=ticker)
+
+
+class Fundamental(Base, HasStock, OwnsStock):
     """
     The purpose of the this class to hold one period's worth of fundamental data for a given stock
 
