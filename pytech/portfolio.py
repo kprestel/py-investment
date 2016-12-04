@@ -1,6 +1,7 @@
 # from pytech import Session
 import pandas as pd
 import pytech.utils as utils
+from pytech.errors import AssetExistsException, AssetNotInUniverseException
 from pytech.base import Base
 import pandas_datareader.data as web
 from datetime import date, timedelta, datetime
@@ -9,7 +10,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy import orm
 
 import pytech.db_utils as db
-from pytech.stock import HasStock, Stock, OwnedStock
+from pytech.stock import HasStock, Stock, OwnedStock, OwnsStock
 from sqlalchemy import Column, Numeric, String, DateTime, Integer
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
@@ -19,34 +20,92 @@ logger = logging.getLogger(__name__)
 
 
 class AssetUniverse(Base):
-
-    # stock_id = Column('stock_id', ForeignKey('stock.id'))
-    watched_assets = relationship('Stock', backref='asset_universe',
+    """
+    This class will contain all the :class:`Asset` that are eligible to be bought and sold.  The intention is to allow
+    the user to limit what stocks they are watching and willing to trade.  It allows for analysis to be done on each
+    :class:`Asset` and compare them against all other possible trade opportunities a user is comfortable with making.
+    """
+    start_date = Column(DateTime)
+    assets = relationship('Stock', backref='asset_universe',
                           collection_class=attribute_mapped_collection('ticker'),
                           cascade='all, delete-orphan')
 
-    def __init__(self, ticker_list, start_watch_date=None, get_fundamentals=True, get_ohlcv=True):
-        self.ticker_list = ticker_list
-        if start_watch_date is None:
+    def __init__(self, ticker_list=None, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
+        """
+        :param ticker_list: containing all the ticker_list in the portfolio. This list will be used to create the
+            :class:``Stock`` objects that they correspond to, there cannot be any duplicates. This is only if you want
+            to load stocks upon initialization, it can be updated later.
+        :type ticker_list: list
+        :param start_date: a date, the start date of the analysis. This will be passed to each :class:``Stock``
+            created and the ohlcv data frame loaded will start at this date.
+            (default: end_date - 365 days)
+        :type start_date: datetime
+        :param end_date: the end date of the analysis. This will be passed in each :class:``Stock`` created
+            and the ohlcv data frame as well.
+            (default: ``datetime.now()``)
+        :type end_date: datetime
+        :param get_fundamentals: if True the fundamentals of each :class:``Stock`` ticker will be retrieved
+            NOTE: if a lot of stocks are loaded this may take a little bit of time, but without :class:`Fundamental`
+             loaded for each :class:``Asset`` fundamental analysis will not work.
+            (default: False)
+        :type get_fundamentals: bool
+        :param get_ohlcv: a boolean, if True an ohlcv data frame will be created for each :class:`Stock`
+            (default: True)
+        :type get_ohlcv: bool
+        """
+        if ticker_list:
+            self.ticker_list = ticker_list
+        else:
+            self.ticker_list = []
+
+        if start_date is None:
             self.start_watch_date = datetime.now() - timedelta(days=365)
         else:
-            self.start_watch_date = utils.parse_date(start_watch_date)
-        self.end_date = datetime.now()
+            self.start_watch_date = utils.parse_date(start_date)
+        if end_date is None:
+            # default to today
+            self.end_date = datetime.now()
+        else:
+            self.end_date = utils.parse_date(end_date)
 
-        self.watched_assets = {}
+        self.assets = {}
         if get_fundamentals:
             watched_stocks = Stock.from_ticker_list(ticker_list=ticker_list, start=self.start_watch_date,
                                                     end=self.end_date, get_ohlcv=get_ohlcv)
             for stock in watched_stocks:
-                self.watched_assets[stock.ticker] = stock
+                self.assets[stock.ticker] = stock
+
+    def add_assets(self, ticker, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
+        if self.assets.get(ticker):
+            raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
+        start_date = utils.parse_date(start_date)
+        if end_date is None:
+            end_date = start_date - timedelta(days=365)
+        else:
+            end_date = utils.parse_date(end_date)
+        self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
+                                    get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
+        with db.transactional_session as session:
+            session.add(self)
+
+    def add_assets_from_list(self, ticker_list, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
+        for ticker in ticker_list:
+            if self.assets.get(ticker):
+                raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
+            self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
+                                        get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
 
 
 
-
-
-class Portfolio(Base):
+class Portfolio(AssetUniverse):
     """
-    Holds stocks and keeps tracks of the owner's cash as well as makes Trades
+    This class inherits from :class:``AssetUniverse`` so that it has access to its analysis functions.  It is important to
+    note that :class:``Portfolio`` is its own table in the database as it represents the :class:``Asset`` that the user
+    currently owns.  An :class:``Asset`` can be in both the *asset_universe* table as well as the *portfolio* table but
+    a :class:``Asset`` does have to be in the :class:``AssetUniverse`` in order to be traded.
+
+    Holds stocks and keeps tracks of the owner's cash as well and their :class:`OwnedAssets` and allows them to perform
+    analysis on just the :class:`Asset` that they currently own.
     """
 
     # TODO: figure out how to make trades and what the relationship it should have with stocks
@@ -63,13 +122,17 @@ class Portfolio(Base):
         pattern but it kinda seems like the right idea right now.  Except for the whole spider thing... so we will
         see where the future takes us.
 
+        This idea has already changed.  See the db_utils.py file.
+
         One thing I know for sure, its gonna be a bumpy ride.
 
     your's truly:
         KP.
 
     """
+    __tablename__ = 'portfolio'
 
+    id = Column(Integer, primary_key=True)
     cash = Column(Numeric(30, 2))
     benchmark_ticker = Column(String)
     start_date = Column(DateTime)
@@ -77,71 +140,28 @@ class Portfolio(Base):
     assets = relationship('OwnedStock', backref='portfolio',
                         collection_class=attribute_mapped_collection('ticker'),
                         cascade='all, delete-orphan')
+    __mapper_args__ = {
+        'concrete': True
+    }
 
-    def __init__(self, tickers, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000,
-                 get_fundamentals=False, get_ohlcv=True):
+    def __init__(self, ticker_list, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000,
+                 get_fundamentals=True, get_ohlcv=True):
         """
-        :param tickers:
-            a list, containing all the tickers in the portfolio. This list will be used to create the Stock
-            objects that they correspond to, there cannot be any duplicates
-        :param start_date:
-            a date, the start date of the analysis.
-            This will be passed to each :class: Stock created and the ohlcv data frame loaded will start at this date.
-            start_date will default to today - 365 days if nothing is passed in
-        :param end_date:
-            a date, the end date of the analysis.
-            This will be passed in each :class: Stock created and the ohlcv data frame as well.
-            end_date defaults to today
-        :param benchmark_ticker:
-            a string, the ticker of the market index or benchmark to compare the portfolio against.
-            benchmark_ticker defaults to the S&P 500
-        :param starting_cash:
-            float, the amount of dollars to allocate to the portfolio initially
-        :param get_fundamentals:
-            a boolean, if True the fundamentals of each :class:`Stock` will be retrieved
-            NOTE: if a lot of stocks are loaded this may take a little bit of time
-            get_fundamentals defaults to False
-        :param get_ohlcv:
-            a boolean, if True an ohlcv data frame will be created for each :class:`Stock`
-            get_ohlcv defaults to True
+        :param benchmark_ticker: the ticker of the market index or benchmark to compare the portfolio against.
+            (default: *^GSPC*)
+        :type benchmark_ticker: str
+        :param starting_cash: the amount of dollars to allocate to the portfolio initially
+            (default: 10000000)
+        :type starting_cash: long
         """
-        if type(tickers) != list:
-            # make sure tickers is a list
-            tickers = [tickers]
+        super().__init__(ticker_list=ticker_list, start_date=start_date, end_date=end_date,
+                         get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
 
-        # ensure start_date and end_date are proper type
-        # I don't like the way this is done but don't have a better idea right now
-
-        if start_date is None:
-            # default to 1 year
-            self.start_date = date.today() - timedelta(days=365)
-        else:
-            self.start_date = utils.parse_date(start_date)
-            # try:
-            #     self.start_date = parser.parse(start_date).date()
-            # except ValueError:
-            #     raise ValueError('Error parsing start_date to date. {} was provided')
-            # except TypeError:
-            #     self.start_date = start_date.date()
-
-        if end_date is None:
-            # default to today
-            self.end_date = date.today()
-        else:
-            self.end_date = utils.parse_date(end_date)
-            # try:
-            #     self.end_date = parser.parse(end_date).date()
-            # except ValueError:
-            #     raise ValueError('Error parsing end_date to date. {} was provided')
-            # except TypeError:
-            #     self.end_date = end_date.date()
-
-        self.assets = {}
-        if get_fundamentals:
-            stocks = OwnedStock.from_ticker_list(ticker_list=tickers, start=start_date, end=end_date,
-                                            get_ohlcv=get_ohlcv)
-            for stock in stocks:
-                self.assets[stock.ticker] = stock
+        # if get_fundamentals:
+        #     stocks = OwnedStock.from_ticker_list(ticker_list=ticker_list, start=start_date, end=end_date,
+        #                                          get_ohlcv=get_ohlcv)
+        #     for stock in stocks:
+        #         self.assets[stock.ticker] = stock
 
         self.benchmark_ticker = benchmark_ticker
 
@@ -157,9 +177,144 @@ class Portfolio(Base):
         """
         self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
-    def buy_shares(self, ticker, num_shares, buy_date):
-        if ticker in self.assets:
-            pass
+
+    # def _make_trade(self, ticker, qty, strategy, trade_date=None, action='buy', price_per_share=None):
+    #     owned_stock = self.assets.get(ticker)
+    #     if owned_stock:
+    #         post_trade_stock = owned_stock.make_trade(qty=qty, price_per_share=price_per_share)
+    #         if isinstance(post_trade_stock, OwnedStock):
+    #             self.assets[ticker] = post_trade_stock
+    #         else:
+    #             del self.assets[ticker]
+    #             # with db.transactional_session as session:
+    #             #     session.add(Trade(qty=qty, price_per_share=post_trade_stock))
+    #     else:
+    #         with db.transactional_session as session:
+    #             stock = session.query(Stock).filter(Stock.ticker == ticker).first()
+    #             if stock:
+    #                 owned_stock = OwnedStock(ticker=stock.ticker, shares_owned=qty)
+    #                 self.assets[ticker] = owned_stock
+    #                 session.add(Trade(qty=qty, price_per_share=owned_stock.average_share_price, stock=owned_stock,
+    #                                   strategy=strategy, action=action, trade_date=trade_date))
+    #                 session.add(self)
+    #             else:
+    #                 raise AssetNotInUniverseException('{} could not be located in the AssetUniverse so the trade was '
+    #                                                   'aborted'.format(ticker))
+
+    def make_trade(self, ticker, qty, action, price_per_share=None, trade_date=None):
+        owned_asset = self.assets.get(ticker)
+        if owned_asset:
+            self._update_existing_position(qty=qty, action=action, price_per_share=price_per_share,
+                                           trade_date=trade_date, asset=owned_asset)
+        else:
+            self._open_new_position(ticker=ticker, qty=qty, action=action, price_per_share=price_per_share,
+                                    trade_date=trade_date)
+
+    # def _update_existing_position_(self, ticker, qty, action, price_per_share, trade_date, asset):
+    #     if action.lower() == 'buy':
+    #         self._update_existing_position(ticker=ticker, qty=qty, price_per_share=price_per_share,
+    #                                        trade_date=trade_date, asset=asset, action=action)
+    #     elif action.lower() == 'sell':
+    #         self._close_position(ticker=ticker, qty=qty, price_per_share=price_per_share, trade_date=trade_date)
+    #     else:
+    #         raise ValueError('{} is not a valid action. action must be either "buy" or "sell"'.format(action))
+    #
+    # def _open_new_position_(self, ticker, qty, action, price_per_share, trade_date):
+    #     if action.lower() == 'buy':
+    #         self._open_new_position(ticker=ticker, qty=qty, price_per_share=price_per_share, trade_date=trade_date,
+    #                                 action=action)
+    #     elif action.lower() == 'sell':
+    #         self._new_short_position(ticker=ticker, qty=qty, price_per_share=price_per_share, trade_date=trade_date)
+    #     else:
+    #         raise ValueError('{} is not a valid action. action must be either "buy" or "sell"'.format(action))
+
+    def _open_new_position(self, ticker, qty, price_per_share, trade_date, action):
+        """
+
+        Create a new :class:``OwnedStock`` object associated with this portfolio as well as update the cash position
+
+        :param qty: how many shares are being bought or sold.
+            If the position is a **long** position use a negative number to close it and positive to open it.
+            If the position is a **short** position use a negative number to open it and positive to close it.
+        :type qty: int
+        :param price_per_share: the average price per share in the trade.
+            This should always be positive no matter what the trade's position is.
+        :type price_per_share: long
+        :param trade_date: the date and time the trade takes place
+            (default: now)
+        :type trade_date: datetime
+        :return: None
+
+        This method processes the trade and then writes the results to the database. It will create a new instance of
+        :class:``OwnedStock`` class and at it to the :class:``Portfolio`` asset dict.
+        """
+        asset = self._get_asset_from_universe(ticker=ticker)
+        if asset:
+            if action.lower() == 'sell':
+                # if selling an asset that is not in the portfolio that means it has to be a short sale.
+                position = 'short'
+            else:
+                position = 'long'
+            owned_asset = OwnedStock(ticker=asset.ticker, shares_owned=qty, average_share_price=price_per_share,
+                                     position=position)
+            # inverse the total position's value and credit cash for that much
+            self.cash += owned_asset.total_position_value * -1
+            self.assets[owned_asset.ticker] = owned_asset
+            trade = Trade(qty=qty, price_per_share=price_per_share, stock=owned_asset, action='buy',
+                          strategy='Open new {} position'.format(position), trade_date=trade_date)
+            with db.transactional_session as session:
+                session.add(self)
+                session.add(trade)
+        else:
+            raise AssetNotInUniverseException('{} could not be located in the AssetUniverse so the trade was '
+                                              'aborted'.format(ticker))
+
+    def _get_asset_from_universe(self, ticker):
+        with db.query_session as session:
+            return session.query(Stock).filter(Stock.ticker == ticker).first()
+
+    def _update_existing_position(self, qty, price_per_share, trade_date, asset, action):
+        """
+        Update the :class:``OwnedStock`` associated with this portfolio as well as the cash position
+
+        :param qty: how many shares are being bought or sold.
+            If the position is a **long** position use a negative number to close it and positive to open it.
+            If the position is a **short** position use a negative number to open it and positive to close it.
+        :type qty: int
+        :param price_per_share: the average price per share in the trade.
+            This should always be positive no matter what the trade's position is.
+        :type price_per_share: long
+        :param trade_date: the date and time the trade takes place
+            (default: now)
+        :type trade_date: datetime
+        :param asset: the asset that is already in the portfolio
+        :type asset: OwnedStock
+        :return: None
+
+        This method processes the trade and then writes the results to the database.
+        """
+        if asset.total_position_value < 0:
+            position = 'short'
+        else:
+            position = 'long'
+        post_trade_asset = asset.make_trade(qty=qty, price_per_share=price_per_share)
+        if post_trade_asset:
+            self.assets[post_trade_asset.ticker] = post_trade_asset
+            self.cash += post_trade_asset.total_position_value * -1
+            trade = Trade(qty=qty, price_per_share=price_per_share, stock=post_trade_asset,
+                          strategy='Update an existing {} position'.format(position), action=action,
+                          trade_date=trade_date)
+        else:
+            self.cash += asset.total_position_value
+            del self.assets[asset.ticker]
+            # add this to the db?
+            unowned_asset = Stock.from_dict(asset.__dict__)
+            trade = Trade(qty=qty, price_per_share=price_per_share, stock=unowned_asset,
+                          strategy='Close an existing {} position'.format(position), action=action,
+                          trade_date=trade_date)
+        with db.transactional_session as session:
+            session.add(self)
+            session.add(trade)
 
     def portfolio_return(self):
         pass
@@ -168,40 +323,37 @@ class Portfolio(Base):
         for ticker, stock in self.assets.items():
             yield stock.simple_moving_average()
 
-class Trade(HasStock, Base):
+class Trade(OwnsStock, Base):
     """
     This class is used to make trades and keep trade of past trades
     """
     # id = Column(Integer, primary_key=True)
     trade_date = Column(DateTime)
     action = Column(String)
-    position = Column(String)
+    strategy = Column(String)
     qty = Column(Integer)
-    price_per_share = Column(Numeric(9,2))
+    price_per_share = Column(Numeric)
     corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
+    net_trade_value = Column(Numeric)
+    # owned_stock_id = Column(Integer, ForeignKey('owned_stock.id'))
+    # owned_stock = relationship('OwnedStock')
     # corresponding_trade = relationship('Trade', remote_side=[id])
 
-    def __init__(self, trade_date, qty, average_price, stock, action='buy', position=None, corresponding_trade=None):
+    def __init__(self, qty, price_per_share, stock, strategy, action, trade_date=None):
         """
         :param trade_date: datetime, corresponding to the date and time of the trade date
         :param qty: int, number of shares traded
-        :param average_price: float
+        :param price_per_share: float
             price per individual share in the trade or the average share price in the trade
         :param stock:
             a :class: Stock, the stock object that was traded
         :param action: str, must be *buy* or *sell* depending on what kind of trade it was
         :param position: str, must be *long* or *short*
         """
-        try:
-            self.trade_date = parser.parse(trade_date)
-        except ValueError:
-            raise ValueError('Error parsing trade_date into a date. {} was provided.'.format(trade_date))
-        except TypeError:
-            if type(trade_date) == datetime:
-                self.trade_date = trade_date
-            else:
-                raise TypeError('trade_date must be a datetime object or a string. '
-                                '{} was provided'.format(type(trade_date)))
+        if trade_date:
+            self.trade_date = utils.parse_date(trade_date)
+        else:
+            self.trade_date = datetime.now()
 
         if action.lower() == 'buy' or action.lower() == 'sell':
             # TODO: may have to run a query to check if we own the stock or not? and if we do use update?
@@ -209,32 +361,24 @@ class Trade(HasStock, Base):
         else:
             raise ValueError('action must be either "buy" or "sell". {} was provided.'.format(action))
 
-        if position.lower() == 'long' or position.lower() == 'short':
-            self.position = position.lower()
-        elif position is None and corresponding_trade is not None:
-            self.position = position
-        elif position is None and corresponding_trade is None:
-            raise ValueError('position can only be None if a corresponding_trade is also provided and None was provided')
-        else:
-            raise ValueError('Nice try buy, position must be either "long" or "short". {} was provided.'.format(position))
-
-        try:
-            self.stock = stock.make_trade(qty=qty, average_price=average_price)
-        except AttributeError:
-            try:
-                self.stock = OwnedStock(ticker=stock.ticker, shares_owned=qty, average_share_price=average_price,
-                                   purchase_date=self.trade_date)
-            except AttributeError:
-                raise AttributeError('stock must be a Stock object. {} was provided'.format(type(stock)))
-
-        if corresponding_trade is None or isinstance(corresponding_trade, Trade):
-            # TODO: check if the corresponding_trade is actually in the DB yet
-            self.corresponding_trade = corresponding_trade
-        else:
-            raise ValueError('corresponding_trade must either be None or an instance of a Trade object.'
-                             '{} was provided'.format(type(corresponding_trade)))
-
-        # TODO: if the position is short shouldn't this be negative? and does this really belong here?
+        self.strategy = strategy.lower()
+        self.stock = stock
         self.qty = qty
-        self.price_per_share = average_price
+        self.price_per_share = price_per_share
+        # elif position is None and corresponding_trade is not None:
+        #     self.position = position
+        # elif position is None and corresponding_trade is None:
+        #     raise ValueError('position can only be None if a corresponding_trade is also provided and None was provided')
+        # else:
+        #     raise ValueError('Nice try buy, position must be either "long" or "short". {} was provided.'.format(position))
+        #
+        # try:
+        #     self.stock = stock.make_trade(qty=qty, price_per_share=price_per_share)
+        # except AttributeError:
+        #     try:
+        #         self.stock = OwnedStock(ticker=stock.ticker, shares_owned=qty, average_share_price=price_per_share,
+        #                                 purchase_date=self.trade_date)
+        #     except AttributeError:
+        #         raise AttributeError('stock must be a Stock object. {} was provided'.format(type(stock)))
+
 

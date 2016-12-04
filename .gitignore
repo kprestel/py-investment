@@ -22,9 +22,10 @@ __pycache__/
 *.so
 .idea/*
 .idea
+*.db
 test/sample_data/*
 .idea/dictionaries/*
-pytech/pytech.db
+#pytech/pytech.db
 
 # Distribution / packaging
 .Python

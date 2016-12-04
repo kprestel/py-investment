@@ -102,18 +102,15 @@ class Stock(WatchedAsset, Base):
     start_date = Column(DateTime)
     end_date = Column(DateTime)
     get_ohlcv = Column(Boolean)
+    latest_price = Column(Numeric)
+    latest_price_time = Column(DateTime)
     load_fundamentals = Column(Boolean)
     beta = Column(Numeric)
     start_price = Column(Numeric)
     end_price = Column(Numeric)
-    # owned = Column(Boolean)
     fundamentals = relationship('Fundamental',
                                 collection_class=attribute_mapped_collection('access_key'),
                                 cascade='all, delete-orphan')
-    # __mapper_args__ = {
-    #     'polymorphic_on': owned,
-    #     'polymorphic_identity': False
-    # }
 
     def __init__(self, ticker, start_date, end_date=None, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
@@ -141,6 +138,9 @@ class Stock(WatchedAsset, Base):
         self.load_fundamentals = get_fundamentals
         if get_fundamentals:
             self.get_fundamentals()
+        quote = self.get_price_quote()
+        self.latest_price = quote.price
+        self.latest_price_time = quote.time
 
     @orm.reconstructor
     def init_on_load(self):
@@ -153,6 +153,9 @@ class Stock(WatchedAsset, Base):
             self.ohlcv = self.get_ohlc_series()
         else:
             self.ohlcv = None
+        quote = self.get_price_quote()
+        self.latest_price = quote.price
+        self.latest_price_time = quote.time
 
     # def __getattr__(self, item):
     #     try:
@@ -168,6 +171,17 @@ class Stock(WatchedAsset, Base):
         I forgot why this is here and am scared to delete it
         """
         return self.ohlcv
+
+    def get_price_quote(self):
+        quote = namedtuple('Quote', 'price time')
+        df = web.get_quote_yahoo(self.ticker)
+        d = date.today()
+        time = utils.parse_date(df['time'][0]).time()
+        dt = datetime.combine(d, time=time)
+        return quote(price=df['last'], time=dt)
+
+
+
 
     def get_ohlc_series(self, data_source='yahoo'):
         """
@@ -1013,15 +1027,17 @@ class OwnedStock(PortfolioAsset, Stock):
     average_share_price = Column(Numeric)
     shares_owned = Column(Numeric)
     total_position_value = Column(Numeric)
+    position = Column(Numeric)
     ticker = Column(String, unique=True)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
     get_ohlcv = Column(Boolean)
+    latest_price = Column(Numeric)
+    latest_price_time = Column(DateTime)
     load_fundamentals = Column(Boolean)
     beta = Column(Numeric)
     start_price = Column(Numeric)
     end_price = Column(Numeric)
-    # owned = Column(Boolean)
     fundamentals = relationship('Fundamental',
                                 collection_class=attribute_mapped_collection('access_key'),
                                 cascade='all, delete-orphan')
@@ -1029,48 +1045,64 @@ class OwnedStock(PortfolioAsset, Stock):
     __mapper_args__ = {
         'concrete': True
     }
-    def __init__(self, ticker, shares_owned, average_share_price, purchase_date=None, get_fundamentals=True,
+    def __init__(self, ticker, shares_owned, position, average_share_price=None, purchase_date=None, get_fundamentals=True,
                  get_ohlcv=True):
+        if position.lower() != 'long' or position.lower() != 'short':
+            raise ValueError('position must be "long" or "short".  {} was provided'.format(position))
+        else:
+            self.position = position
+
         if purchase_date is None:
             self.purchase_date = datetime.now()
         else:
             self.purchase_date = utils.parse_date(purchase_date)
-            # try:
-            #     self.purchase_date = parser.parse(purchase_date)
-            # except ValueError:
-            #     raise ValueError('Could not parse purchase_date to datetime. {} was provided'.format(purchase_date))
-            # except TypeError:
-            #     self.purchase_date = purchase_date
-        self.average_share_price = average_share_price
+
+        if average_share_price:
+            self.average_share_price = average_share_price
+            self.latest_price = average_share_price
+            self.latest_price_time = self.purchase_date.time()
+        else:
+            quote = self.get_price_quote()
+            self.average_share_price = quote.price
+            self.latest_price = quote.price
+            self.latest_price_time = quote.time
         self.shares_owned = shares_owned
-        self.total_position_value = average_share_price * shares_owned
-        self.owned = True
+        if self.position == 'short':
+            # short positions should have a negative total value
+            self.total_position_value = (self.average_share_price * shares_owned) * -1
+        else:
+            self.total_position_value = self.average_share_price * shares_owned
         super().__init__(ticker=ticker, start_date=self.purchase_date, get_fundamentals=get_fundamentals,
                          get_ohlcv=get_ohlcv)
 
-    def make_trade(self, qty, average_price):
+    def make_trade(self, qty, price_per_share=None):
         """
         Update the position of the :class:`Stock`
 
         :param qty: int, positive if buying more shares and negative if selling shares
-        :param average_price: float, the average price per share in the trade
+        :param price_per_share: float, the average price per share in the trade
         :return: self
         """
-        self.total_position_value = qty * average_price
+        if price_per_share:
+            self.total_position_value += qty * price_per_share
+        else:
+            quote = self.get_price_quote()
+            self.latest_price = quote.price
+            self.latest_price_time = quote.time
+            self.total_position_value += qty * quote.price
         self.shares_owned += qty
         try:
             self.average_share_price = self.total_position_value / self.shares_owned
         except ZeroDivisionError:
-            self.average_share_price = 0
-            self.owned = False
-            with db.transactional_session as session:
-                post_trade_stock = super().from_dict(self.__dict__)
-                session.delete(self)
-                session.add(post_trade_stock)
+            # self.average_share_price = 0
+            # with db.transactional_session as session:
+            #     post_trade_stock = super().from_dict(self.__dict__)
+            #     session.delete(self)
+            #     session.add(post_trade_stock)
             return None
         else:
-            with db.transactional_session as session:
-                session.add(self)
+            # with db.transactional_session as session:
+            #     session.add(self)
             return self
 
     def market_correlation(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):

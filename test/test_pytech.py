@@ -1,8 +1,48 @@
+from contextlib import contextmanager
+from distutils import dirname
+from os.path import join
+
 import pytest
 import pandas as pd
 from datetime import datetime
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+from pytech.base import Base
 from pytech.stock import Stock, Fundamental
 from pytech.portfolio import Portfolio, AssetUniverse
+
+import logging
+PROJECT_DIR = dirname(__file__)
+DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.db')
+cs = 'sqlite+pysqlite:///{}'.format(DATABASE_LOCATION)
+
+@pytest.fixture(scope='session')
+def engine():
+    return create_engine(cs, connect_args={'check_same_thread':False}, poolclass=StaticPool)
+
+@pytest.yield_fixture(scope='session')
+def tables(engine):
+    Base.metadata.create_all(engine)
+    yield
+    Base.metadata.drop_all(engine)
+
+@pytest.yield_fixture(autouse=True)
+def mock_session(monkeypatch, engine):
+    @contextmanager
+    def session():
+        conn = engine.connect()
+        trans = conn.begin()
+        session = Session(bind=conn)
+        session.begin(nested=True)
+        yield session
+        session.close()
+        trans.rollback()
+        conn.close()
+    monkeypatch.setattr('pytech.db_utils.transactional_session', session)
+
+
 
 class TestStock(object):
 
@@ -62,7 +102,7 @@ class TestPortfolio(object):
 
     def test_portfolio_with_fundamentals(self):
         tickers = ['AAPL', 'MSFT']
-        portfolio = Portfolio(tickers=tickers, start_date='20160601', end_date='20161124',
+        portfolio = Portfolio(ticker_list=tickers, start_date='20160601', end_date='20161124',
                               get_fundamentals=True, get_ohlcv=False)
         for k, stock in portfolio.assets.items():
             assert isinstance(stock, Stock)
@@ -75,7 +115,7 @@ class TestAssetUniverse(object):
     def test_asset_universe(self):
         tickers = ['AAPL', 'MSFT']
         uni = AssetUniverse(ticker_list=tickers)
-        for k, stock in uni.watched_assets.items():
+        for k, stock in uni.assets.items():
             assert isinstance(stock, Stock)
             for fundamental in stock.fundamentals:
                 assert isinstance(fundamental, Fundamental)
