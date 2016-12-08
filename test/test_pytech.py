@@ -15,7 +15,7 @@ from pytech.portfolio import Portfolio, AssetUniverse
 
 import logging
 PROJECT_DIR = dirname(__file__)
-DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.db')
+DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.sqlite')
 cs = 'sqlite+pysqlite:///{}'.format(DATABASE_LOCATION)
 
 @pytest.fixture(scope='session')

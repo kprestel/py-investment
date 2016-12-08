@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 # from pytech.portfolio import Portfolio
 import logging
 PROJECT_DIR = dirname(__file__)
-DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.db')
+DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.sqlite')
 cs = 'sqlite+pysqlite:///{}'.format(DATABASE_LOCATION)
 engine = create_engine(cs, connect_args={'check_same_thread':False}, poolclass=StaticPool)
 

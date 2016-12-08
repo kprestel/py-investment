@@ -54,11 +54,11 @@ class PortfolioAsset(object):
         #                         collection_class=attribute_mapped_collection('ticker'),
         #                         cascade='all, delete-orphan')
 
+
 class WatchedAsset(object):
     @declared_attr
     def asset_universe_id(cls):
         return Column('asset_universe_id', ForeignKey('asset_universe.id'))
-
 
 
 class HasStock(object):
@@ -73,15 +73,16 @@ class HasStock(object):
     def stock_id(cls):
         return Column('stock_id', ForeignKey('stock.id'))
 
-    # @declared_attr
-    # def stock(cls):
-    #     return relationship('Stock')
+        # @declared_attr
+        # def stock(cls):
+        #     return relationship('Stock')
 
 
 class OwnsStock(object):
     @declared_attr
     def owned_stock_id(cls):
         return Column('owned_stock_id', ForeignKey('owned_stock.id'))
+
     @declared_attr
     def owned_stock(cls):
         return relationship('OwnedStock')
@@ -179,9 +180,6 @@ class Stock(WatchedAsset, Base):
         time = utils.parse_date(df['time'][0]).time()
         dt = datetime.combine(d, time=time)
         return quote(price=df['last'], time=dt)
-
-
-
 
     def get_ohlc_series(self, data_source='yahoo'):
         """
@@ -1017,6 +1015,7 @@ class Stock(WatchedAsset, Base):
             stock_dict[ticker] = cls(ticker=ticker, start_date=start, end_date=end, get_ohlc=get_ohlc)
         return stock_dict
 
+
 class OwnedStock(PortfolioAsset, Stock):
     """
     Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
@@ -1045,7 +1044,9 @@ class OwnedStock(PortfolioAsset, Stock):
     __mapper_args__ = {
         'concrete': True
     }
-    def __init__(self, ticker, shares_owned, position, average_share_price=None, purchase_date=None, get_fundamentals=True,
+
+    def __init__(self, ticker, shares_owned, position, average_share_price=None, purchase_date=None,
+                 get_fundamentals=True,
                  get_ohlcv=True):
         if position.lower() != 'long' or position.lower() != 'short':
             raise ValueError('position must be "long" or "short".  {} was provided'.format(position))
@@ -1118,6 +1119,7 @@ class OwnedStock(PortfolioAsset, Stock):
         """
         pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
         return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
+
     def calculate_beta(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
         """
         Compute the beta for the :class: Stock
@@ -1170,11 +1172,11 @@ class OwnedStock(PortfolioAsset, Stock):
         else:
             return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
-    # @classmethod
-    # def from_ticker_list(cls, ticker_list, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
-    #     super()._init_spiders(ticker_list=ticker_list, start_date=purchase_date, end_date=end)
-        # for ticker in ticker_list:
-        #     yield cls(ticker=ticker)
+            # @classmethod
+            # def from_ticker_list(cls, ticker_list, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
+            #     super()._init_spiders(ticker_list=ticker_list, start_date=purchase_date, end_date=end)
+            # for ticker in ticker_list:
+            #     yield cls(ticker=ticker)
 
 
 class Fundamental(Base, HasStock, OwnsStock):
@@ -1339,8 +1341,6 @@ class Fundamental(Base, HasStock, OwnsStock):
         self.ebit = self._ebit()
         self.ebitda = self._ebitda()
 
-
-
     def return_on_assets(self):
         return self.net_income / self.assets
 
@@ -1442,7 +1442,6 @@ class Fundamental(Base, HasStock, OwnsStock):
                    investment_revenues=investment_revenues, fin_cash_flow=fin_cash_flow, inv_cash_flow=inv_cash_flow,
                    ops_cash_flow=ops_cash_flow, year=year, period_focus=period_focus, ticker=ticker)
 
-
     @classmethod
     def from_dict(cls, fundamental_dict):
         """
@@ -1473,4 +1472,3 @@ class Fundamental(Base, HasStock, OwnsStock):
 #                  shares_outstanding, shares_outstanding_diluted, common_stock_outstanding, depreciation_amortization,
 #                  cogs, comprehensive_income_net_of_tax, research_and_dev_expense, warranty_accrual,
 #                  warranty_accrual_payments)
-

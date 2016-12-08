@@ -210,24 +210,6 @@ class Portfolio(AssetUniverse):
             self._open_new_position(ticker=ticker, qty=qty, action=action, price_per_share=price_per_share,
                                     trade_date=trade_date)
 
-    # def _update_existing_position_(self, ticker, qty, action, price_per_share, trade_date, asset):
-    #     if action.lower() == 'buy':
-    #         self._update_existing_position(ticker=ticker, qty=qty, price_per_share=price_per_share,
-    #                                        trade_date=trade_date, asset=asset, action=action)
-    #     elif action.lower() == 'sell':
-    #         self._close_position(ticker=ticker, qty=qty, price_per_share=price_per_share, trade_date=trade_date)
-    #     else:
-    #         raise ValueError('{} is not a valid action. action must be either "buy" or "sell"'.format(action))
-    #
-    # def _open_new_position_(self, ticker, qty, action, price_per_share, trade_date):
-    #     if action.lower() == 'buy':
-    #         self._open_new_position(ticker=ticker, qty=qty, price_per_share=price_per_share, trade_date=trade_date,
-    #                                 action=action)
-    #     elif action.lower() == 'sell':
-    #         self._new_short_position(ticker=ticker, qty=qty, price_per_share=price_per_share, trade_date=trade_date)
-    #     else:
-    #         raise ValueError('{} is not a valid action. action must be either "buy" or "sell"'.format(action))
-
     def _open_new_position(self, ticker, qty, price_per_share, trade_date, action):
         """
 
