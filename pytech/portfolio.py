@@ -19,95 +19,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class AssetUniverse(Base):
+class Portfolio(Base):
     """
-    This class will contain all the :class:`Asset` that are eligible to be bought and sold.  The intention is to allow
-    the user to limit what stocks they are watching and willing to trade.  It allows for analysis to be done on each
-    :class:`Asset` and compare them against all other possible trade opportunities a user is comfortable with making.
-    """
-    start_date = Column(DateTime)
-    assets = relationship('Stock', backref='asset_universe',
-                          collection_class=attribute_mapped_collection('ticker'),
-                          cascade='all, delete-orphan')
-
-    def __init__(self, ticker_list=None, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
-        """
-        :param ticker_list: containing all the ticker_list in the portfolio. This list will be used to create the
-            :class:``Stock`` objects that they correspond to, there cannot be any duplicates. This is only if you want
-            to load stocks upon initialization, it can be updated later.
-        :type ticker_list: list
-        :param start_date: a date, the start date of the analysis. This will be passed to each :class:``Stock``
-            created and the ohlcv data frame loaded will start at this date.
-            (default: end_date - 365 days)
-        :type start_date: datetime
-        :param end_date: the end date of the analysis. This will be passed in each :class:``Stock`` created
-            and the ohlcv data frame as well.
-            (default: ``datetime.now()``)
-        :type end_date: datetime
-        :param get_fundamentals: if True the fundamentals of each :class:``Stock`` ticker will be retrieved
-            NOTE: if a lot of stocks are loaded this may take a little bit of time, but without :class:`Fundamental`
-             loaded for each :class:``Asset`` fundamental analysis will not work.
-            (default: False)
-        :type get_fundamentals: bool
-        :param get_ohlcv: a boolean, if True an ohlcv data frame will be created for each :class:`Stock`
-            (default: True)
-        :type get_ohlcv: bool
-        """
-        if ticker_list:
-            self.ticker_list = ticker_list
-        else:
-            self.ticker_list = []
-
-        if start_date is None:
-            self.start_watch_date = datetime.now() - timedelta(days=365)
-        else:
-            self.start_watch_date = utils.parse_date(start_date)
-        if end_date is None:
-            # default to today
-            self.end_date = datetime.now()
-        else:
-            self.end_date = utils.parse_date(end_date)
-
-        self.assets = {}
-        if get_fundamentals:
-            watched_stocks = Stock.from_ticker_list(ticker_list=ticker_list, start=self.start_watch_date,
-                                                    end=self.end_date, get_ohlcv=get_ohlcv)
-            for stock in watched_stocks:
-                self.assets[stock.ticker] = stock
-
-    def add_assets(self, ticker, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
-        if self.assets.get(ticker):
-            raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
-        start_date = utils.parse_date(start_date)
-        if end_date is None:
-            end_date = start_date - timedelta(days=365)
-        else:
-            end_date = utils.parse_date(end_date)
-        self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
-                                    get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
-        with db.transactional_session as session:
-            session.add(self)
-
-    def add_assets_from_list(self, ticker_list, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
-        for ticker in ticker_list:
-            if self.assets.get(ticker):
-                raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
-            self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
-                                        get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
+    Holds stocks and keeps tracks of the owner's cash as well and their :class:`OwnedAssets` and allows them to perform
+    analysis on just the :class:`Asset` that they currently own.
 
 
-
-class Portfolio(AssetUniverse):
-    """
+    Ignore this part:
     This class inherits from :class:``AssetUniverse`` so that it has access to its analysis functions.  It is important to
     note that :class:``Portfolio`` is its own table in the database as it represents the :class:``Asset`` that the user
     currently owns.  An :class:``Asset`` can be in both the *asset_universe* table as well as the *portfolio* table but
     a :class:``Asset`` does have to be in the :class:``AssetUniverse`` in order to be traded.
-
-    Holds stocks and keeps tracks of the owner's cash as well and their :class:`OwnedAssets` and allows them to perform
-    analysis on just the :class:`Asset` that they currently own.
     """
-
     # TODO: figure out how to make trades and what the relationship it should have with stocks
     """
     NOTES:
@@ -130,23 +53,23 @@ class Portfolio(AssetUniverse):
         KP.
 
     """
-    __tablename__ = 'portfolio'
-
     id = Column(Integer, primary_key=True)
     cash = Column(Numeric(30, 2))
     benchmark_ticker = Column(String)
-    start_date = Column(DateTime)
-    end_date = Column(DateTime)
-    assets = relationship('OwnedStock', backref='portfolio',
-                        collection_class=attribute_mapped_collection('ticker'),
-                        cascade='all, delete-orphan')
-    __mapper_args__ = {
-        'concrete': True
-    }
+    # start_date = Column(DateTime)
+    # end_date = Column(DateTime)
+    # assets = relationship('OwnedStock', backref='portfolio',
+    #                     collection_class=attribute_mapped_collection('ticker'),
+    #                     cascade='all, delete-orphan')
 
-    def __init__(self, ticker_list, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000,
-                 get_fundamentals=True, get_ohlcv=True):
+    def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000):
         """
+        :param start_date: a date, the start date to the load the benchmark as of.
+            (default: end_date - 365 days)
+        :type start_date: datetime
+        :param end_date: the end date to load the benchmark as of.
+            (default: ``datetime.now()``)
+        :type end_date: datetime
         :param benchmark_ticker: the ticker of the market index or benchmark to compare the portfolio against.
             (default: *^GSPC*)
         :type benchmark_ticker: str
@@ -154,17 +77,20 @@ class Portfolio(AssetUniverse):
             (default: 10000000)
         :type starting_cash: long
         """
-        super().__init__(ticker_list=ticker_list, start_date=start_date, end_date=end_date,
-                         get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
 
-        # if get_fundamentals:
-        #     stocks = OwnedStock.from_ticker_list(ticker_list=ticker_list, start=start_date, end=end_date,
-        #                                          get_ohlcv=get_ohlcv)
-        #     for stock in stocks:
-        #         self.assets[stock.ticker] = stock
+        if start_date is None:
+            self.start_watch_date = datetime.now() - timedelta(days=365)
+        else:
+            self.start_watch_date = utils.parse_date(start_date)
 
+        if end_date is None:
+            # default to today
+            self.end_date = datetime.now()
+        else:
+            self.end_date = utils.parse_date(end_date)
+
+        self.assets = {}
         self.benchmark_ticker = benchmark_ticker
-
         self.benchmark = web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         self.cash = starting_cash
 
@@ -175,31 +101,28 @@ class Portfolio(AssetUniverse):
 
         recreate the benchmark series on load from DB
         """
+
         self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
+    def add_assets(self, ticker, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
+        if self.assets.get(ticker):
+            raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
+        start_date = utils.parse_date(start_date)
+        if end_date is None:
+            end_date = start_date - timedelta(days=365)
+        else:
+            end_date = utils.parse_date(end_date)
+        self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
+                                    get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
+        with db.transactional_session as session:
+            session.add(self)
 
-    # def _make_trade(self, ticker, qty, strategy, trade_date=None, action='buy', price_per_share=None):
-    #     owned_stock = self.assets.get(ticker)
-    #     if owned_stock:
-    #         post_trade_stock = owned_stock.make_trade(qty=qty, price_per_share=price_per_share)
-    #         if isinstance(post_trade_stock, OwnedStock):
-    #             self.assets[ticker] = post_trade_stock
-    #         else:
-    #             del self.assets[ticker]
-    #             # with db.transactional_session as session:
-    #             #     session.add(Trade(qty=qty, price_per_share=post_trade_stock))
-    #     else:
-    #         with db.transactional_session as session:
-    #             stock = session.query(Stock).filter(Stock.ticker == ticker).first()
-    #             if stock:
-    #                 owned_stock = OwnedStock(ticker=stock.ticker, shares_owned=qty)
-    #                 self.assets[ticker] = owned_stock
-    #                 session.add(Trade(qty=qty, price_per_share=owned_stock.average_share_price, stock=owned_stock,
-    #                                   strategy=strategy, action=action, trade_date=trade_date))
-    #                 session.add(self)
-    #             else:
-    #                 raise AssetNotInUniverseException('{} could not be located in the AssetUniverse so the trade was '
-    #                                                   'aborted'.format(ticker))
+    def add_assets_from_list(self, ticker_list, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
+        for ticker in ticker_list:
+            if self.assets.get(ticker):
+                raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
+            self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
+                                        get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
 
     def make_trade(self, ticker, qty, action, price_per_share=None, trade_date=None):
         owned_asset = self.assets.get(ticker)

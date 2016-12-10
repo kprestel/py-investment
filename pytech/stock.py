@@ -1,4 +1,3 @@
-# from pytech import Session
 import pytech.utils as utils
 from pytech.base import Base
 from collections import namedtuple
@@ -55,10 +54,10 @@ class PortfolioAsset(object):
         #                         cascade='all, delete-orphan')
 
 
-class WatchedAsset(object):
-    @declared_attr
-    def asset_universe_id(cls):
-        return Column('asset_universe_id', ForeignKey('asset_universe.id'))
+# class WatchedAsset(object):
+#     @declared_attr
+#     def asset_universe_id(cls):
+#         return Column('asset_universe_id', ForeignKey('asset_universe.id'))
 
 
 class HasStock(object):
@@ -95,7 +94,7 @@ class Asset(object):
     pass
 
 
-class Stock(WatchedAsset, Base):
+class Stock(Base):
     """
     main class that is used to model stocks and may contain technical and fundamental data about the stock
     """
@@ -109,12 +108,18 @@ class Stock(WatchedAsset, Base):
     beta = Column(Numeric)
     start_price = Column(Numeric)
     end_price = Column(Numeric)
+    discriminator = Column('type', String)
     fundamentals = relationship('Fundamental',
                                 collection_class=attribute_mapped_collection('access_key'),
                                 cascade='all, delete-orphan')
+    __mapper_args__ = {
+        'polymorphic_identity': 'stock',
+        'polymorphic_on': discriminator
+    }
 
     def __init__(self, ticker, start_date, end_date=None, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
+        self.discriminator = 'stock'
         self.start_date = utils.parse_date(start_date)
         if end_date is None:
             self.end_date = datetime.now()
@@ -936,7 +941,7 @@ class Stock(WatchedAsset, Base):
         # runner = CrawlerRunner(settings=get_project_settings())
         #
         # spider_dict = {
-        #     'symbols': ticker_list,
+        #     'symbols': tickers,
         #     'start_date': start,
         #     'end_date': end
         # }
@@ -1016,38 +1021,28 @@ class Stock(WatchedAsset, Base):
         return stock_dict
 
 
-class OwnedStock(PortfolioAsset, Stock):
+class OwnedStock(Stock):
     """
     Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
     """
     __tablename__ = 'owned_stock'
-    id = Column(Integer, primary_key=True)
+    owned_stock_id = Column('id', Integer, ForeignKey('stock.id'), primary_key=True)
     purchase_date = Column(DateTime)
     average_share_price = Column(Numeric)
     shares_owned = Column(Numeric)
     total_position_value = Column(Numeric)
     position = Column(Numeric)
-    ticker = Column(String, unique=True)
-    start_date = Column(DateTime)
-    end_date = Column(DateTime)
-    get_ohlcv = Column(Boolean)
-    latest_price = Column(Numeric)
-    latest_price_time = Column(DateTime)
-    load_fundamentals = Column(Boolean)
-    beta = Column(Numeric)
-    start_price = Column(Numeric)
-    end_price = Column(Numeric)
-    fundamentals = relationship('Fundamental',
-                                collection_class=attribute_mapped_collection('access_key'),
-                                cascade='all, delete-orphan')
 
     __mapper_args__ = {
-        'concrete': True
+        'polymorphic_identity': 'owned_stock'
     }
 
     def __init__(self, ticker, shares_owned, position, average_share_price=None, purchase_date=None,
-                 get_fundamentals=True,
-                 get_ohlcv=True):
+                 get_fundamentals=True, get_ohlcv=True):
+        super().__init__(ticker=ticker, start_date=self.purchase_date, get_fundamentals=get_fundamentals,
+                         get_ohlcv=get_ohlcv)
+
+        self.discriminator = 'owned_stock'
         if position.lower() != 'long' or position.lower() != 'short':
             raise ValueError('position must be "long" or "short".  {} was provided'.format(position))
         else:
@@ -1073,8 +1068,6 @@ class OwnedStock(PortfolioAsset, Stock):
             self.total_position_value = (self.average_share_price * shares_owned) * -1
         else:
             self.total_position_value = self.average_share_price * shares_owned
-        super().__init__(ticker=ticker, start_date=self.purchase_date, get_fundamentals=get_fundamentals,
-                         get_ohlcv=get_ohlcv)
 
     def make_trade(self, qty, price_per_share=None):
         """
@@ -1095,15 +1088,8 @@ class OwnedStock(PortfolioAsset, Stock):
         try:
             self.average_share_price = self.total_position_value / self.shares_owned
         except ZeroDivisionError:
-            # self.average_share_price = 0
-            # with db.transactional_session as session:
-            #     post_trade_stock = super().from_dict(self.__dict__)
-            #     session.delete(self)
-            #     session.add(post_trade_stock)
             return None
         else:
-            # with db.transactional_session as session:
-            #     session.add(self)
             return self
 
     def market_correlation(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
@@ -1173,9 +1159,9 @@ class OwnedStock(PortfolioAsset, Stock):
             return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
             # @classmethod
-            # def from_ticker_list(cls, ticker_list, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
-            #     super()._init_spiders(ticker_list=ticker_list, start_date=purchase_date, end_date=end)
-            # for ticker in ticker_list:
+            # def from_ticker_list(cls, tickers, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
+            #     super()._init_spiders(tickers=tickers, start_date=purchase_date, end_date=end)
+            # for ticker in tickers:
             #     yield cls(ticker=ticker)
 
 
@@ -1453,22 +1439,3 @@ class Fundamental(Base, HasStock, OwnsStock):
         """
         df = {k: v for k, v in fundamental_dict.items() if k in cls.__dict__}
         return cls(**df)
-
-# class QFourFundamental(Fundamental):
-#
-#     def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
-#                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,
-#                  ops_cash_flow, year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid,
-#                  acts_pay_current, acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current,
-#                  period_focus, inventory_net, interest_expense, total_liabilities, total_liabilities_equity,
-#                  shares_outstanding, shares_outstanding_diluted, common_stock_outstanding, depreciation_amortization,
-#                  cogs, comprehensive_income_net_of_tax, research_and_dev_expense, warranty_accrual,
-#                  warranty_accrual_payments):
-#         super().__init__(amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
-#                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,
-#                  ops_cash_flow, year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid,
-#                  acts_pay_current, acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current,
-#                  period_focus, inventory_net, interest_expense, total_liabilities, total_liabilities_equity,
-#                  shares_outstanding, shares_outstanding_diluted, common_stock_outstanding, depreciation_amortization,
-#                  cogs, comprehensive_income_net_of_tax, research_and_dev_expense, warranty_accrual,
-#                  warranty_accrual_payments)

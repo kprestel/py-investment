@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 from pytech.base import Base
 from pytech.stock import Stock, Fundamental
-from pytech.portfolio import Portfolio, AssetUniverse
+from pytech.portfolio import Portfolio
 
 import logging
 PROJECT_DIR = dirname(__file__)
@@ -102,25 +102,12 @@ class TestPortfolio(object):
 
     def test_portfolio_with_fundamentals(self):
         tickers = ['AAPL', 'MSFT']
-        portfolio = Portfolio(ticker_list=tickers, start_date='20160601', end_date='20161124',
-                              get_fundamentals=True, get_ohlcv=False)
+        portfolio = Portfolio()
         for k, stock in portfolio.assets.items():
             assert isinstance(stock, Stock)
             for fundamental in stock.fundamentals:
                 assert isinstance(fundamental, Fundamental)
                 assert fundamental.assets == fundamental.total_liabilities_equity
-
-class TestAssetUniverse(object):
-
-    def test_asset_universe(self):
-        tickers = ['AAPL', 'MSFT']
-        uni = AssetUniverse(ticker_list=tickers)
-        for k, stock in uni.assets.items():
-            assert isinstance(stock, Stock)
-            for fundamental in stock.fundamentals:
-                assert isinstance(fundamental, Fundamental)
-                assert fundamental.assets == fundamental.total_liabilities_equity
-
 
 
 @pytest.mark.skip(reason='I will fix it later')

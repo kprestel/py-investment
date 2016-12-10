@@ -15,6 +15,6 @@ Session = sessionmaker(bind=engine)
 from pytech.base import Base
 from pytech.portfolio import Portfolio, Trade
 from pytech.stock import Stock, Fundamental, HasStock, PortfolioAsset, OwnedStock
-# Base.metadata.drop_all(engine)
+Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 logging.basicConfig(level=logging.DEBUG)
