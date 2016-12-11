@@ -1,4 +1,3 @@
-import os
 from builtins import object
 import logging
 from dateutil import parser
@@ -9,7 +8,7 @@ from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
 from crawler.loaders import ReportItemLoader
-
+from pytech import utils
 logger = logging.getLogger(__name__)
 
 
@@ -39,7 +38,7 @@ class EdgarSpider(CrawlSpider):
                   callback='parse_10qk'))
 
     def __init__(self, **kwargs):
-        super(EdgarSpider, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self.symbols_arg = kwargs.get('symbols')
         if 'start_date' in kwargs:
@@ -52,23 +51,8 @@ class EdgarSpider(CrawlSpider):
         else:
             end_date = date.today()
 
-        try:
-            start_date = parser.parse(start_date)
-        except ValueError:
-            raise ValueError('Error parsing start_date. {} was provided.'.format(start_date))
-        except AttributeError:
-            self.start_date = start_date.strftime('%Y%m%d')
-        else:
-            self.start_date = start_date.strftime('%Y%m%d')
-
-        try:
-            end_date = parser.parse(end_date)
-        except ValueError:
-            raise ValueError('Error parsing start_date. {} was provided.'.format(start_date))
-        except AttributeError:
-            self.end_date = end_date.strftime('%Y%m%d')
-        else:
-            self.end_date = end_date.strftime('%Y%m%d')
+        self.start_date = utils.parse_date(start_date).strftime('%Y%m%d')
+        self.end_date = utils.parse_date(end_date).strftime('%Y%m%d')
 
         # limit_arg = kwargs.get('limit', '')
         start = int(kwargs.get('start', 0))
@@ -77,13 +61,12 @@ class EdgarSpider(CrawlSpider):
             count = int(count)
 
         if self.symbols_arg:
-            if isinstance(self.symbols_arg, list):
-                self.start_urls = URLGenerator(self.symbols_arg, start_date=self.start_date, end_date= self.end_date,
+            self.start_urls = URLGenerator(self.symbols_arg, start_date=self.start_date, end_date= self.end_date,
                                                start=start, count=count)
-            else:
-                symbols = [self.symbols_arg]
-                self.start_urls = URLGenerator(symbols, start_date=self.start_date, end_date=self.end_date,
-                                               start=start, count=count)
+            # else:
+            # symbols = [self.symbols_arg]
+            # self.start_urls = URLGenerator(symbols, start_date=self.start_date, end_date=self.end_date,
+            #                                    start=start, count=count)
             for s in self.start_urls:
                 logger.info('Start URL: {}'.format(s))
         else:
@@ -110,15 +93,3 @@ class EdgarSpider(CrawlSpider):
                 self.logger.info('{} found, returning as item'.format(doc_type))
                 return item
         return None
-
-
-    @classmethod
-    def check_date_arg(cls, value, arg_name=None):
-        if value:
-            try:
-                if len(value) != 8:
-                    raise ValueError
-                datetime.strptime(value, '%Y%m%d')
-            except ValueError:
-                raise ValueError("Option '{}' must be in YYYYMMDD format, input is '{}'".format(arg_name, value))
-

@@ -109,10 +109,11 @@ class FundamentalItemPipeline(object):
         """
         with db.transactional_session() as session:
             logger.info('Creating fundamental obj for ticker: {}'.format(item['symbol']))
-            access_key = str(item.get('year')) + '_' + item.get('period_focus')
+            access_key = str(item.get('fiscal_year')) + '_' + item.get('period_focus')
 
-            q = session.query(Fundamental).filter(Fundamental.access_key == access_key)
+            q = session.query(Fundamental).filter(Fundamental.access_key == access_key).first()
             if q is not None:
+                logger.warning('Dropped item because access_key: {} exists'.format(access_key))
                 raise DropItem
             fundamental_dict = {}
             fundamental_dict['amended'] = item.get('amend')
@@ -155,6 +156,7 @@ class FundamentalItemPipeline(object):
             fundamental_dict['research_and_dev_expense'] = item.get('research_and_dev_expense')
             fundamental_dict['warranty_accrual'] = item.get('warranty_accrual')
             fundamental_dict['warranty_accrual_payments'] = item.get('warranty_accrual_payments')
+            fundamental_dict['ticker'] = item.get('symbol')
 
             logger.info('Created Fundamental obj for ticker: {}'.format(item['symbol']))
             session.add(Fundamental.from_dict(fundamental_dict=fundamental_dict))

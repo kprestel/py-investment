@@ -1,5 +1,9 @@
+from contextlib import contextmanager
+
 import pytest
 from pytech.stock import Stock, Fundamental
+
+
 
 @pytest.fixture()
 def stock():

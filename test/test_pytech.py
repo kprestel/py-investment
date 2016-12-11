@@ -7,45 +7,68 @@ import pandas as pd
 from datetime import datetime
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy import event
+# from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from pytech.base import Base
 from pytech.stock import Stock, Fundamental
 from pytech.portfolio import Portfolio
 
 import logging
+
 PROJECT_DIR = dirname(__file__)
-DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.sqlite')
+DATABASE_LOCATION = join(PROJECT_DIR, 'pytech_test.sqlite')
 cs = 'sqlite+pysqlite:///{}'.format(DATABASE_LOCATION)
+engine = create_engine(cs, connect_args={'check_same_thread': False}, poolclass=StaticPool)
+Session = sessionmaker(bind=engine)
 
-@pytest.fixture(scope='session')
-def engine():
-    return create_engine(cs, connect_args={'check_same_thread':False}, poolclass=StaticPool)
 
-@pytest.yield_fixture(scope='session')
-def tables(engine):
+@pytest.yield_fixture(scope='session', autouse=True)
+def tables():
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield
-    Base.metadata.drop_all(engine)
+
 
 @pytest.yield_fixture(autouse=True)
-def mock_session(monkeypatch, engine):
+def mock_session(monkeypatch):
     @contextmanager
     def session():
-        conn = engine.connect()
-        trans = conn.begin()
-        session = Session(bind=conn)
-        session.begin(nested=True)
+        session = Session()
         yield session
-        session.close()
-        trans.rollback()
-        conn.close()
+        session.commit()
+        # session.close()
+
     monkeypatch.setattr('pytech.db_utils.transactional_session', session)
 
 
+@pytest.yield_fixture(autouse=True)
+def mock_query_session(monkeypatch):
+    @contextmanager
+    def session():
+        session = Session()
+        yield session
+        session.close()
+
+    monkeypatch.setattr('pytech.db_utils.query_session', session)
+
+
+@contextmanager
+def test_session():
+    session = Session()
+    yield session
+    session.close()
+
+
+@pytest.fixture(scope='class')
+def stock_universe():
+    """Write stocks to the DB"""
+    Stock.from_list(ticker_list=['AAPL', 'MSFT', 'SKX'], start='20160901', end='20161201', get_fundamentals=True,
+                    get_ohlcv=True)
+
 
 class TestStock(object):
-
     def test_stock_start_date_constructor(self):
         with pytest.raises(ValueError):
             stock = Stock(ticker='AAPL', start_date='not a date', end_date='20161124')
@@ -97,22 +120,26 @@ class TestStock(object):
         assert stock_with_ohlcv.fundamentals == {}
         assert type(stock_with_ohlcv.ohlcv) == pd.DataFrame
 
-@pytest.mark.skip(reason='I broke it :(')
+@pytest.mark.usefixtures('stock_universe')
 class TestPortfolio(object):
-
-    def test_portfolio_with_fundamentals(self):
-        tickers = ['AAPL', 'MSFT']
+    def test_make_trade(self):
         portfolio = Portfolio()
+        portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
         for k, stock in portfolio.assets.items():
             assert isinstance(stock, Stock)
-            for fundamental in stock.fundamentals:
+            for key, fundamental in stock.fundamentals.items():
                 assert isinstance(fundamental, Fundamental)
-                assert fundamental.assets == fundamental.total_liabilities_equity
+
+    def test_update_trade(self):
+        portfolio = Portfolio()
+        portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
+        portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
+        aapl = portfolio.assets.get('AAPL')
+        assert aapl.shares_owned == 200
 
 
 @pytest.mark.skip(reason='I will fix it later')
 class TestFundamental(object):
-
     def test_fundamental_fixture(self, fundamental: Fundamental):
         """
         test the fundamental fixture from conftest.py
@@ -198,10 +225,5 @@ class TestFundamental(object):
         assert fundamental.acts_receive_noncurrent == fundamental_from_dict.acts_receive_noncurrent
         assert fundamental.accrued_liabilities_current == fundamental_from_dict.accrued_liabilities_current
 
-
     def test_current_ratio(self, fundamental: Fundamental):
         assert fundamental.current_ratio() == 1
-
-
-
-

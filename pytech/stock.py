@@ -1,12 +1,13 @@
 import pytech.utils as utils
 from pytech.base import Base
 from collections import namedtuple
+from multiprocessing import Process
 import pandas as pd
 import os
 import numpy as np
 import pandas_datareader.data as web
 # import datetime
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import logging
 import re
 from dateutil import parser
@@ -96,8 +97,12 @@ class Asset(object):
 
 class Stock(Base):
     """
-    main class that is used to model stocks and may contain technical and fundamental data about the stock
+    Main class that is used to model stocks and may contain technical and fundamental data about the stock.
+
+    A ``Stock`` object must exist in the database in order for it to be traded.  Each ``Stock`` object is considered to
+    be in the *universe* of assets the portfolio owner is willing to own/trade
     """
+
     ticker = Column(String, unique=True)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
@@ -110,17 +115,22 @@ class Stock(Base):
     end_price = Column(Numeric)
     discriminator = Column('type', String)
     fundamentals = relationship('Fundamental',
-                                collection_class=attribute_mapped_collection('access_key'),
-                                cascade='all, delete-orphan')
+                                collection_class=attribute_mapped_collection('access_key'))
+
     __mapper_args__ = {
         'polymorphic_identity': 'stock',
-        'polymorphic_on': discriminator
+        'polymorphic_on': discriminator,
+        'with_polymorphic': '*'
     }
 
-    def __init__(self, ticker, start_date, end_date=None, get_fundamentals=False, get_ohlcv=True):
+    def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
         self.discriminator = 'stock'
-        self.start_date = utils.parse_date(start_date)
+        if start_date is None:
+            self.start_date = datetime.now() - timedelta(days=365)
+        else:
+            self.start_date = utils.parse_date(start_date)
+
         if end_date is None:
             self.end_date = datetime.now()
         else:
@@ -150,11 +160,7 @@ class Stock(Base):
 
     @orm.reconstructor
     def init_on_load(self):
-        """
-        :return:
-
-        if the user wanted the ohlc_series then recreate it when this object is loaded again
-        """
+        """If the user wanted the ohlc_series then recreate it when this object is loaded again"""
         if self.get_ohlcv:
             self.ohlcv = self.get_ohlc_series()
         else:
@@ -213,20 +219,11 @@ class Stock(Base):
             # fundamentals will be returned but for now this should work
             # it will require some sort of date guessing based on the periods and the end dates or something so yeah
             # that is a problem for another day
-            result = session.query(Fundamental).filter(Fundamental.stock_id == self.id).all()
+            result = session.query(Fundamental).filter(Fundamental.ticker == self.ticker).all()
             if result:
                 for row in result:
                     self.fundamentals[row.access_key] = row
             else:
-                # configure_logging()
-                # runner = CrawlerRunner(settings=get_project_settings())
-                # spider_dict = {
-                #     'symbols': self.ticker,
-                #     'start_date': self.start_date.strftime('%Y%m%d'),
-                #     'end_date': self.end_date.strftime('%Y%m%d')
-                # }
-                # runner.crawl(EdgarSpider, **spider_dict)
-                # reactor.run()
                 self._init_spiders([self.ticker], end_date=self.end_date, start_date=self.start_date)
                 result = session.query(Fundamental).filter(Fundamental.stock_id == self.id).all()
                 for row in result:
@@ -305,8 +302,8 @@ class Stock(Base):
 
         SMA of the SMA
         """
-        sma = self._sma_computation(period=period, column=column).rolling(center=False, window=period,
-                                                                          min_periods=period - 1).mean()
+        sma = self._sma_computation(period=period, column=column, ts=self.ohlcv)\
+            .rolling(center=False, window=period, min_periods=period - 1).mean()
         return pd.Series(sma, name='{} day TRIMA Ticker: {}'.format(period, self.ticker))
 
     def triple_ema_oscillator(self, period=15, column='Adj Close'):
@@ -903,6 +900,25 @@ class Stock(Base):
 
     @staticmethod
     def _init_spiders(ticker_list, start_date, end_date):
+        """
+        Start a subprocess to run the spiders in.
+
+        :param ticker_list: list of tickers to get fundamentals for
+        :type ticker_list: list
+        :param start_date: date to start scraping as of
+        :type start_date: datetime
+        :param end_date: date to stop scraping as of
+        :type end_date: datetime
+
+        The main reason behind  this method is to work around the fact that ``~twisted.reactor`` cannot be restarted
+        so we start it in a subprocess that can be killed off.
+        """
+        p = Process(target=Stock._run_spiders, args=(ticker_list, start_date, end_date))
+        p.start()
+        p.join()
+
+    @staticmethod
+    def _run_spiders(ticker_list, start_date, end_date):
         configure_logging()
         runner = CrawlerRunner(settings=get_project_settings())
 
@@ -916,12 +932,34 @@ class Stock(Base):
         d.addBoth(lambda _: reactor.stop())
         reactor.run()
 
+
+    @classmethod
+    def _is_asset_in_universe(cls, ticker):
+        """
+        Check if an asset exists in the ``Asset`` table and if it does delete it so that it can be recreated as an
+        ``OwnedAsset`` and return a boolean to notify ``~pytech.Portfolio`` that is ok to trade it
+
+        :param ticker: the ticker of the ``Stock`` being traded
+        :type ticker: str
+        :return: True if the asset exists otherwise false
+        :rtype: bool
+        """
+
+        with db.transactional_session() as session:
+            delete_count = session.query(cls).filter(Stock.ticker == ticker).delete()
+            if delete_count == 1:
+                session.commit()
+                return True
+            else:
+                return False
+
+
     """
     ALTERNATE CONSTRUCTORS
     """
 
     @classmethod
-    def from_ticker_list(cls, ticker_list, start, end, get_ohlcv=False):
+    def from_list(cls, ticker_list, start, end, get_ohlcv=False, get_fundamentals=False):
         """
         Create a dict of stocks for a given time period based on the list of ticker symbols passed in
 
@@ -937,23 +975,13 @@ class Stock(Base):
             contains one :class:`Stock` per ticker in the ticker list
         """
 
-        # configure_logging()
-        # runner = CrawlerRunner(settings=get_project_settings())
-        #
-        # spider_dict = {
-        #     'symbols': tickers,
-        #     'start_date': start,
-        #     'end_date': end
-        # }
-        # runner.crawl(EdgarSpider, **spider_dict)
-        # d = runner.join()
-        # d.addBoth(lambda _: reactor.stop())
-        # reactor.run()
-        cls._init_spiders(ticker_list=ticker_list, start_date=start, end_date=end)
+        if get_fundamentals:
+            cls._init_spiders(ticker_list=ticker_list, start_date=start, end_date=end)
 
-        for ticker in ticker_list:
-            yield cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv,
-                      get_fundamentals=False)
+        with db.transactional_session() as session:
+            for ticker in ticker_list:
+                 session.add(cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv,
+                          get_fundamentals=get_fundamentals))
 
     @classmethod
     def from_dict(cls, stock_dict):
@@ -1021,17 +1049,18 @@ class Stock(Base):
         return stock_dict
 
 
-class OwnedStock(Stock):
+class OwnedStock(PortfolioAsset, Stock):
     """
     Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
     """
     __tablename__ = 'owned_stock'
-    owned_stock_id = Column('id', Integer, ForeignKey('stock.id'), primary_key=True)
+    id = Column('id', Integer, ForeignKey('stock.id'), primary_key=True)
     purchase_date = Column(DateTime)
-    average_share_price = Column(Numeric)
+    average_share_price_paid = Column(Numeric)
     shares_owned = Column(Numeric)
     total_position_value = Column(Numeric)
-    position = Column(Numeric)
+    total_position_cost = Column(Numeric)
+    position = Column(String)
 
     __mapper_args__ = {
         'polymorphic_identity': 'owned_stock'
@@ -1043,10 +1072,11 @@ class OwnedStock(Stock):
                          get_ohlcv=get_ohlcv)
 
         self.discriminator = 'owned_stock'
-        if position.lower() != 'long' or position.lower() != 'short':
-            raise ValueError('position must be "long" or "short".  {} was provided'.format(position))
-        else:
+        if position.lower() == 'long' or position.lower() == 'short':
             self.position = position
+        else:
+            raise ValueError('position must be "long" or "short".  {} was provided'.format(position))
+
 
         if purchase_date is None:
             self.purchase_date = datetime.now()
@@ -1054,20 +1084,24 @@ class OwnedStock(Stock):
             self.purchase_date = utils.parse_date(purchase_date)
 
         if average_share_price:
-            self.average_share_price = average_share_price
+            self.average_share_price_paid = average_share_price
             self.latest_price = average_share_price
             self.latest_price_time = self.purchase_date.time()
         else:
             quote = self.get_price_quote()
-            self.average_share_price = quote.price
+            self.average_share_price_paid = quote.price
             self.latest_price = quote.price
             self.latest_price_time = quote.time
         self.shares_owned = shares_owned
+        self._set_position_cost_and_value(qty=shares_owned, price=self.average_share_price_paid)
         if self.position == 'short':
-            # short positions should have a negative total value
-            self.total_position_value = (self.average_share_price * shares_owned) * -1
+            # short positions should have a negative number of shares owned but a positive total cost
+            self.total_position_cost = (self.average_share_price_paid * shares_owned) * -1
+            # but a negative total value
+            self.total_position_value = self.average_share_price_paid * shares_owned
         else:
-            self.total_position_value = self.average_share_price * shares_owned
+            self.total_position_value = self.average_share_price_paid * shares_owned
+            self.total_position_cost = (self.average_share_price_paid * shares_owned) * -1
 
     def make_trade(self, qty, price_per_share=None):
         """
@@ -1078,19 +1112,60 @@ class OwnedStock(Stock):
         :return: self
         """
         if price_per_share:
-            self.total_position_value += qty * price_per_share
+            self._set_position_cost_and_value(qty=qty, price=price_per_share)
+            # if self.position == 'short':
+            #     self.total_position_value += qty * price_per_share
+            #     self.total_position_cost+= (qty * price_per_share) * -1
+            # else:
+            #     self.total_position_value += qty * price_per_share
+            #     self.total_position_cost += (qty * price_per_share) * -1
         else:
             quote = self.get_price_quote()
             self.latest_price = quote.price
             self.latest_price_time = quote.time
-            self.total_position_value += qty * quote.price
+            self._set_position_cost_and_value(qty=qty, price=quote.price)
+            # if self.position == 'short':
+            #     self.total_position_value += (qty * quote.price) * -1
+            #     self.total_position_cost += qty * quote.price
+            # else:
+            #     self.total_position_value += qty * quote.price
+            #     self.total_position_cost += (qty * quote.price) * -1
         self.shares_owned += qty
         try:
-            self.average_share_price = self.total_position_value / self.shares_owned
+            self.average_share_price_paid = self.total_position_value / float(self.shares_owned)
         except ZeroDivisionError:
             return None
         else:
             return self
+
+    def _set_position_cost_and_value(self, qty, price):
+        """
+        Calculate a position's cost and value
+
+        :param qty: number of shares
+        :type qty: int
+        :param price: price per share
+        :type price: long
+        """
+        if self.position == 'short':
+            # short positions should have a negative number of shares owned but a positive total cost
+            self.total_position_cost = (price * qty) * -1
+            # but a negative total value
+            self.total_position_value = price * qty
+        else:
+            self.total_position_cost = price * qty
+            self.total_position_value = (price * qty) * -1
+
+    def update_total_position_value(self):
+        """Retrieve the latest market quote and update the ``OwnedStock`` attributes to reflect the change"""
+
+        quote = self.get_price_quote()
+        self.latest_price = quote.price
+        self.latest_price_time = quote.time
+        if self.position == 'short':
+            self.total_position_value = (self.latest_price * self.shares_owned) * -1
+        else:
+            self.total_position_value = self.latest_price * self.shares_owned
 
     def market_correlation(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
         """
@@ -1159,13 +1234,13 @@ class OwnedStock(Stock):
             return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
             # @classmethod
-            # def from_ticker_list(cls, tickers, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
+            # def from_list(cls, tickers, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
             #     super()._init_spiders(tickers=tickers, start_date=purchase_date, end_date=end)
             # for ticker in tickers:
             #     yield cls(ticker=ticker)
 
 
-class Fundamental(Base, HasStock, OwnsStock):
+class Fundamental(Base, HasStock):
     """
     The purpose of the this class to hold one period's worth of fundamental data for a given stock
 
@@ -1220,6 +1295,7 @@ class Fundamental(Base, HasStock, OwnsStock):
     warranty_accrual_payments = Column(Numeric)
     ebit = Column(Numeric)
     ebitda = Column(Numeric)
+    ticker = Column(String)
 
     def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,
@@ -1228,7 +1304,7 @@ class Fundamental(Base, HasStock, OwnsStock):
                  period_focus, inventory_net, interest_expense, total_liabilities, total_liabilities_equity,
                  shares_outstanding, shares_outstanding_diluted, common_stock_outstanding, depreciation_amortization,
                  cogs, comprehensive_income_net_of_tax, research_and_dev_expense, warranty_accrual,
-                 warranty_accrual_payments):
+                 warranty_accrual_payments, ticker):
         """
         This :class: should never really be instantiated directly.  It is intended to be instantiated by the
         :class: EdgarSpider after it has finished scraping the XBRL page that it will be associated with
@@ -1326,6 +1402,7 @@ class Fundamental(Base, HasStock, OwnsStock):
         self.warranty_accrual_payments = warranty_accrual_payments
         self.ebit = self._ebit()
         self.ebitda = self._ebitda()
+        self.ticker = ticker
 
     def return_on_assets(self):
         return self.net_income / self.assets
@@ -1365,7 +1442,11 @@ class Fundamental(Base, HasStock, OwnsStock):
         Earnings before interest, tax, depreciation and amortization
         :return: float
         """
-        return self.net_income + self.tax_expense + self.interest_expense + self.depreciation_amortization
+        try:
+            return self.net_income + self.tax_expense + self.interest_expense + self.depreciation_amortization
+        except TypeError:
+            logger.exception('net_income: {}, tax_expense: {}, interest_expense: {}, depreciation_amortization: {}'
+                             .format(self.net_income, self.tax_expense, self.interest_expense, self.depreciation_amortization))
 
     def _ebit(self):
         """

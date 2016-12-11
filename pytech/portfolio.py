@@ -58,9 +58,9 @@ class Portfolio(Base):
     benchmark_ticker = Column(String)
     # start_date = Column(DateTime)
     # end_date = Column(DateTime)
-    # assets = relationship('OwnedStock', backref='portfolio',
-    #                     collection_class=attribute_mapped_collection('ticker'),
-    #                     cascade='all, delete-orphan')
+    assets = relationship('OwnedStock', backref='portfolio',
+                        collection_class=attribute_mapped_collection('ticker'),
+                        cascade='save-update, all, delete-orphan')
 
     def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000):
         """
@@ -79,9 +79,9 @@ class Portfolio(Base):
         """
 
         if start_date is None:
-            self.start_watch_date = datetime.now() - timedelta(days=365)
+            self.start_date = datetime.now() - timedelta(days=365)
         else:
-            self.start_watch_date = utils.parse_date(start_date)
+            self.start_date = utils.parse_date(start_date)
 
         if end_date is None:
             # default to today
@@ -105,19 +105,24 @@ class Portfolio(Base):
         self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
     def add_assets(self, ticker, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
+        # TODO: determine if this is even needed
         if self.assets.get(ticker):
             raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
+
         start_date = utils.parse_date(start_date)
+
         if end_date is None:
             end_date = start_date - timedelta(days=365)
         else:
             end_date = utils.parse_date(end_date)
+
         self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
                                     get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
         with db.transactional_session as session:
             session.add(self)
 
     def add_assets_from_list(self, ticker_list, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
+        # TODO: determine if this is even needed
         for ticker in ticker_list:
             if self.assets.get(ticker):
                 raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
@@ -125,17 +130,37 @@ class Portfolio(Base):
                                         get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
 
     def make_trade(self, ticker, qty, action, price_per_share=None, trade_date=None):
-        owned_asset = self.assets.get(ticker)
-        if owned_asset:
+        """
+        Buy or sell an asset from the asset universe.
+
+        :param ticker: the ticker of the :class:``Asset`` to trade
+        :type ticker: str
+        :param qty: the number of shares to trade
+        :type qty: int
+        :param action: **buy** or **sell** depending on the trade
+        :type action: str
+        :param price_per_share: the cost per share in the trade
+        :type price_per_share: long
+        :param trade_date: the date and time that the trade is taking place
+        :type trade_date: datetime
+
+        This method will add the asset to the :class:``Portfolio`` asset dict and update the db to reflect the trade
+        """
+
+        # owned_asset = self.assets.get(ticker)
+        with db.query_session() as session:
+            asset = session.query(OwnedStock).filter(OwnedStock.ticker == ticker).first()
+
+        # if ticker in self.assets:
+        if asset:
             self._update_existing_position(qty=qty, action=action, price_per_share=price_per_share,
-                                           trade_date=trade_date, asset=owned_asset)
+                                           trade_date=trade_date, asset=asset)
         else:
             self._open_new_position(ticker=ticker, qty=qty, action=action, price_per_share=price_per_share,
                                     trade_date=trade_date)
 
     def _open_new_position(self, ticker, qty, price_per_share, trade_date, action):
         """
-
         Create a new :class:``OwnedStock`` object associated with this portfolio as well as update the cash position
 
         :param qty: how many shares are being bought or sold.
@@ -153,32 +178,29 @@ class Portfolio(Base):
         This method processes the trade and then writes the results to the database. It will create a new instance of
         :class:``OwnedStock`` class and at it to the :class:``Portfolio`` asset dict.
         """
-        asset = self._get_asset_from_universe(ticker=ticker)
-        if asset:
+
+        if Stock._is_asset_in_universe(ticker=ticker):
             if action.lower() == 'sell':
                 # if selling an asset that is not in the portfolio that means it has to be a short sale.
                 position = 'short'
             else:
                 position = 'long'
-            owned_asset = OwnedStock(ticker=asset.ticker, shares_owned=qty, average_share_price=price_per_share,
+            owned_asset = OwnedStock(ticker=ticker, shares_owned=qty, average_share_price=price_per_share,
                                      position=position)
-            # inverse the total position's value and credit cash for that much
+            # owned_asset.owned_stock_id = asset.id
+            # inverse the total position's value and credit/debit cash for that much
             self.cash += owned_asset.total_position_value * -1
             self.assets[owned_asset.ticker] = owned_asset
-            trade = Trade(qty=qty, price_per_share=price_per_share, stock=owned_asset, action='buy',
+            trade = Trade(qty=qty, price_per_share=price_per_share, stock=owned_asset, action=action,
                           strategy='Open new {} position'.format(position), trade_date=trade_date)
-            with db.transactional_session as session:
+            with db.transactional_session() as session:
                 session.add(self)
                 session.add(trade)
         else:
-            raise AssetNotInUniverseException('{} could not be located in the AssetUniverse so the trade was '
+            raise AssetNotInUniverseException('A Stock with ticker: {} could not be located so the trade was '
                                               'aborted'.format(ticker))
 
-    def _get_asset_from_universe(self, ticker):
-        with db.query_session as session:
-            return session.query(Stock).filter(Stock.ticker == ticker).first()
-
-    def _update_existing_position(self, qty, price_per_share, trade_date, asset, action):
+    def _update_existing_position(self, qty, price_per_share, trade_date, action, asset):
         """
         Update the :class:``OwnedStock`` associated with this portfolio as well as the cash position
 
@@ -194,20 +216,27 @@ class Portfolio(Base):
         :type trade_date: datetime
         :param asset: the asset that is already in the portfolio
         :type asset: OwnedStock
-        :return: None
+        :param action: **buy** or **sell**
+        :type action: str
 
         This method processes the trade and then writes the results to the database.
         """
-        if asset.total_position_value < 0:
-            position = 'short'
-        else:
-            position = 'long'
-        post_trade_asset = asset.make_trade(qty=qty, price_per_share=price_per_share)
-        if post_trade_asset:
-            self.assets[post_trade_asset.ticker] = post_trade_asset
-            self.cash += post_trade_asset.total_position_value * -1
-            trade = Trade(qty=qty, price_per_share=price_per_share, stock=post_trade_asset,
-                          strategy='Update an existing {} position'.format(position), action=action,
+
+        # if asset.total_position_value < 0:
+        #     position = 'short'
+        # else:
+        #     position = 'long'
+
+
+        # old_asset = session.query(OwnedStock).filter(OwnedStock.ticker == asset.ticker).first()
+        # post_trade_asset = old_asset.make_trade(qty=qty, price_per_share=price_per_share)
+        # asset = self.assets.get(ticker)
+        asset.make_trade(qty=qty, price_per_share=price_per_share)
+        if asset.shares_owned != 0:
+            self.assets[asset.ticker] = asset
+            self.cash += asset.total_position_cost
+            trade = Trade(qty=qty, price_per_share=price_per_share, stock=asset,
+                          strategy='Update an existing {} position'.format(asset.position), action=action,
                           trade_date=trade_date)
         else:
             self.cash += asset.total_position_value
@@ -215,11 +244,32 @@ class Portfolio(Base):
             # add this to the db?
             unowned_asset = Stock.from_dict(asset.__dict__)
             trade = Trade(qty=qty, price_per_share=price_per_share, stock=unowned_asset,
-                          strategy='Close an existing {} position'.format(position), action=action,
+                          strategy='Close an existing {} position'.format(asset.position), action=action,
                           trade_date=trade_date)
-        with db.transactional_session as session:
+        with db.transactional_session() as session:
             session.add(self)
             session.add(trade)
+
+    def get_total_value(self, include_cash=True):
+        """
+        Calculate the total value of the ``Portfolio`` assets
+
+        :param include_cash: should cash be included in the calculation, or just get the total value of the assets
+        :type include_cash: bool
+        :return: the total value of the portfolio at a given moment in time
+        :rtype: float
+        """
+
+        total_value = 0.0
+        for asset in self.assets.values():
+            asset.update_total_position_value()
+            total_value += asset.total_position_value
+        if include_cash:
+            total_value += self.cash
+        with db.transactional_session() as session:
+            # update the owned stocks in the db
+            session.add(self)
+        return total_value
 
     def portfolio_return(self):
         pass
@@ -281,7 +331,7 @@ class Trade(OwnsStock, Base):
         #     self.stock = stock.make_trade(qty=qty, price_per_share=price_per_share)
         # except AttributeError:
         #     try:
-        #         self.stock = OwnedStock(ticker=stock.ticker, shares_owned=qty, average_share_price=price_per_share,
+        #         self.stock = OwnedStock(ticker=stock.ticker, shares_owned=qty, average_share_price_paid=price_per_share,
         #                                 purchase_date=self.trade_date)
         #     except AttributeError:
         #         raise AttributeError('stock must be a Stock object. {} was provided'.format(type(stock)))
