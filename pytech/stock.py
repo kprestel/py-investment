@@ -48,11 +48,9 @@ class PortfolioAsset(object):
         # def portfolio(cls):
         #     return relationship('Portfolio', )
 
-        # @declared_attr
-        # def portfolio(cls):
-        #     return relationship('Portfolio',
-        #                         collection_class=attribute_mapped_collection('ticker'),
-        #                         cascade='all, delete-orphan')
+    # @declared_attr
+    # def portfolio(cls):
+    #     return relationship('Portfolio', lazy='joined')
 
 
 # class WatchedAsset(object):
@@ -1049,12 +1047,14 @@ class Stock(Base):
         return stock_dict
 
 
-class OwnedStock(PortfolioAsset, Stock):
+class OwnedStock(Stock):
     """
     Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
     """
     __tablename__ = 'owned_stock'
     id = Column('id', Integer, ForeignKey('stock.id'), primary_key=True)
+    portfolio_id = Column('portfolio_id', Integer, ForeignKey('portfolio.id'), primary_key=True)
+    portfolio = relationship('Portfolio', lazy='joined')
     purchase_date = Column(DateTime)
     average_share_price_paid = Column(Numeric)
     shares_owned = Column(Numeric)
@@ -1253,33 +1253,33 @@ class Fundamental(Base, HasStock):
     # key to the corresponding Stock's dictionary must be 'period_focus_year'
     access_key = Column(String, unique=True)
     amended = Column(Boolean)
-    assets = Column(Numeric(30, 2))
-    current_assets = Column(Numeric(30, 2))
-    current_liabilities = Column(Numeric(30, 2))
-    cash = Column(Numeric(30, 2))
-    dividend = Column(Numeric(10, 2))
+    assets = Column(Numeric)
+    current_assets = Column(Numeric)
+    current_liabilities = Column(Numeric)
+    cash = Column(Numeric)
+    dividend = Column(Numeric)
     end_date = Column(DateTime)
-    eps = Column(Numeric(6, 2))
-    eps_diluted = Column(Numeric(6, 2))
-    equity = Column(Numeric(30, 2))
-    net_income = Column(Numeric(30, 2))
-    operating_income = Column(Numeric(30, 2))
-    revenues = Column(Numeric(30, 2))
-    investment_revenues = Column(Numeric(30, 2))
-    fin_cash_flow = Column(Numeric(30, 2))
-    inv_cash_flow = Column(Numeric(30, 2))
-    ops_cash_flow = Column(Numeric(30, 2))
+    eps = Column(Numeric)
+    eps_diluted = Column(Numeric)
+    equity = Column(Numeric)
+    net_income = Column(Numeric)
+    operating_income = Column(Numeric)
+    revenues = Column(Numeric)
+    investment_revenues = Column(Numeric)
+    fin_cash_flow = Column(Numeric)
+    inv_cash_flow = Column(Numeric)
+    ops_cash_flow = Column(Numeric)
     year = Column(String)
     period_focus = Column(String)
-    property_plant_equipment = Column(Numeric(30, 2))
-    gross_profit = Column(Numeric(30, 2))
-    tax_expense = Column(Numeric(30, 2))
-    net_taxes_paid = Column(Numeric(30, 2))
-    acts_pay_current = Column(Numeric(30, 2))
-    acts_receive_current = Column(Numeric(30, 2))
-    acts_receive_noncurrent = Column(Numeric(30, 2))
-    acts_receive = Column(Numeric(30, 2))
-    accrued_liabilities_current = Column(Numeric(30, 2))
+    property_plant_equipment = Column(Numeric)
+    gross_profit = Column(Numeric)
+    tax_expense = Column(Numeric)
+    net_taxes_paid = Column(Numeric)
+    acts_pay_current = Column(Numeric)
+    acts_receive_current = Column(Numeric)
+    acts_receive_noncurrent = Column(Numeric)
+    acts_receive = Column(Numeric)
+    accrued_liabilities_current = Column(Numeric)
     inventory_net = Column(Numeric)
     interest_expense = Column(Numeric)
     total_liabilities = Column(Numeric)

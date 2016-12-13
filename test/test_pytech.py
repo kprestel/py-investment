@@ -12,8 +12,8 @@ from sqlalchemy import event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from pytech.base import Base
-from pytech.stock import Stock, Fundamental
 from pytech.portfolio import Portfolio
+from pytech.stock import Stock, Fundamental
 
 import logging
 
@@ -34,11 +34,12 @@ def tables():
 @pytest.yield_fixture(autouse=True)
 def mock_session(monkeypatch):
     @contextmanager
-    def session():
+    def session(auto_close=True):
         session = Session()
         yield session
         session.commit()
-        # session.close()
+        if auto_close:
+            session.close()
 
     monkeypatch.setattr('pytech.db_utils.transactional_session', session)
 
@@ -54,17 +55,100 @@ def mock_query_session(monkeypatch):
     monkeypatch.setattr('pytech.db_utils.query_session', session)
 
 
+@pytest.fixture(autouse=True)
+def mock_fundamentals(monkeypatch):
+    aapl_fundamentals = {
+        'accrued_liabilities_current': 22027000000.0,
+        'acts_pay_current': 37294000000.0,
+        'acts_receive_current': 15754000000.0,
+        'amend': False,
+        'assets': 321686000000.0,
+        'cash': 20484000000.0,
+        'fin_cash_flow': -20483000000.0,
+        'inv_cash_flow': -45977000000.0,
+        'ops_cash_flow': 65824000000.0,
+        'cogs': 131376000000.0,
+        'common_stock_outstanding': 5336166000.0,
+        'comprehensive_income_net_of_tax': 46666000000.0,
+        'current_assets': 106869000000.0,
+        'current_liabilities': 79006000000.0,
+        'depreciation_amortization': 10505000000.0,
+        'dividend': 2.18,
+        'doc_type': '10-K',
+        'end_date': '2016-09-24',
+        'eps': 8.35,
+        'eps_diluted': 8.31,
+        'equity': 128249000000.0,
+        'year': 2016,
+        'gross_profit': 84263000000.0,
+        'interest_expense': 1456000000.0,
+        'inventory_net': 2132000000.0,
+        'net_income': 45687000000.0,
+        'net_taxes_paid': 10444000000.0,
+        'op_income': 60024000000.0,
+        'period_focus': 'FY',
+        'property_plant_equipment': 61245000000.0,
+        'research_and_dev_expense': 10045000000.0,
+        'revenues': 215639000000.0,
+        'shares_outstanding': 5470820000.0,
+        'ticker': 'AAPL',
+        'tax_expense': 15685000000.0,
+        'total_liabilities': 193437000000.0,
+        'warranty_accrual': 3702000000.0,
+        'warranty_accrual_payments': 4663000000.0
+    }
+
+    msft_fundamentals = {
+        'acts_pay_current': 6296000000.0,
+        'acts_receive_current': 11129000000.0,
+        'amend': False,
+        'assets': 212524000000.0,
+        'cash': 13928000000.0,
+        'fin_cash_flow': 14329000000.0,
+        'inv_cash_flow': -18470000000.0,
+        'ops_cash_flow': 11549000000.0,
+        'common_stock_outstanding': 7784000000.0,
+        'comprehensive_income_net_of_tax': 4834000000.0,
+        'cur_assets': 157909000000.0,
+        'cur_liab': 58810000000.0,
+        'dividend': 0.39,
+        'doc_type': '10-Q',
+        'end_date': '2016-09-30',
+        'eps': 0.6,
+        'eps_diluted': 0.6,
+        'equity': 70372000000.0,
+        'year': 2017,
+        'gross_profit': 12609000000.0,
+        'interest_expense': 437000000.0,
+        'inventory_net': 3122000000.0,
+        'net_income': 4690000000.0,
+        'operating_income': 5225000000.0,
+        'period_focus': 'Q1',
+        'research_and_dev_expense': 3106000000.0,
+        'revenues': 20453000000.0,
+        'shares_outstanding': 7789000000.0,
+        'ticker': 'MSFT',
+        'tax_expense': 635000000.0,
+        'total_liabilities': 142152000000.0
+    }
+
+    def mock_spiders():
+        with test_session() as session:
+            session.add(Fundamental.from_dict(fundamental_dict=aapl_fundamentals))
+
+
 @contextmanager
 def test_session():
     session = Session()
     yield session
+    session.commit()
     session.close()
 
 
 @pytest.fixture(scope='class')
 def stock_universe():
     """Write stocks to the DB"""
-    Stock.from_list(ticker_list=['AAPL', 'MSFT', 'SKX'], start='20160901', end='20161201', get_fundamentals=True,
+    Stock.from_list(ticker_list=['AAPL'], start='20160901', end='20161201', get_fundamentals=True,
                     get_ohlcv=True)
 
 
@@ -119,6 +203,7 @@ class TestStock(object):
         assert stock_with_ohlcv.get_ohlcv == True
         assert stock_with_ohlcv.fundamentals == {}
         assert type(stock_with_ohlcv.ohlcv) == pd.DataFrame
+
 
 @pytest.mark.usefixtures('stock_universe')
 class TestPortfolio(object):

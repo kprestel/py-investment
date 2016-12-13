@@ -1,5 +1,7 @@
 # from pytech import Session
 import pandas as pd
+from sqlalchemy import Float
+
 import pytech.utils as utils
 from pytech.errors import AssetExistsException, AssetNotInUniverseException
 from pytech.base import Base
@@ -54,12 +56,13 @@ class Portfolio(Base):
 
     """
     id = Column(Integer, primary_key=True)
-    cash = Column(Numeric(30, 2))
+    cash = Column(Float)
     benchmark_ticker = Column(String)
     # start_date = Column(DateTime)
     # end_date = Column(DateTime)
     assets = relationship('OwnedStock', backref='portfolio',
                         collection_class=attribute_mapped_collection('ticker'),
+                        lazy='joined',
                         cascade='save-update, all, delete-orphan')
 
     def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000):
@@ -102,7 +105,7 @@ class Portfolio(Base):
         recreate the benchmark series on load from DB
         """
 
-        self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
+        # self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
     def add_assets(self, ticker, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
         # TODO: determine if this is even needed
@@ -148,10 +151,11 @@ class Portfolio(Base):
         """
 
         # owned_asset = self.assets.get(ticker)
-        with db.query_session() as session:
-            asset = session.query(OwnedStock).filter(OwnedStock.ticker == ticker).first()
+        # with db.query_session() as session:
+        #     asset = session.query(OwnedStock).filter(OwnedStock.ticker == ticker).first()
 
         # if ticker in self.assets:
+        asset = self.assets.get(ticker)
         if asset:
             self._update_existing_position(qty=qty, action=action, price_per_share=price_per_share,
                                            trade_date=trade_date, asset=asset)
@@ -193,7 +197,7 @@ class Portfolio(Base):
             self.assets[owned_asset.ticker] = owned_asset
             trade = Trade(qty=qty, price_per_share=price_per_share, stock=owned_asset, action=action,
                           strategy='Open new {} position'.format(position), trade_date=trade_date)
-            with db.transactional_session() as session:
+            with db.transactional_session(auto_close=False) as session:
                 session.add(self)
                 session.add(trade)
         else:
@@ -231,7 +235,9 @@ class Portfolio(Base):
         # old_asset = session.query(OwnedStock).filter(OwnedStock.ticker == asset.ticker).first()
         # post_trade_asset = old_asset.make_trade(qty=qty, price_per_share=price_per_share)
         # asset = self.assets.get(ticker)
-        asset.make_trade(qty=qty, price_per_share=price_per_share)
+        # asset = session.query(OwnedStock).filter(OwnedStock.ticker == ticker).first()
+        asset = asset.make_trade(qty=qty, price_per_share=price_per_share)
+        # asset = session.merge(asset)
         if asset.shares_owned != 0:
             self.assets[asset.ticker] = asset
             self.cash += asset.total_position_cost
@@ -247,7 +253,8 @@ class Portfolio(Base):
                           strategy='Close an existing {} position'.format(asset.position), action=action,
                           trade_date=trade_date)
         with db.transactional_session() as session:
-            session.add(self)
+            # session.merge(self)
+            session.add(session.merge(self))
             session.add(trade)
 
     def get_total_value(self, include_cash=True):
