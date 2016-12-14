@@ -17,5 +17,5 @@ class Base(object):
                    lambda m: '_' + m.group(0).lower(), name[1:])
         )
 
-    id = Column(Integer, primary_key=True)
+    # id = Column(Integer, primary_key=True)
 

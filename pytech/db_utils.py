@@ -9,9 +9,17 @@ def query_session():
     session.close()
 
 @contextmanager
-def transactional_session(nested=True):
+def transactional_session(auto_close=True):
+    """
+    Helper method to manage db transactions
+
+    :param auto_close: whether or not the session should be closed after it goes out of scope
+    :type auto_close: bool
+    :return: session
+    """
+
     session = Session()
-    session.begin(nested=nested)
+    # session.begin(nested=nested)
     try:
         yield session
     except:
@@ -19,7 +27,8 @@ def transactional_session(nested=True):
         raise
     else:
         session.commit()
-        session.close()
+        if auto_close:
+            session.close()
 
 def in_transaction(**session_kwargs):
     """Decorator which wraps the decorated function in a transactional session. If the

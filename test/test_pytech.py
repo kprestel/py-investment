@@ -62,7 +62,7 @@ def mock_fundamentals(monkeypatch):
         'acts_pay_current': 37294000000.0,
         'acts_receive_current': 15754000000.0,
         'amend': False,
-        'assets': 321686000000.0,
+        'owned_assets': 321686000000.0,
         'cash': 20484000000.0,
         'fin_cash_flow': -20483000000.0,
         'inv_cash_flow': -45977000000.0,
@@ -102,7 +102,7 @@ def mock_fundamentals(monkeypatch):
         'acts_pay_current': 6296000000.0,
         'acts_receive_current': 11129000000.0,
         'amend': False,
-        'assets': 212524000000.0,
+        'owned_assets': 212524000000.0,
         'cash': 13928000000.0,
         'fin_cash_flow': 14329000000.0,
         'inv_cash_flow': -18470000000.0,
@@ -210,16 +210,16 @@ class TestPortfolio(object):
     def test_make_trade(self):
         portfolio = Portfolio()
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
-        for k, stock in portfolio.assets.items():
-            assert isinstance(stock, Stock)
-            for key, fundamental in stock.fundamentals.items():
+        for k, owned_stock in portfolio.owned_assets.items():
+            assert isinstance(owned_stock.stock, Stock)
+            for key, fundamental in owned_stock.stock.fundamentals.items():
                 assert isinstance(fundamental, Fundamental)
 
     def test_update_trade(self):
         portfolio = Portfolio()
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
-        aapl = portfolio.assets.get('AAPL')
+        aapl = portfolio.owned_assets.get('AAPL')
         assert aapl.shares_owned == 200
 
 
@@ -252,7 +252,7 @@ class TestFundamental(object):
     def test_creating_fundamental_from_dict(self, fundamental: Fundamental):
         fundamental_dict = {
             'amended': False,
-            'assets': 10000.0,
+            'owned_assets': 10000.0,
             'current_assets': 5000.0,
             'current_liabilities': 5000.0,
             'cash': 4000.0,

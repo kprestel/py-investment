@@ -1,6 +1,7 @@
 # from pytech import Session
 import pandas as pd
 from sqlalchemy import Float
+from sqlalchemy.ext.associationproxy import association_proxy
 
 import pytech.utils as utils
 from pytech.errors import AssetExistsException, AssetNotInUniverseException
@@ -60,10 +61,11 @@ class Portfolio(Base):
     benchmark_ticker = Column(String)
     # start_date = Column(DateTime)
     # end_date = Column(DateTime)
-    assets = relationship('OwnedStock', backref='portfolio',
-                        collection_class=attribute_mapped_collection('ticker'),
-                        lazy='joined',
-                        cascade='save-update, all, delete-orphan')
+    owned_assets = relationship('OwnedStock', backref='portfolio',
+                                collection_class=attribute_mapped_collection('stock.ticker'),
+                                lazy='joined', cascade='save-update, all, delete-orphan')
+    assets = association_proxy('owned_assets', 'stock')
+
 
     def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000):
         """
@@ -92,7 +94,7 @@ class Portfolio(Base):
         else:
             self.end_date = utils.parse_date(end_date)
 
-        self.assets = {}
+        self.owned_assets = {}
         self.benchmark_ticker = benchmark_ticker
         self.benchmark = web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         self.cash = starting_cash
@@ -109,8 +111,8 @@ class Portfolio(Base):
 
     def add_assets(self, ticker, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
         # TODO: determine if this is even needed
-        if self.assets.get(ticker):
-            raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
+        if self.owned_assets.get(ticker):
+            raise AssetExistsException('Asset is already in the {} owned_assets dict.'.format(self.__class__))
 
         start_date = utils.parse_date(start_date)
 
@@ -119,18 +121,18 @@ class Portfolio(Base):
         else:
             end_date = utils.parse_date(end_date)
 
-        self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
-                                    get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
+        self.owned_assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
+                                          get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
         with db.transactional_session as session:
             session.add(self)
 
     def add_assets_from_list(self, ticker_list, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
         # TODO: determine if this is even needed
         for ticker in ticker_list:
-            if self.assets.get(ticker):
-                raise AssetExistsException('Asset is already in the {} assets dict.'.format(self.__class__))
-            self.assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
-                                        get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
+            if self.owned_assets.get(ticker):
+                raise AssetExistsException('Asset is already in the {} owned_assets dict.'.format(self.__class__))
+            self.owned_assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
+                                              get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
 
     def make_trade(self, ticker, qty, action, price_per_share=None, trade_date=None):
         """
@@ -150,12 +152,12 @@ class Portfolio(Base):
         This method will add the asset to the :class:``Portfolio`` asset dict and update the db to reflect the trade
         """
 
-        # owned_asset = self.assets.get(ticker)
+        # owned_asset = self.owned_assets.get(ticker)
         # with db.query_session() as session:
         #     asset = session.query(OwnedStock).filter(OwnedStock.ticker == ticker).first()
 
-        # if ticker in self.assets:
-        asset = self.assets.get(ticker)
+        # if ticker in self.owned_assets:
+        asset = self.owned_assets.get(ticker)
         if asset:
             self._update_existing_position(qty=qty, action=action, price_per_share=price_per_share,
                                            trade_date=trade_date, asset=asset)
@@ -183,22 +185,23 @@ class Portfolio(Base):
         :class:``OwnedStock`` class and at it to the :class:``Portfolio`` asset dict.
         """
 
-        if Stock._is_asset_in_universe(ticker=ticker):
+        asset = Stock._is_asset_in_universe(ticker=ticker)
+        if asset is not None:
             if action.lower() == 'sell':
                 # if selling an asset that is not in the portfolio that means it has to be a short sale.
                 position = 'short'
             else:
                 position = 'long'
-            owned_asset = OwnedStock(ticker=ticker, shares_owned=qty, average_share_price=price_per_share,
-                                     position=position)
+            owned_asset = OwnedStock(stock=asset, shares_owned=qty, average_share_price=price_per_share,
+                                     position=position, portfolio=self)
             # owned_asset.owned_stock_id = asset.id
             # inverse the total position's value and credit/debit cash for that much
             self.cash += owned_asset.total_position_value * -1
-            self.assets[owned_asset.ticker] = owned_asset
+            self.owned_assets[owned_asset.stock.ticker] = owned_asset
             trade = Trade(qty=qty, price_per_share=price_per_share, stock=owned_asset, action=action,
                           strategy='Open new {} position'.format(position), trade_date=trade_date)
             with db.transactional_session(auto_close=False) as session:
-                session.add(self)
+                session.add(session.merge(self))
                 session.add(trade)
         else:
             raise AssetNotInUniverseException('A Stock with ticker: {} could not be located so the trade was '
@@ -234,19 +237,19 @@ class Portfolio(Base):
 
         # old_asset = session.query(OwnedStock).filter(OwnedStock.ticker == asset.ticker).first()
         # post_trade_asset = old_asset.make_trade(qty=qty, price_per_share=price_per_share)
-        # asset = self.assets.get(ticker)
+        # asset = self.owned_assets.get(ticker)
         # asset = session.query(OwnedStock).filter(OwnedStock.ticker == ticker).first()
         asset = asset.make_trade(qty=qty, price_per_share=price_per_share)
         # asset = session.merge(asset)
         if asset.shares_owned != 0:
-            self.assets[asset.ticker] = asset
+            self.owned_assets[asset.stock.ticker] = asset
             self.cash += asset.total_position_cost
             trade = Trade(qty=qty, price_per_share=price_per_share, stock=asset,
                           strategy='Update an existing {} position'.format(asset.position), action=action,
                           trade_date=trade_date)
         else:
             self.cash += asset.total_position_value
-            del self.assets[asset.ticker]
+            del self.owned_assets[asset.ticker]
             # add this to the db?
             unowned_asset = Stock.from_dict(asset.__dict__)
             trade = Trade(qty=qty, price_per_share=price_per_share, stock=unowned_asset,
@@ -259,16 +262,16 @@ class Portfolio(Base):
 
     def get_total_value(self, include_cash=True):
         """
-        Calculate the total value of the ``Portfolio`` assets
+        Calculate the total value of the ``Portfolio`` owned_assets
 
-        :param include_cash: should cash be included in the calculation, or just get the total value of the assets
+        :param include_cash: should cash be included in the calculation, or just get the total value of the owned_assets
         :type include_cash: bool
         :return: the total value of the portfolio at a given moment in time
         :rtype: float
         """
 
         total_value = 0.0
-        for asset in self.assets.values():
+        for asset in self.owned_assets.values():
             asset.update_total_position_value()
             total_value += asset.total_position_value
         if include_cash:
@@ -282,14 +285,14 @@ class Portfolio(Base):
         pass
 
     def sma(self):
-        for ticker, stock in self.assets.items():
+        for ticker, stock in self.owned_assets.items():
             yield stock.simple_moving_average()
 
-class Trade(OwnsStock, Base):
+class Trade(HasStock, Base):
     """
     This class is used to make trades and keep trade of past trades
     """
-    # id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)
     trade_date = Column(DateTime)
     action = Column(String)
     strategy = Column(String)

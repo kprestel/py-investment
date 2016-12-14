@@ -88,7 +88,7 @@ class OwnsStock(object):
 
 class Asset(object):
     """
-    This is just an empty class acting as a placeholder for my idea that we will later add more than just stock assets
+    This is just an empty class acting as a placeholder for my idea that we will later add more than just stock owned_assets
     """
     pass
 
@@ -98,9 +98,9 @@ class Stock(Base):
     Main class that is used to model stocks and may contain technical and fundamental data about the stock.
 
     A ``Stock`` object must exist in the database in order for it to be traded.  Each ``Stock`` object is considered to
-    be in the *universe* of assets the portfolio owner is willing to own/trade
+    be in the *universe* of owned_assets the portfolio owner is willing to own/trade
     """
-
+    id = Column(Integer, primary_key=True)
     ticker = Column(String, unique=True)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
@@ -111,15 +111,9 @@ class Stock(Base):
     beta = Column(Numeric)
     start_price = Column(Numeric)
     end_price = Column(Numeric)
-    discriminator = Column('type', String)
     fundamentals = relationship('Fundamental',
                                 collection_class=attribute_mapped_collection('access_key'))
 
-    __mapper_args__ = {
-        'polymorphic_identity': 'stock',
-        'polymorphic_on': discriminator,
-        'with_polymorphic': '*'
-    }
 
     def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
@@ -152,7 +146,7 @@ class Stock(Base):
         self.load_fundamentals = get_fundamentals
         if get_fundamentals:
             self.get_fundamentals()
-        quote = self.get_price_quote()
+        quote = get_price_quote(self.ticker)
         self.latest_price = quote.price
         self.latest_price_time = quote.time
 
@@ -163,7 +157,7 @@ class Stock(Base):
             self.ohlcv = self.get_ohlc_series()
         else:
             self.ohlcv = None
-        quote = self.get_price_quote()
+        quote = get_price_quote(self.ticker)
         self.latest_price = quote.price
         self.latest_price_time = quote.time
 
@@ -182,13 +176,6 @@ class Stock(Base):
         """
         return self.ohlcv
 
-    def get_price_quote(self):
-        quote = namedtuple('Quote', 'price time')
-        df = web.get_quote_yahoo(self.ticker)
-        d = date.today()
-        time = utils.parse_date(df['time'][0]).time()
-        dt = datetime.combine(d, time=time)
-        return quote(price=df['last'], time=dt)
 
     def get_ohlc_series(self, data_source='yahoo'):
         """
@@ -943,13 +930,13 @@ class Stock(Base):
         :rtype: bool
         """
 
-        with db.transactional_session() as session:
-            delete_count = session.query(cls).filter(Stock.ticker == ticker).delete()
-            if delete_count == 1:
-                session.commit()
-                return True
-            else:
-                return False
+        with db.transactional_session(auto_close=False) as session:
+            return session.query(cls).filter(Stock.ticker == ticker).first()
+            # if delete_count == 1:
+            #     session.commit()
+            #     return True
+            # else:
+            #     return False
 
 
     """
@@ -1047,14 +1034,15 @@ class Stock(Base):
         return stock_dict
 
 
-class OwnedStock(Stock):
+class OwnedStock(Base):
     """
     Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
     """
-    __tablename__ = 'owned_stock'
-    id = Column('id', Integer, ForeignKey('stock.id'), primary_key=True)
-    portfolio_id = Column('portfolio_id', Integer, ForeignKey('portfolio.id'), primary_key=True)
-    portfolio = relationship('Portfolio', lazy='joined')
+    # __tablename__ = 'owned_stock'
+    stock_id = Column(Integer, ForeignKey('stock.id'), primary_key=True)
+    stock = relationship('Stock', lazy='joined')
+    portfolio_id = Column(Integer, ForeignKey('portfolio.id'), primary_key=True)
+    # portfolio = relationship('Portfolio', lazy='joined')
     purchase_date = Column(DateTime)
     average_share_price_paid = Column(Numeric)
     shares_owned = Column(Numeric)
@@ -1062,16 +1050,10 @@ class OwnedStock(Stock):
     total_position_cost = Column(Numeric)
     position = Column(String)
 
-    __mapper_args__ = {
-        'polymorphic_identity': 'owned_stock'
-    }
+    def __init__(self, stock, portfolio, shares_owned, position, average_share_price=None, purchase_date=None):
 
-    def __init__(self, ticker, shares_owned, position, average_share_price=None, purchase_date=None,
-                 get_fundamentals=True, get_ohlcv=True):
-        super().__init__(ticker=ticker, start_date=self.purchase_date, get_fundamentals=get_fundamentals,
-                         get_ohlcv=get_ohlcv)
-
-        self.discriminator = 'owned_stock'
+        self.stock = stock
+        self.portfolio = portfolio
         if position.lower() == 'long' or position.lower() == 'short':
             self.position = position
         else:
@@ -1088,7 +1070,7 @@ class OwnedStock(Stock):
             self.latest_price = average_share_price
             self.latest_price_time = self.purchase_date.time()
         else:
-            quote = self.get_price_quote()
+            quote = get_price_quote(ticker=stock.ticker)
             self.average_share_price_paid = quote.price
             self.latest_price = quote.price
             self.latest_price_time = quote.time
@@ -1120,7 +1102,7 @@ class OwnedStock(Stock):
             #     self.total_position_value += qty * price_per_share
             #     self.total_position_cost += (qty * price_per_share) * -1
         else:
-            quote = self.get_price_quote()
+            quote = get_price_quote(ticker=self.stock.ticker)
             self.latest_price = quote.price
             self.latest_price_time = quote.time
             self._set_position_cost_and_value(qty=qty, price=quote.price)
@@ -1251,6 +1233,7 @@ class Fundamental(Base, HasStock):
     """
 
     # key to the corresponding Stock's dictionary must be 'period_focus_year'
+    id = Column(Integer, primary_key=True)
     access_key = Column(String, unique=True)
     amended = Column(Boolean)
     assets = Column(Numeric)
@@ -1313,9 +1296,9 @@ class Fundamental(Base, HasStock):
         :param amended: str
             were the finical statements amended
         :param assets: float
-            total assets
+            total owned_assets
         :param current_assets: float
-            total current assets
+            total current owned_assets
         :param current_liabilities: float
             total current liabilities
         :param cash: float
@@ -1520,3 +1503,12 @@ class Fundamental(Base, HasStock):
         """
         df = {k: v for k, v in fundamental_dict.items() if k in cls.__dict__}
         return cls(**df)
+
+def get_price_quote(ticker):
+    quote = namedtuple('Quote', 'price time')
+    df = web.get_quote_yahoo(ticker)
+    d = date.today()
+    time = utils.parse_date(df['time'][0]).time()
+    dt = datetime.combine(d, time=time)
+    return quote(price=df['last'], time=dt)
+
