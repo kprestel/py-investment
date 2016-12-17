@@ -4,7 +4,7 @@ from sqlalchemy import Float
 from sqlalchemy.ext.associationproxy import association_proxy
 
 import pytech.utils as utils
-from pytech.exceptions import AssetExistsError, AssetNotInUniverseError
+from pytech.exceptions import AssetExistsError, AssetNotInUniverseError, InvalidActionError
 from pytech.base import Base
 import pandas_datareader.data as web
 from datetime import date, timedelta, datetime
@@ -304,26 +304,10 @@ class Trade(HasStock, Base):
             # TODO: may have to run a query to check if we own the stock or not? and if we do use update?
             self.action = action.lower()
         else:
-            raise ValueError('action must be either "buy" or "sell". {} was provided.'.format(action))
+            raise InvalidActionError('action must be either "buy" or "sell". {} was provided.'.format(action))
 
         self.strategy = strategy.lower()
         self.stock = stock
         self.qty = qty
         self.price_per_share = price_per_share
-        # elif position is None and corresponding_trade is not None:
-        #     self.position = position
-        # elif position is None and corresponding_trade is None:
-        #     raise ValueError('position can only be None if a corresponding_trade is also provided and None was provided')
-        # else:
-        #     raise ValueError('Nice try buy, position must be either "long" or "short". {} was provided.'.format(position))
-        #
-        # try:
-        #     self.stock = stock.make_trade(qty=qty, price_per_share=price_per_share)
-        # except AttributeError:
-        #     try:
-        #         self.stock = OwnedStock(ticker=stock.ticker, shares_owned=qty, average_share_price_paid=price_per_share,
-        #                                 purchase_date=self.trade_date)
-        #     except AttributeError:
-        #         raise AttributeError('stock must be a Stock object. {} was provided'.format(type(stock)))
-
 
