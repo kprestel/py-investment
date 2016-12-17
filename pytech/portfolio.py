@@ -4,7 +4,7 @@ from sqlalchemy import Float
 from sqlalchemy.ext.associationproxy import association_proxy
 
 import pytech.utils as utils
-from pytech.errors import AssetExistsException, AssetNotInUniverseException
+from pytech.exceptions import AssetExistsError, AssetNotInUniverseError
 from pytech.base import Base
 import pandas_datareader.data as web
 from datetime import date, timedelta, datetime
@@ -32,30 +32,9 @@ class Portfolio(Base):
     This class inherits from :class:``AssetUniverse`` so that it has access to its analysis functions.  It is important to
     note that :class:``Portfolio`` is its own table in the database as it represents the :class:``Asset`` that the user
     currently owns.  An :class:``Asset`` can be in both the *asset_universe* table as well as the *portfolio* table but
-    a :class:``Asset`` does have to be in the :class:``AssetUniverse`` in order to be traded.
+    a :class:``Asset`` does have to be in the database to be traded
     """
-    # TODO: figure out how to make trades and what the relationship it should have with stocks
-    """
-    NOTES:
-        What is the best way to model the Portfolio -> Stock -> Trade relationship?
-            Use the Trade table as an association table?
-        How else can price/qty be tracked for a specific Stock -> Portfolio?
-        How else can we handle this?
 
-        The portfolio class ideally is the only class that will interact with the database. By that I mean that no other
-        class should be 'committing' anything the only way anything gets committed to the db is when the Portfolio they
-        are all directly or indirectly associated with. I'm not 100% sure this will be possible or the best design
-        pattern but it kinda seems like the right idea right now.  Except for the whole spider thing... so we will
-        see where the future takes us.
-
-        This idea has already changed.  See the db_utils.py file.
-
-        One thing I know for sure, its gonna be a bumpy ride.
-
-    your's truly:
-        KP.
-
-    """
     id = Column(Integer, primary_key=True)
     cash = Column(Float)
     benchmark_ticker = Column(String)
@@ -112,7 +91,7 @@ class Portfolio(Base):
     def add_assets(self, ticker, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
         # TODO: determine if this is even needed
         if self.owned_assets.get(ticker):
-            raise AssetExistsException('Asset is already in the {} owned_assets dict.'.format(self.__class__))
+            raise AssetExistsError('Asset is already in the {} owned_assets dict.'.format(self.__class__))
 
         start_date = utils.parse_date(start_date)
 
@@ -130,7 +109,7 @@ class Portfolio(Base):
         # TODO: determine if this is even needed
         for ticker in ticker_list:
             if self.owned_assets.get(ticker):
-                raise AssetExistsException('Asset is already in the {} owned_assets dict.'.format(self.__class__))
+                raise AssetExistsError('Asset is already in the {} owned_assets dict.'.format(self.__class__))
             self.owned_assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
                                               get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
 
@@ -180,6 +159,7 @@ class Portfolio(Base):
             (default: now)
         :type trade_date: datetime
         :return: None
+        :raises AssetNotInUniverseError: when an asset is traded that does not yet exist in the Universe
 
         This method processes the trade and then writes the results to the database. It will create a new instance of
         :class:``OwnedStock`` class and at it to the :class:``Portfolio`` asset dict.
@@ -204,7 +184,7 @@ class Portfolio(Base):
                 session.add(session.merge(self))
                 session.add(trade)
         else:
-            raise AssetNotInUniverseException('A Stock with ticker: {} could not be located so the trade was '
+            raise AssetNotInUniverseError('A Stock with ticker: {} could not be located so the trade was '
                                               'aborted'.format(ticker))
 
     def _update_existing_position(self, qty, price_per_share, trade_date, action, asset):
