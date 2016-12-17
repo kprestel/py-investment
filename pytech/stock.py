@@ -1,5 +1,8 @@
+from sqlalchemy.ext.declarative import AbstractConcreteBase
+
 import pytech.utils as utils
 from pytech.base import Base
+from pytech.exceptions import InvalidPositionError
 from collections import namedtuple
 from multiprocessing import Process
 import pandas as pd
@@ -24,6 +27,7 @@ from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, B
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
 import pytech.db_utils as db
+from abc import ABCMeta, abstractmethod
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -86,7 +90,7 @@ class OwnsStock(object):
         return relationship('OwnedStock')
 
 
-class Asset(object):
+class Asset(metaclass=ABCMeta):
     """
     This is just an empty class acting as a placeholder for my idea that we will later add more than just stock owned_assets
     """
@@ -1034,6 +1038,7 @@ class Stock(Base):
         return stock_dict
 
 
+
 class OwnedStock(Base):
     """
     Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
@@ -1057,7 +1062,7 @@ class OwnedStock(Base):
         if position.lower() == 'long' or position.lower() == 'short':
             self.position = position
         else:
-            raise ValueError('position must be "long" or "short".  {} was provided'.format(position))
+            raise InvalidPositionError('position must be "long" or "short".  {} was provided'.format(position))
 
 
         if purchase_date is None:
@@ -1093,26 +1098,17 @@ class OwnedStock(Base):
         :param price_per_share: float, the average price per share in the trade
         :return: self
         """
+
+        self.shares_owned += qty
+
         if price_per_share:
             self._set_position_cost_and_value(qty=qty, price=price_per_share)
-            # if self.position == 'short':
-            #     self.total_position_value += qty * price_per_share
-            #     self.total_position_cost+= (qty * price_per_share) * -1
-            # else:
-            #     self.total_position_value += qty * price_per_share
-            #     self.total_position_cost += (qty * price_per_share) * -1
         else:
             quote = get_price_quote(ticker=self.stock.ticker)
             self.latest_price = quote.price
             self.latest_price_time = quote.time
             self._set_position_cost_and_value(qty=qty, price=quote.price)
-            # if self.position == 'short':
-            #     self.total_position_value += (qty * quote.price) * -1
-            #     self.total_position_cost += qty * quote.price
-            # else:
-            #     self.total_position_value += qty * quote.price
-            #     self.total_position_cost += (qty * quote.price) * -1
-        self.shares_owned += qty
+
         try:
             self.average_share_price_paid = self.total_position_value / float(self.shares_owned)
         except ZeroDivisionError:
