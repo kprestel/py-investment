@@ -205,5 +205,5 @@ setup(
     license='JSON',
     author='Kyle Prestel',
     author_email='kprestel@gmail.com',
-    description='A Python Library for doing technical and fundament stock analysis'
+    description='A Python Library for doing technical and fundament asset analysis'
 )

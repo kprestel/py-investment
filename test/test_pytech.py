@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from pytech.base import Base
 from pytech.portfolio import Portfolio
-from pytech.stock import Stock, Fundamental
+from pytech.stock import Stock, Fundamental, Asset
 
 import logging
 
@@ -210,10 +210,12 @@ class TestPortfolio(object):
     def test_make_trade(self):
         portfolio = Portfolio()
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
-        for k, owned_stock in portfolio.owned_assets.items():
-            assert isinstance(owned_stock.stock, Stock)
-            for key, fundamental in owned_stock.stock.fundamentals.items():
-                assert isinstance(fundamental, Fundamental)
+        for k, owned_asset in portfolio.owned_assets.items():
+            if isinstance(owned_asset.asset, Stock):
+                for key, fundamental in owned_asset.asset.fundamentals.items():
+                    assert isinstance(fundamental, Fundamental)
+            else:
+                assert issubclass(owned_asset.asset, Asset)
 
     def test_update_trade(self):
         portfolio = Portfolio()

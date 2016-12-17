@@ -1,33 +1,31 @@
-from sqlalchemy.ext.declarative import AbstractConcreteBase
-
-import pytech.utils as utils
-from pytech.base import Base
-from pytech.exceptions import InvalidPositionError
-from collections import namedtuple
-from multiprocessing import Process
-import pandas as pd
-import os
-import numpy as np
-import pandas_datareader.data as web
-# import datetime
-from datetime import datetime, date, timedelta
 import logging
+import os
 import re
-from dateutil import parser
-from sqlalchemy import orm
-from crawler.spiders.edgar import EdgarSpider
-from twisted.internet import reactor
-from scrapy.crawler import CrawlerRunner
-from scrapy.utils.project import get_project_settings
-from scrapy.utils.log import configure_logging
+from collections import namedtuple
+from datetime import datetime, date, timedelta
+from multiprocessing import Process
 
-from sqlalchemy.ext.declarative import as_declarative
-from sqlalchemy.ext.declarative import declared_attr
+import numpy as np
+import pandas as pd
+import pandas_datareader.data as web
+from dateutil import parser
+from scrapy.crawler import CrawlerRunner
+from scrapy.utils.log import configure_logging
+from scrapy.utils.project import get_project_settings
 from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
+from sqlalchemy import orm
+from sqlalchemy.ext.declarative import AbstractConcreteBase
+from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
+from sqlalchemy_utils import generic_relationship
+from twisted.internet import reactor
+
 import pytech.db_utils as db
-from abc import ABCMeta, abstractmethod
+import pytech.utils as utils
+from crawler.spiders.edgar import EdgarSpider
+from pytech.base import Base
+from pytech.exceptions import InvalidPositionError, AssetNotInUniverseError
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,26 +46,12 @@ class PortfolioAsset(object):
     def portfolio_id(cls):
         return Column('portfolio_id', ForeignKey('portfolio.id'))
 
-        # @declared_attr
-        # def portfolio(cls):
-        #     return relationship('Portfolio', )
-
-    # @declared_attr
-    # def portfolio(cls):
-    #     return relationship('Portfolio', lazy='joined')
-
-
-# class WatchedAsset(object):
-#     @declared_attr
-#     def asset_universe_id(cls):
-#         return Column('asset_universe_id', ForeignKey('asset_universe.id'))
-
 
 class HasStock(object):
     """
-    Mixin object to create a relation to a stock object
+    Mixin object to create a relation to a asset object
 
-    Any class that inherits from this class will be given a foreign key column that corresponds to the stock object
+    Any class that inherits from this class will be given a foreign key column that corresponds to the asset object
     passed to the child class's constructor
     """
 
@@ -75,53 +59,84 @@ class HasStock(object):
     def stock_id(cls):
         return Column('stock_id', ForeignKey('stock.id'))
 
-        # @declared_attr
-        # def stock(cls):
-        #     return relationship('Stock')
-
-
-class OwnsStock(object):
-    @declared_attr
-    def owned_stock_id(cls):
-        return Column('owned_stock_id', ForeignKey('owned_stock.id'))
-
-    @declared_attr
-    def owned_stock(cls):
-        return relationship('OwnedStock')
-
 
 class Asset(Base, AbstractConcreteBase):
     """
-    This is just an empty class acting as a placeholder for my idea that we will later add more than just stock owned_assets
+    This is the base class that all Asset classes should inherit from.
+
+    Inheriting from it will provide a table name and the proper mapper args required for the db.  It will also allow it
+    to have a relationship with the :class:``OwnedAsset``.
+
+    The child class is responsible for giving each instance a ticker to identify it.
+
+    If the child class needs any more fields it is responsible for creating them at the class level as well as
+    populating them via the child's constructor.
     """
-    pass
+
+    @declared_attr
+    def __tablename__(cls):
+        name = cls.__name__
+        return (
+            name[0].lower() +
+            re.sub(r'([A-Z])',
+                   lambda m: '_' + m.group(0).lower(), name[1:])
+        )
+
+    @declared_attr
+    def __mapper_args__(cls):
+        name = cls.__name__
+        return {
+            'polymorphic_identity': name.lower(),
+            'concrete': True
+        }
+
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String, unique=True)
+
+    @classmethod
+    def is_asset_in_universe(cls, ticker):
+        """
+        Query the asset universe for the requested ticker and return the object
+
+        :param ticker: the ticker of the ``Asset`` being traded
+        :type ticker: str
+        :return: The :class:``Asset`` object with the ticker passed in
+        :rtype: Asset
+        :raises AssetNotInUniverseError: if an :class:``Asset`` with the requested ticker cannot be found
+        """
+
+        with db.transactional_session(auto_close=False) as session:
+            asset = session.query(cls).filter(Stock.ticker == ticker).first()
+            if asset is not None:
+                return asset
+            else:
+                raise AssetNotInUniverseError('Could not locate an asset with the ticker: {}'.format(ticker))
 
 
-class Stock(Base):
+class Stock(Asset):
     """
-    Main class that is used to model stocks and may contain technical and fundamental data about the stock.
+    Main class that is used to model stocks and may contain technical and fundamental data about the asset.
 
     A ``Stock`` object must exist in the database in order for it to be traded.  Each ``Stock`` object is considered to
     be in the *universe* of owned_assets the portfolio owner is willing to own/trade
     """
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String, unique=True)
+
     start_date = Column(DateTime)
     end_date = Column(DateTime)
-    get_ohlcv = Column(Boolean)
     latest_price = Column(Numeric)
     latest_price_time = Column(DateTime)
+    get_ohlcv = Column(Boolean)
     load_fundamentals = Column(Boolean)
     beta = Column(Numeric)
     start_price = Column(Numeric)
     end_price = Column(Numeric)
     fundamentals = relationship('Fundamental',
-                                collection_class=attribute_mapped_collection('access_key'))
+                                collection_class=attribute_mapped_collection('access_key'),
+                                lazy='joined')
 
 
     def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
         self.ticker = ticker
-        self.discriminator = 'stock'
         if start_date is None:
             self.start_date = datetime.now() - timedelta(days=365)
         else:
@@ -198,7 +213,7 @@ class Stock(Base):
         :return:
 
         pass the required attributes to the EdgarSpider and it will create the corresponding fundamentals objects
-        for this stock instance as well as write the fundamental object to the DB
+        for this asset instance as well as write the fundamental object to the DB
         """
 
         # session = Session()
@@ -533,12 +548,12 @@ class Stock(Base):
         :param period: int
         :return: generator
 
-        finds the true range a stock is trading within
+        finds the true range a asset is trading within
         most recent period's high - most recent periods low
         absolute value of the most recent period's high minus the previous close
         absolute value of the most recent period's low minus the previous close
 
-        this will give you a dollar amount that the stock's range that it has been trading in
+        this will give you a dollar amount that the asset's range that it has been trading in
         """
         # TODO: make this method use adjusted close
         range_one = pd.Series(self.ohlcv['High'].tail(period) - self.ohlcv['Low'].tail(period), name='high_low')
@@ -563,7 +578,7 @@ class Stock(Base):
         :param period: int
         :return: generator
 
-         moving average of a stock's true range
+         moving average of a asset's true range
         """
         tr = self._true_range_computation(ts=self.ohlcv, period=period * 2)
         return pd.Series(tr.rolling(center=False, window=period, min_periods=period - 1).mean(),
@@ -603,7 +618,7 @@ class Stock(Base):
 
     def _get_pct_change(self, market_ticker='^GSPC'):
         """
-        Get the percentage change over the :class: Stock's start and end dates for both the stock as well as the market
+        Get the percentage change over the :class: Stock's start and end dates for both the asset as well as the market
 
         :param use_portfolio_benchmark: boolean
             When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
@@ -768,7 +783,7 @@ class Stock(Base):
         :param period: int
         :return: Timeseries
 
-        this method is used internally to compute the average true range of a stock
+        this method is used internally to compute the average true range of a asset
 
         the purpose of having it as separate function is so that external functions can return generators
         """
@@ -921,28 +936,6 @@ class Stock(Base):
         d.addBoth(lambda _: reactor.stop())
         reactor.run()
 
-
-    @classmethod
-    def _is_asset_in_universe(cls, ticker):
-        """
-        Check if an asset exists in the ``Asset`` table and if it does delete it so that it can be recreated as an
-        ``OwnedAsset`` and return a boolean to notify ``~pytech.Portfolio`` that is ok to trade it
-
-        :param ticker: the ticker of the ``Stock`` being traded
-        :type ticker: str
-        :return: True if the asset exists otherwise false
-        :rtype: bool
-        """
-
-        with db.transactional_session(auto_close=False) as session:
-            return session.query(cls).filter(Stock.ticker == ticker).first()
-            # if delete_count == 1:
-            #     session.commit()
-            #     return True
-            # else:
-            #     return False
-
-
     """
     ALTERNATE CONSTRUCTORS
     """
@@ -989,7 +982,7 @@ class Stock(Base):
         :param get_ohlc: boolean, if true then an ohlc time series will bce created based on the start and end dates
         :param close_session: boolean, if a user passes a session in and they don't want it to be closed after then set
         this to false
-        :return: dict, contains stock objects with their corresponding tickers as the key
+        :return: dict, contains asset objects with their corresponding tickers as the key
 
         create a dict of stocks for a given time period based on the list of ticker symbols passed in
         """
@@ -1022,7 +1015,7 @@ class Stock(Base):
         :param get_ohlc: boolean
         :return: dict
 
-        create a dictionary of stock objects with their tickers as keys and write them to the DB if a session is provided
+        create a dictionary of asset objects with their tickers as keys and write them to the DB if a session is provided
         NOTE: if get_fundamentals is True then stocks have to be written to the DB
         """
         if get_fundamentals:
@@ -1039,13 +1032,17 @@ class Stock(Base):
 
 
 
-class OwnedStock(Base):
+class OwnedAsset(Base):
     """
     Contains data that only matters for a :class:`Stock` that is in a user's :class:`Portfolio`
     """
     # __tablename__ = 'owned_stock'
-    stock_id = Column(Integer, ForeignKey('stock.id'), primary_key=True)
-    stock = relationship('Stock', lazy='joined')
+    # stock_id = Column(Integer, ForeignKey('asset.id'), primary_key=True)
+    asset_id = Column(Integer)
+    asset_type = Column(String)
+    asset = generic_relationship(asset_id, asset_type)
+
+    # asset = relationship('Stock', lazy='joined')
     portfolio_id = Column(Integer, ForeignKey('portfolio.id'), primary_key=True)
     # portfolio = relationship('Portfolio', lazy='joined')
     purchase_date = Column(DateTime)
@@ -1055,9 +1052,9 @@ class OwnedStock(Base):
     total_position_cost = Column(Numeric)
     position = Column(String)
 
-    def __init__(self, stock, portfolio, shares_owned, position, average_share_price=None, purchase_date=None):
+    def __init__(self, asset, portfolio, shares_owned, position, average_share_price=None, purchase_date=None):
 
-        self.stock = stock
+        self.asset = asset
         self.portfolio = portfolio
         if position.lower() == 'long' or position.lower() == 'short':
             self.position = position
@@ -1075,7 +1072,7 @@ class OwnedStock(Base):
             self.latest_price = average_share_price
             self.latest_price_time = self.purchase_date.time()
         else:
-            quote = get_price_quote(ticker=stock.ticker)
+            quote = get_price_quote(ticker=asset.ticker)
             self.average_share_price_paid = quote.price
             self.latest_price = quote.price
             self.latest_price_time = quote.time
@@ -1104,7 +1101,7 @@ class OwnedStock(Base):
         if price_per_share:
             self._set_position_cost_and_value(qty=qty, price=price_per_share)
         else:
-            quote = get_price_quote(ticker=self.stock.ticker)
+            quote = get_price_quote(ticker=self.asset.ticker)
             self.latest_price = quote.price
             self.latest_price_time = quote.time
             self._set_position_cost_and_value(qty=qty, price=quote.price)
@@ -1177,7 +1174,7 @@ class OwnedStock(Base):
 
     def _get_pct_change(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
         """
-        Get the percentage change over the :class: Stock's start and end dates for both the stock as well as the market
+        Get the percentage change over the :class: Stock's start and end dates for both the asset as well as the market
 
         :param use_portfolio_benchmark: boolean
             When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
@@ -1220,7 +1217,7 @@ class OwnedStock(Base):
 
 class Fundamental(Base, HasStock):
     """
-    The purpose of the this class to hold one period's worth of fundamental data for a given stock
+    The purpose of the this class to hold one period's worth of fundamental data for a given asset
 
     NOTE: If the period focus is Q1, Q2, Q3 then all cumulative measures will be QTD and if its FY they will be YTD
 
@@ -1446,7 +1443,7 @@ class Fundamental(Base, HasStock):
         """
         import json
         if not isinstance(stock, Stock):
-            raise TypeError('stock must be an instance of a stock object. {} was provided'.format(type(stock)))
+            raise TypeError('asset must be an instance of a asset object. {} was provided'.format(type(stock)))
         logger.info('Getting {} fundamental data'.format(stock.ticker))
         if period_focus is None:
             file_name = 'FY_{}.json'.format(stock.ticker)

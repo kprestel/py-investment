@@ -14,7 +14,7 @@ engine = create_engine(cs, connect_args={'check_same_thread':False}, poolclass=S
 Session = sessionmaker(bind=engine)
 from pytech.base import Base
 from pytech.portfolio import Portfolio, Trade
-from pytech.stock import Stock, Fundamental, HasStock, PortfolioAsset, OwnedStock
+from pytech.stock import Stock, Fundamental, HasStock, PortfolioAsset, OwnedAsset
 Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 logging.basicConfig(level=logging.DEBUG)
