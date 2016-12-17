@@ -30,7 +30,6 @@ pytest==3.0.3
 pytest-cov==2.4.0
 python-dateutil==2.5.3
 pytz==2016.7
-QuantPy==0.1
 queuelib==1.4.2
 requests==2.11.1
 requests-file==1.4.1
@@ -38,6 +37,7 @@ Scrapy==1.2.1
 service-identity==16.0.0
 six==1.10.0
 SQLAlchemy==1.1.4
+SQLAlchemy-Utils==0.32.11
 Twisted==16.5.0
 w3lib==1.15.0
 zope.interface==4.3.2

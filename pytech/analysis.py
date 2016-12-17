@@ -85,7 +85,7 @@ def get_stock_universe(start=default_start, end=default_end, **kwargs):
     if 'stock_list' in kwargs:
         stock_list = kwargs['stock_list']
         for stock in stock_list:
-            # df_list.append(web.DataReader(stock, data_source="yahoo", start=start,
+            # df_list.append(web.DataReader(asset, data_source="yahoo", start=start,
             #                               end=end))
             temp_df = web.DataReader(stock, data_source='yahoo', start=start, end=end)
             temp_df['ticker'] = stock
@@ -474,12 +474,12 @@ def true_range(universe_dict, period=14):
     :param period: int
     :return: generator
 
-    finds the true range a stock is trading within
+    finds the true range a asset is trading within
     most recent period's high - most recent periods low
     absolute value of the most recent period's high minus the previous close
     absolute value of the most recent period's low minus the previous close
 
-    this will give you a dollar amount that the stock's range that it has been trading in
+    this will give you a dollar amount that the asset's range that it has been trading in
     """
     for ticker, ts in universe_dict.items():
         # TODO: make this method use adjusted close
@@ -506,7 +506,7 @@ def average_true_range(universe_dict, period=14):
     :param period: int
     :return: generator
 
-     moving average of a stock's true range
+     moving average of a asset's true range
     """
     for ticker, ts in universe_dict.items():
         tr = _true_range_computation(ts, period=period * 2)
@@ -604,7 +604,7 @@ def _true_range_computation(ts, period):
     :param period: int
     :return: Timeseries
 
-    this method is used internally to compute the average true range of a stock
+    this method is used internally to compute the average true range of a asset
 
     the purpose of having it as separate function is so that external functions can return generators
     """

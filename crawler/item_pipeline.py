@@ -92,7 +92,7 @@ class JsonItemPipeline(object):
 
 class FundamentalItemPipeline(object):
     """
-    Create a Fundamental object and the corresponding stock (if it doesn't already exist) and add it to the db
+    Create a Fundamental object and the corresponding asset (if it doesn't already exist) and add it to the db
     """
 
     def open_spider(self, spider):
