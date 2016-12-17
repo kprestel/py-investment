@@ -34,7 +34,7 @@ def tables():
 @pytest.yield_fixture(autouse=True)
 def mock_session(monkeypatch):
     @contextmanager
-    def session(auto_close=True):
+    def session(auto_close=False):
         session = Session()
         yield session
         session.commit()

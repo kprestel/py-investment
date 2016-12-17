@@ -9,7 +9,7 @@ def query_session():
     session.close()
 
 @contextmanager
-def transactional_session(auto_close=True):
+def transactional_session(auto_close=False):
     """
     Helper method to manage db transactions
 

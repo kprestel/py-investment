@@ -31,9 +31,6 @@ logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# Base = Base()
-# Base.metadata.create_all(db.engine)
-
 class PortfolioAsset(object):
     """
     Mixin object to create a one to many relationship with Portfolio
@@ -71,6 +68,10 @@ class Asset(Base, AbstractConcreteBase):
 
     If the child class needs any more fields it is responsible for creating them at the class level as well as
     populating them via the child's constructor.
+
+    Any child class instance of this base class is considered to be a part of the **Asset Universe** or the assets that
+    are eligible to be traded.  If a child instance of an Asset does not yet exist in the universe and the
+    :class:``~pytech.portfolio.Portfolio`` tries to trade it an exception will occur.
     """
 
     @declared_attr
@@ -94,7 +95,7 @@ class Asset(Base, AbstractConcreteBase):
     ticker = Column(String, unique=True)
 
     @classmethod
-    def is_asset_in_universe(cls, ticker):
+    def get_asset_from_universe(cls, ticker):
         """
         Query the asset universe for the requested ticker and return the object
 
@@ -105,8 +106,8 @@ class Asset(Base, AbstractConcreteBase):
         :raises AssetNotInUniverseError: if an :class:``Asset`` with the requested ticker cannot be found
         """
 
-        with db.transactional_session(auto_close=False) as session:
-            asset = session.query(cls).filter(Stock.ticker == ticker).first()
+        with db.transactional_session() as session:
+            asset = session.query(cls).filter(cls.ticker == ticker).first()
             if asset is not None:
                 return asset
             else:
@@ -624,7 +625,7 @@ class Stock(Asset):
             When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
         :param market_ticker: str
             Any valid ticker symbol to use as the market.
-        :return: TimeSeries
+        :return: namedtuple
         """
         pct_change = namedtuple('Pct_Change', 'market_pct_change stock_pct_change')
         market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
@@ -632,7 +633,7 @@ class Stock(Asset):
         stock_pct_change = pd.Series(self.ohlcv['Adj Close'].pct_change(periods=1))
         return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
 
-    def calculate_beta(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+    def calculate_beta(self, market_ticker='^GSPC'):
         """
         Compute the beta for the :class: Stock
 
@@ -648,7 +649,7 @@ class Stock(Asset):
         variance = pct_change.market_pct_change.var()
         return covar / variance
 
-    def market_correlation(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+    def market_correlation(self, market_ticker='^GSPC'):
         """
         Compute the correlation between a :class: Stock's return and the market return.
         :param use_portfolio_benchmark:
@@ -1184,7 +1185,7 @@ class OwnedAsset(Base):
         """
         pct_change = namedtuple('Pct_Change', 'market_pct_change stock_pct_change')
         if use_portfolio_benchmark:
-            market_df = self._get_portfolio_benchmark()
+            market_df = self.portfolio.benchmark
         else:
             market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         market_pct_change = pd.Series(market_df['Adj Close'].pct_change(periods=1))
@@ -1196,17 +1197,19 @@ class OwnedAsset(Base):
         Helper method to get the :class: Portfolio's benchmark ticker symbol
         :return: TimeSeries
         """
-        from pytech.portfolio import Portfolio
 
-        with db.query_session() as session:
-            benchmark_ticker = \
-                session.query(Portfolio.benchmark_ticker) \
-                    .filter(Portfolio.id == self.portfolio_id) \
-                    .first()
-        if not benchmark_ticker:
-            return web.DataReader('^GSPC', 'yahoo', start=self.start_date, end=self.end_date)
-        else:
-            return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
+        return self.portfolio.benchmark
+        # from pytech.portfolio import Portfolio
+        #
+        # with db.query_session() as session:
+        #     benchmark_ticker = \
+        #         session.query(Portfolio.benchmark_ticker) \
+        #             .filter(Portfolio.id == self.portfolio_id) \
+        #             .first()
+        # if not benchmark_ticker:
+        #     return web.DataReader('^GSPC', 'yahoo', start=self.start_date, end=self.end_date)
+        # else:
+        #     return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
             # @classmethod
             # def from_list(cls, tickers, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
@@ -1330,14 +1333,7 @@ class Fundamental(Base, HasStock):
         self.current_liabilities = current_liabilities
         self.cash = cash
         self.dividend = dividend
-        # TODO: convert to date. need to test if all dates are the same format
-        try:
-            self.end_date = parser.parse(end_date)
-        except ValueError:
-            raise ValueError('end_date could not be converted to datetime object. {} was provided'.format(end_date))
-        except TypeError:
-            # thrown when a datetime object is passed into the parser
-            self.end_date = end_date
+        self.end_date = utils.parse_date(end_date)
         self.eps = eps
         self.eps_diluted = eps_diluted
         self.equity = equity
