@@ -5,6 +5,7 @@ from os.path import join
 import pytest
 import pandas as pd
 from datetime import datetime
+from pytech.exceptions import InvalidActionError
 
 from sqlalchemy import create_engine
 from sqlalchemy import event
@@ -222,7 +223,15 @@ class TestPortfolio(object):
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
         aapl = portfolio.owned_assets.get('AAPL')
+        portfolio.return_on_owned_assets()
         assert aapl.shares_owned == 200
+        portfolio.make_trade(ticker='AAPL', qty=100, action='sell')
+        assert aapl.shares_owned == 100
+
+    def test_make_trade_with_invaild_action(self):
+        portfolio = Portfolio()
+        with pytest.raises(InvalidActionError):
+            portfolio.make_trade(ticker='AAPL', qty=111, action='nothing')
 
 
 @pytest.mark.skip(reason='I will fix it later')

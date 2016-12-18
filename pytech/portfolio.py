@@ -42,7 +42,7 @@ class Portfolio(Base):
     owned_assets = relationship('OwnedAsset', backref='portfolio',
                                 collection_class=attribute_mapped_collection('asset.ticker'),
                                 lazy='joined', cascade='save-update, all, delete-orphan')
-    assets = association_proxy('owned_assets', 'asset')
+    # assets = association_proxy('owned_assets', 'asset')
 
     def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000):
         """
@@ -82,14 +82,6 @@ class Portfolio(Base):
 
         self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
-    def add_assets_from_list(self, ticker_list, start_date, end_date=None, get_fundamentals=True, get_ohlcv=True):
-        # TODO: determine if this is even needed
-        for ticker in ticker_list:
-            if self.owned_assets.get(ticker):
-                raise AssetExistsError('Asset is already in the {} owned_assets dict.'.format(self.__class__))
-            self.owned_assets[ticker] = Stock(ticker=ticker, start_date=start_date, end_date=end_date,
-                                              get_fundamentals=get_fundamentals, get_ohlcv=get_ohlcv)
-
     def make_trade(self, ticker, qty, action, price_per_share=None, trade_date=None):
         """
         Buy or sell an asset from the asset universe.
@@ -120,7 +112,7 @@ class Portfolio(Base):
         """
         Create a new :class:``OwnedStock`` object associated with this portfolio as well as update the cash position
 
-        :param qty: how many shares are being bought or sold.
+        :param qty: how many shares are being bought or sold.\r
             If the position is a **long** position use a negative number to close it and positive to open it.
             If the position is a **short** position use a negative number to open it and positive to close it.
         :type qty: int
@@ -141,6 +133,7 @@ class Portfolio(Base):
         if action.lower() == 'sell':
             # if selling an asset that is not in the portfolio that means it has to be a short sale.
             position = 'short'
+            qty *= -1
         elif action.lower() == 'buy':
             position = 'long'
         else:
@@ -179,6 +172,11 @@ class Portfolio(Base):
         This method processes the trade and then writes the results to the database.
         """
 
+        if action.lower() == 'sell':
+            qty *= -1
+        elif action.lower() != 'buy':
+            raise InvalidActionError('action must be either "buy" or "sell". {} was provided'.format(action))
+
         owned_asset = owned_asset.make_trade(qty=qty, price_per_share=price_per_share)
 
         if owned_asset.shares_owned != 0:
@@ -201,9 +199,11 @@ class Portfolio(Base):
         """
         Calculate the total value of the ``Portfolio`` owned_assets
 
-        :param include_cash: should cash be included in the calculation, or just get the total value of the owned_assets
+        :param include_cash:
+            should cash be included in the calculation, or just get the total value of the owned_assets
         :type include_cash: bool
-        :return: the total value of the portfolio at a given moment in time
+        :return:
+            the total value of the portfolio at a given moment in time
         :rtype: float
         """
 
@@ -218,8 +218,12 @@ class Portfolio(Base):
             session.add(self)
         return total_value
 
-    def portfolio_return(self):
-        pass
+    def return_on_owned_assets(self):
+        """Get the total return of the portfolio's current owned assets"""
+        roi = 0.0
+        for asset in self.owned_assets.values():
+            roi += asset.return_on_investment()
+        return roi
 
     def sma(self):
         for ticker, stock in self.owned_assets.items():
