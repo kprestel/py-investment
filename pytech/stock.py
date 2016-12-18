@@ -14,6 +14,8 @@ from scrapy.utils.log import configure_logging
 from scrapy.utils.project import get_project_settings
 from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy import orm
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import AbstractConcreteBase
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship
@@ -182,10 +184,11 @@ class Stock(Asset):
     @orm.reconstructor
     def init_on_load(self):
         """If the user wanted the ohlc_series then recreate it when this object is loaded again"""
-        if self.get_ohlcv:
-            self.ohlcv = self.get_ohlcv_series()
-        else:
-            self.ohlcv = None
+        self.get_ohlcv_series()
+        # if self.get_ohlcv:
+        #     self.get_ohlcv_series()
+        # else:
+        #     self.ohlcv = None
         quote = self.get_price_quote()
         self.latest_price = quote.price
         self.latest_price_time = quote.time
@@ -258,8 +261,26 @@ class Stock(Asset):
     # TECHNICAL INDICATORS/ANALYSIS
 
     def simple_moving_average(self, period=50, column='Adj Close'):
-        return pd.Series(self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean(),
-                         name='{} day SMA Ticker: {}'.format(period, self.ticker)).dropna()
+        table_name = 'sma_test'
+        # stmt = text('SELECT * FROM sma_test WHERE asset_id = :asset_id')
+        # stmt.bindparams(asset_id=self.id)
+        sql = 'SELECT * FROM sma_test WHERE asset_id = :asset_id'
+        conn = db.raw_connection()
+        try:
+            # TODO: parse dates
+            df = pd.read_sql(sql, con=conn, params={'asset_id': self.id})
+        except OperationalError:
+            logger.exception('error in query')
+            sma_ts =  pd.Series(self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean()).dropna()
+            db.df_to_sql(sma_ts, 'sma_test', asset_id=self.id)
+            print('creating')
+            print(sma_ts)
+            return sma_ts
+            # return sma_ts
+        else:
+            print('found')
+            print(df)
+            return df
 
     def simple_moving_median(self, period=50, column='Adj Close'):
         """
@@ -557,7 +578,7 @@ class Stock(Asset):
         it signals to sell short when indicators crosses under +0.5 or crosses under -0.5 if it has not previously crossed +.05
         """
         import numpy as np
-        v1 = pd.Series(.1 * (self._rsi_computation(ts=self.ohlcv, period=rsi_period, column=column) - 50),
+        v1 = pd.Series(.1 * (self._rsi_computation(period=rsi_period, column=column) - 50),
                        name='v1')
         v2 = pd.Series(self._weighted_moving_average_computation(ts=v1, period=wma_period, column=column),
                        index=v1.index)
@@ -857,9 +878,11 @@ class Stock(Asset):
         relative_strength = avg_gain / avg_loss
         return pd.Series(100 - (100 / (1 + relative_strength)))
 
-    def _weighted_moving_average_computation(self, period, column):
+    def _weighted_moving_average_computation(self, period, column, ts=None):
         wma = []
-        for chunk in self._chunks(period=period, column=column):
+        if ts is None:
+            ts = self.ohlcv
+        for chunk in self._chunks(period=period, column=column, ts=ts):
             # TODO: figure out a better way to handle this. this is better than a catch all except though
             try:
                 wma.append(self.chunked_weighted_moving_average(chunk=chunk, period=period))
@@ -868,7 +891,7 @@ class Stock(Asset):
         wma.reverse()
         return wma
 
-    def _chunks(self, period, column):
+    def _chunks(self, period, column, ts=None):
         """
         :param ts: Timeseries
         :param period: int, the amount of chunks needed
@@ -877,11 +900,13 @@ class Stock(Asset):
 
         creates n chunks based on the number of periods
         """
+        if ts is None:
+            ts = self.ohlcv
         # reverse the ts
         try:
-            ts_rev = self.ohlcv[column].iloc[::-1]
+            ts_rev = ts[column].iloc[::-1]
         except KeyError:
-            ts_rev = self.ohlcv.iloc[::-1]
+            ts_rev = ts.iloc[::-1]
         for i in enumerate(ts_rev):
             chunk = ts_rev.iloc[i[0]:i[0] + period]
             if len(chunk) != period:

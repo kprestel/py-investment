@@ -1,6 +1,18 @@
 from contextlib import contextmanager
 from functools import wraps
-from pytech import Session
+from pytech import Session, engine
+import pandas as pd
+
+def df_to_sql(df, table_name, asset_id):
+    df = pd.DataFrame(df)
+    df['asset_id'] = asset_id
+    df.to_sql(table_name, con=engine, if_exists='append')
+    # return df
+
+# @contextmanager
+def raw_connection(*args, **kwargs):
+    return engine
+
 
 @contextmanager
 def query_session():

@@ -31,6 +31,28 @@ def tables():
     Base.metadata.create_all(engine)
     yield
 
+@pytest.yield_fixture(autouse=True)
+def raw_connection_mock(monkeypatch):
+    # @contextmanager
+    def raw_conn(*args, **kwargs):
+        return engine
+        # conn = engine.connect()
+        # conn.begin()
+        # yield conn
+        # conn.close()
+    monkeypatch.setattr('pytech.db_utils.df_to_sql', raw_conn)
+
+
+
+@pytest.yield_fixture(autouse=True)
+def df_to_sql_mock(monkeypatch):
+    def df_to_sql(df, table_name, asset_id):
+        df = pd.DataFrame(df)
+        df['asset_id'] = asset_id
+        df.to_sql(table_name, con=engine, if_exists='replace')
+
+    monkeypatch.setattr('pytech.db_utils.df_to_sql', df_to_sql)
+
 
 @pytest.yield_fixture(autouse=True)
 def mock_session(monkeypatch):
@@ -149,7 +171,7 @@ def test_session():
 @pytest.fixture(scope='class')
 def stock_universe():
     """Write stocks to the DB"""
-    Stock.from_list(ticker_list=['AAPL'], start='20160901', end='20161201', get_fundamentals=True,
+    Stock.from_list(ticker_list=['AAPL'], start='20160901', end='20161201', get_fundamentals=False,
                     get_ohlcv=True)
 
 
@@ -208,6 +230,7 @@ class TestStock(object):
 
 @pytest.mark.usefixtures('stock_universe')
 class TestPortfolio(object):
+    @pytest.mark.skip('for now')
     def test_make_trade(self):
         portfolio = Portfolio()
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
@@ -224,6 +247,9 @@ class TestPortfolio(object):
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
         aapl = portfolio.owned_assets.get('AAPL')
         portfolio.return_on_owned_assets()
+        df_1 = aapl.asset.simple_moving_average()
+        df_2 = aapl.asset.simple_moving_average()
+        assert df_1.all() == df_2.all()
         assert aapl.shares_owned == 200
         portfolio.make_trade(ticker='AAPL', qty=100, action='sell')
         assert aapl.shares_owned == 100
