@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta, datetime
 
 import pandas_datareader.data as web
+from sqlalchemy import Boolean
 from sqlalchemy import Column, Numeric, String, DateTime, Integer
 from sqlalchemy import Float
 from sqlalchemy import ForeignKey
@@ -10,12 +11,14 @@ from sqlalchemy import orm
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
+from sqlalchemy_utils import generic_relationship
 
 import pytech.db_utils as db
 import pytech.utils as utils
 from pytech.base import Base
-from pytech.exceptions import AssetExistsError, InvalidActionError
+from pytech.exceptions import AssetExistsError, InvalidActionError, PyInvestmentError
 from pytech.stock import Stock, OwnedAsset, Asset
+from pytech.enums import TradeActions, OrderStatus, AssetPosition
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +126,7 @@ class Portfolio(Base):
             (default: now)
         :type trade_date: datetime
         :return: None
+        :raises InvalidActionError: If action is not 'BUY' or 'SELL'
         :raises AssetNotInUniverseError: when an asset is traded that does not yet exist in the Universe
 
         This method processes the trade and then writes the results to the database. It will create a new instance of
@@ -130,14 +134,14 @@ class Portfolio(Base):
         """
 
         asset = Asset.get_asset_from_universe(ticker=ticker)
-        if action.lower() == 'sell':
+        action = TradeActions.check_if_valid(action)
+
+        if action is TradeActions.SELL:
             # if selling an asset that is not in the portfolio that means it has to be a short sale.
-            position = 'short'
+            position = AssetPosition.SHORT
             qty *= -1
-        elif action.lower() == 'buy':
-            position = 'long'
         else:
-            raise InvalidActionError('action must either be "buy" or "sell". {} was provided'.format(action))
+            position = AssetPosition.LONG
 
         owned_asset = OwnedAsset(asset=asset, shares_owned=qty, average_share_price=price_per_share,
                                  position=position, portfolio=self)
@@ -167,15 +171,15 @@ class Portfolio(Base):
         :param owned_asset: the asset that is already in the portfolio
         :type owned_asset: OwnedAsset
         :param action: **buy** or **sell**
+        :raises InvalidActionError:
         :type action: str
 
         This method processes the trade and then writes the results to the database.
         """
+        action = TradeActions.check_if_valid(action)
 
-        if action.lower() == 'sell':
+        if action.name == 'SELL':
             qty *= -1
-        elif action.lower() != 'buy':
-            raise InvalidActionError('action must be either "buy" or "sell". {} was provided'.format(action))
 
         owned_asset = owned_asset.make_trade(qty=qty, price_per_share=price_per_share)
 
@@ -229,6 +233,21 @@ class Portfolio(Base):
         for ticker, stock in self.owned_assets.items():
             yield stock.simple_moving_average()
 
+class Order(Base):
+    """Hold open orders"""
+    id = Column(Integer, primary_key=True)
+    asset_id = Column(Integer)
+    asset_type = Column(String)
+    asset = generic_relationship(asset_id, asset_type)
+    status = Column(String)
+    created = Column(DateTime)
+    stop = Column(Numeric)
+    limit = Column(Numeric)
+    stop_reached = Column(Boolean)
+    limit_reached = Column(Boolean)
+    qty = Column(Integer)
+
+
 
 class Trade(Base):
     """
@@ -264,10 +283,10 @@ class Trade(Base):
         else:
             self.trade_date = datetime.now()
 
-        if action.lower() == 'buy' or action.lower() == 'sell':
-            self.action = action.lower()
-        else:
-            raise InvalidActionError('action must be either "buy" or "sell". {} was provided.'.format(action))
+        try:
+            self.action = TradeActions.check_if_valid(action)
+        except PyInvestmentError:
+            raise InvalidActionError('action must be either "BUY" or "SELL". {} was provided.'.format(action))
 
         self.strategy = strategy.lower()
         self.ticker = ticker

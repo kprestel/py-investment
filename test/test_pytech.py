@@ -230,7 +230,7 @@ class TestStock(object):
 
 @pytest.mark.usefixtures('stock_universe')
 class TestPortfolio(object):
-    @pytest.mark.skip('for now')
+
     def test_make_trade(self):
         portfolio = Portfolio()
         portfolio.make_trade(ticker='AAPL', qty=100, action='buy')

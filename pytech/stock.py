@@ -27,7 +27,8 @@ import pytech.db_utils as db
 import pytech.utils as utils
 from crawler.spiders.edgar import EdgarSpider
 from pytech.base import Base
-from pytech.exceptions import InvalidPositionError, AssetNotInUniverseError
+from pytech.exceptions import InvalidPositionError, AssetNotInUniverseError, PyInvestmentError
+from pytech.enums import AssetPosition
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -1089,10 +1090,7 @@ class OwnedAsset(Base):
 
         self.asset = asset
         self.portfolio = portfolio
-        if position.lower() == 'long' or position.lower() == 'short':
-            self.position = position
-        else:
-            raise InvalidPositionError('position must be "long" or "short".  {} was provided'.format(position))
+        self.position = AssetPosition.check_if_valid(position)
 
         if purchase_date is None:
             self.purchase_date = datetime.now()
@@ -1147,7 +1145,8 @@ class OwnedAsset(Base):
         :param price: price per share
         :type price: long
         """
-        if self.position == 'short':
+        # if self.position == 'short':
+        if self.position == AssetPosition.SHORT:
             # short positions should have a negative number of shares owned but a positive total cost
             self.total_position_cost = (price * qty) * -1
             # but a negative total value
@@ -1162,7 +1161,8 @@ class OwnedAsset(Base):
         quote = self.asset.get_price_quote()
         self.latest_price = quote.price
         self.latest_price_time = quote.time
-        if self.position == 'short':
+        # if self.position == 'short':
+        if self.position == AssetPosition.SHORT:
             self.total_position_value = (self.latest_price * self.shares_owned) * -1
         else:
             self.total_position_value = self.latest_price * self.shares_owned
