@@ -33,6 +33,7 @@ logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+
 class PortfolioAsset(object):
     """
     Mixin object to create a one to many relationship with Portfolio
@@ -266,6 +267,7 @@ class Stock(Asset):
         # stmt.bindparams(asset_id=self.id)
         sql = 'SELECT * FROM sma_test WHERE asset_id = :asset_id'
         conn = db.raw_connection()
+        print(Base.metadata)
         try:
             # TODO: parse dates
             df = pd.read_sql(sql, con=conn, params={'asset_id': self.id})

@@ -1,7 +1,5 @@
 import re
 
-from sqlalchemy import Column
-from sqlalchemy import Integer
 from sqlalchemy.ext.declarative import as_declarative
 from sqlalchemy.ext.declarative import declared_attr
 

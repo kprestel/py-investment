@@ -40,7 +40,7 @@ def raw_connection_mock(monkeypatch):
         # conn.begin()
         # yield conn
         # conn.close()
-    monkeypatch.setattr('pytech.db_utils.df_to_sql', raw_conn)
+    monkeypatch.setattr('pytech.db_utils.raw_connection', raw_conn)
 
 
 
@@ -249,12 +249,15 @@ class TestPortfolio(object):
         portfolio.return_on_owned_assets()
         df_1 = aapl.asset.simple_moving_average()
         df_2 = aapl.asset.simple_moving_average()
-        assert df_1.all() == df_2.all()
+        print(df_1)
+        print(df_2)
+        test_df = df_1['Adj Close'] == df_2['Adj Close']
+        assert test_df.all() == True
         assert aapl.shares_owned == 200
         portfolio.make_trade(ticker='AAPL', qty=100, action='sell')
         assert aapl.shares_owned == 100
 
-    def test_make_trade_with_invaild_action(self):
+    def test_make_trade_with_invalid_action(self):
         portfolio = Portfolio()
         with pytest.raises(InvalidActionError):
             portfolio.make_trade(ticker='AAPL', qty=111, action='nothing')
