@@ -1088,7 +1088,7 @@ class OwnedAsset(Base):
 
     def __init__(self, asset, portfolio, shares_owned, position, average_share_price=None, purchase_date=None):
 
-        if issubclass(asset, Asset):
+        if issubclass(asset.__class__, Asset):
             self.asset = asset
         else:
             raise NotAnAssetError('asset must be an instance of a subclass of the Asset class. {} was provided'
@@ -1150,7 +1150,7 @@ class OwnedAsset(Base):
         :type price: long
         """
         # if self.position == 'short':
-        if self.position == AssetPosition.SHORT:
+        if self.position is AssetPosition.SHORT:
             # short positions should have a negative number of shares owned but a positive total cost
             self.total_position_cost = (price * qty) * -1
             # but a negative total value
@@ -1166,7 +1166,7 @@ class OwnedAsset(Base):
         self.latest_price = quote.price
         self.latest_price_time = quote.time
         # if self.position == 'short':
-        if self.position == AssetPosition.SHORT:
+        if self.position is AssetPosition.SHORT:
             self.total_position_value = (self.latest_price * self.shares_owned) * -1
         else:
             self.total_position_value = self.latest_price * self.shares_owned

@@ -16,9 +16,10 @@ class AutoNumber(Enum):
             return value.name
         for name, member in cls.__members__.items():
             if member.name == value.upper():
-                return member.name
+                return member
         else:
             return None
+
 
 class TradeAction(AutoNumber):
     BUY = ()
@@ -31,6 +32,7 @@ class TradeAction(AutoNumber):
             return name
         else:
             raise InvalidActionError('action must either be "BUY" or "SELL". {} was provided'.format(value))
+
 
 class OrderStatus(AutoNumber):
     OPEN = ()
@@ -45,14 +47,31 @@ class OrderStatus(AutoNumber):
         if name is not None:
             return name
         else:
-            raise InvalidOrderStatusError('order_status must either be "OPEN", "FILLED", "CANCELLED", "REJECTED", or "HELD". {} was provided'
-                                          .format(value))
+            raise InvalidOrderStatusError(
+                'order_status must either be "OPEN", "FILLED", "CANCELLED", "REJECTED", or "HELD". {} was provided'
+                .format(value))
+
 
 class OrderType(AutoNumber):
+    """Valid Order Types"""
+    # TODO: document this better
     STOP = ()
     LIMIT = ()
     STOP_LIMIT = ()
     MARKET = ()
+
+    @classmethod
+    def check_if_valid(cls, value):
+        name = super().check_if_valid(value)
+        if name is not None:
+            return name
+        else:
+            raise InvalidOrderTypeError('order_type must either be "STOP", "LIMIT", "STOP_LIMIT", or "MARKET".'
+                                        '{} was provided'.format(value))
+
+
+class OrderSubType(AutoNumber):
+    """Valid OrderSubtypes """
     ALL_OR_NONE = ()
     GOOD_TIL_CANCELED = ()
     DAY = ()
@@ -63,8 +82,8 @@ class OrderType(AutoNumber):
         if name is not None:
             return name
         else:
-            raise InvalidOrderTypeError('order_type must either be "STOP", "LIMIT", "STOP_LIMIT", "MARKET", "ALL_OR_NONE", '
-                                        '"GOOD_TILL_CANCELED", "DAY". {} was provided'.format(value))
+            raise InvalidOrderTypeError('order_subtype must either be "ALL_OR_NONE", "GOOD_TIL_CANCELED", or "DAY".'
+                                        '{} was provided'.format(value))
 
 
 class AssetPosition(AutoNumber):

@@ -1,24 +1,18 @@
 # from pytech import Session
 import logging
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 
 import pandas_datareader.data as web
-from sqlalchemy import Boolean
-from sqlalchemy import Column, Numeric, String, DateTime, Integer
-from sqlalchemy import Float
-from sqlalchemy import ForeignKey
-from sqlalchemy import orm
-from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy import Column, DateTime, Float, Integer, String, orm
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
-from sqlalchemy_utils import generic_relationship
 
 import pytech.db_utils as db
 import pytech.utils as utils
+from pytech.order import Trade
 from pytech.base import Base
-from pytech.exceptions import AssetExistsError, InvalidActionError, PyInvestmentError, NotAnAssetError
-from pytech.stock import Stock, OwnedAsset, Asset
-from pytech.enums import TradeAction, OrderStatus, AssetPosition
+from pytech.enums import AssetPosition, TradeAction
+from pytech.stock import Asset, OwnedAsset
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +188,7 @@ class Portfolio(Base):
         """
         action = TradeAction.check_if_valid(action)
 
-        if action == TradeAction.SELL:
+        if action is TradeAction.SELL:
             qty *= -1
 
         owned_asset = owned_asset.make_trade(qty=qty, price_per_share=price_per_share)
@@ -258,189 +252,3 @@ class Portfolio(Base):
     def sma(self):
         for ticker, stock in self.owned_assets.items():
             yield stock.simple_moving_average()
-
-
-class Order(Base):
-    """Hold open orders"""
-
-    id = Column(Integer, primary_key=True)
-    asset_id = Column(Integer)
-    asset_type = Column(String)
-    asset = generic_relationship(asset_id, asset_type)
-    portfolio_id = Column(Integer, ForeignKey('portfolio.id'), primary_key=True)
-    status = Column(String)
-    created = Column(DateTime)
-    close_date = Column(DateTime)
-    commission = Column(Numeric)
-    stop = Column(Numeric)
-    limit = Column(Numeric)
-    stop_reached = Column(Boolean)
-    limit_reached = Column(Boolean)
-    qty = Column(Integer)
-    filled = Column(Integer)
-    action = Column(String)
-    reason = Column(String)
-
-    def __init__(self, asset, portfolio, action, stop=None, limit=None, qty=0, filled=0, commission=0,
-                 created=datetime.now()):
-        """
-        Order constructor
-
-        :param asset: The asset for which the order is associated with
-        :type asset: Asset
-        :param portfolio: The portfolio that the asset is associated with
-        :type portfolio: Portfolio
-        :param action: Either BUY or SELL
-        :type action: TradeAction
-        :param stop: The price at which to execute a stop order. If this is not a stop order then leave as None
-        :type stop: str
-        :param limit: The price at which to execute a limit order. If this is not a limit order then leave as None
-        :type limit: str
-        :param qty: The amount of shares the order is for.
-            This should be negative if it is a sell order and positive if it is a buy order.
-        :type qty: int
-        :param filled: How many shares of the order have already been filled, if any.
-        :type filled: int
-        :param commission: The amount of commission associated with placing the order.
-        :type commission: int
-        :param created: The date and time that the order was created
-        :type created: datetime
-        """
-
-        if issubclass(asset, Asset):
-            self.asset = asset
-        else:
-            raise NotAnAssetError('asset must be an instance of a subclass of the Asset class. {} was provided'
-                                  .format(type(asset)))
-
-        self.portfolio = portfolio
-        self.action = TradeAction.check_if_valid(action)
-
-        if self.action == TradeAction.SELL:
-            if qty > 0:
-                self.qty = qty * -1
-            else:
-                self.qty = qty
-        else:
-            self.qty = qty
-
-        self.commission = commission
-        self.stop = stop
-        self.limit = limit
-        self.stop_reached = False
-        self.limit_reached = False
-        self.filled = filled
-        self._status = OrderStatus.OPEN
-        self.reason = None
-        self.created = created
-        self.close_date = None
-
-    @property
-    def status(self):
-        if not self.open_amount:
-            return OrderStatus.FILLED
-        elif self._status == OrderStatus.HELD and self.filled:
-            return OrderStatus.OPEN
-        else:
-            return self._status
-
-    @status.setter
-    def status(self, status):
-        self._status = OrderStatus.check_if_valid(status)
-
-    @property
-    def triggered(self):
-        if self.stop is not None and not self.stop_reached:
-            return False
-
-        if self.limit is not None and not self.limit_reached:
-            return False
-
-        return True
-
-    @property
-    def open(self):
-        return self.status in [OrderStatus.OPEN, OrderStatus.HELD]
-
-    @property
-    def open_amount(self):
-        return self.qty - self.filled
-
-    def cancel(self, reason=''):
-        self.status = OrderStatus.CANCELLED
-        self.reason = reason
-
-    def reject(self, reason=''):
-        self.status = OrderStatus.REJECTED
-        self.reason = reason
-
-    def hold(self, reason=''):
-        self.status = OrderStatus.HELD
-        self.reason = reason
-
-    def check_order_triggers(self):
-        """
-        Check if any of the order's triggers should be pulled and execute a trade and then delete the order.
-        :return:
-        :rtype:
-        """
-        pass
-
-
-class Trade(Base):
-    """
-    This class is used to make trades and keep trade of past trades
-    """
-    id = Column(Integer, primary_key=True)
-    trade_date = Column(DateTime)
-    action = Column(String)
-    strategy = Column(String)
-    qty = Column(Integer)
-    price_per_share = Column(Numeric)
-    corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
-    net_trade_value = Column(Numeric)
-    ticker = Column(String)
-
-    # owned_stock_id = Column(Integer, ForeignKey('owned_stock.id'))
-    # owned_stock = relationship('OwnedStock')
-    # corresponding_trade = relationship('Trade', remote_side=[id])
-
-    def __init__(self, qty, price_per_share, strategy, action, trade_date=None, ticker=None):
-        """
-        :param trade_date: datetime, corresponding to the date and time of the trade date
-        :param qty: int, number of shares traded
-        :param price_per_share: float
-            price per individual share in the trade or the average share price in the trade
-        :param ticker:
-            a :class: Stock, the asset object that was traded
-        :param action: str, must be *buy* or *sell* depending on what kind of trade it was
-        :param position: str, must be *long* or *short*
-        """
-        if trade_date:
-            self.trade_date = utils.parse_date(trade_date)
-        else:
-            self.trade_date = datetime.now()
-
-        try:
-            self.action = TradeAction.check_if_valid(action)
-        except PyInvestmentError:
-            raise InvalidActionError('action must be either "BUY" or "SELL". {} was provided.'.format(action))
-
-        self.strategy = strategy.lower()
-        self.ticker = ticker
-        self.qty = qty
-        self.price_per_share = price_per_share
-        self.corresponding_trade_id = self._get_corresponding_trade_id(ticker=ticker)
-
-    @classmethod
-    def _get_corresponding_trade_id(cls, ticker):
-        """Get the most recent trade's id"""
-        with db.query_session() as session:
-            corresponding_trade = session.query(cls) \
-                .filter(cls.ticker == ticker) \
-                .order_by(cls.trade_date.desc()) \
-                .first()
-        try:
-            return corresponding_trade.id
-        except AttributeError:
-            return None
