@@ -27,12 +27,11 @@ import pytech.db_utils as db
 import pytech.utils as utils
 from crawler.spiders.edgar import EdgarSpider
 from pytech.base import Base
-from pytech.exceptions import InvalidPositionError, AssetNotInUniverseError, PyInvestmentError
+from pytech.exceptions import InvalidPositionError, AssetNotInUniverseError, PyInvestmentError, NotAnAssetError
 from pytech.enums import AssetPosition
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 
 class PortfolioAsset(object):
@@ -274,7 +273,8 @@ class Stock(Asset):
             df = pd.read_sql(sql, con=conn, params={'asset_id': self.id})
         except OperationalError:
             logger.exception('error in query')
-            sma_ts =  pd.Series(self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean()).dropna()
+            sma_ts = pd.Series(
+                self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean()).dropna()
             db.df_to_sql(sma_ts, 'sma_test', asset_id=self.id)
             print('creating')
             print(sma_ts)
@@ -1088,7 +1088,11 @@ class OwnedAsset(Base):
 
     def __init__(self, asset, portfolio, shares_owned, position, average_share_price=None, purchase_date=None):
 
-        self.asset = asset
+        if issubclass(asset, Asset):
+            self.asset = asset
+        else:
+            raise NotAnAssetError('asset must be an instance of a subclass of the Asset class. {} was provided'
+                                  .format(type(asset)))
         self.portfolio = portfolio
         self.position = AssetPosition.check_if_valid(position)
 
@@ -1522,5 +1526,3 @@ class Fundamental(Base, HasStock):
         """
         df = {k: v for k, v in fundamental_dict.items() if k in cls.__dict__}
         return cls(**df)
-
-

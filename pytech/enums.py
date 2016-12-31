@@ -1,5 +1,6 @@
 from enum import Enum
-from pytech.exceptions import PyInvestmentError, InvalidActionError, InvalidPositionError
+from pytech.exceptions import PyInvestmentError, InvalidActionError, InvalidPositionError, InvalidOrderStatusError, \
+    InvalidOrderTypeError
 
 
 class AutoNumber(Enum):
@@ -19,7 +20,7 @@ class AutoNumber(Enum):
         else:
             return None
 
-class TradeActions(AutoNumber):
+class TradeAction(AutoNumber):
     BUY = ()
     SELL = ()
 
@@ -37,6 +38,34 @@ class OrderStatus(AutoNumber):
     CANCELLED = ()
     REJECTED = ()
     HELD = ()
+
+    @classmethod
+    def check_if_valid(cls, value):
+        name = super().check_if_valid(value)
+        if name is not None:
+            return name
+        else:
+            raise InvalidOrderStatusError('order_status must either be "OPEN", "FILLED", "CANCELLED", "REJECTED", or "HELD". {} was provided'
+                                          .format(value))
+
+class OrderType(AutoNumber):
+    STOP = ()
+    LIMIT = ()
+    STOP_LIMIT = ()
+    MARKET = ()
+    ALL_OR_NONE = ()
+    GOOD_TIL_CANCELED = ()
+    DAY = ()
+
+    @classmethod
+    def check_if_valid(cls, value):
+        name = super().check_if_valid(value)
+        if name is not None:
+            return name
+        else:
+            raise InvalidOrderTypeError('order_type must either be "STOP", "LIMIT", "STOP_LIMIT", "MARKET", "ALL_OR_NONE", '
+                                        '"GOOD_TILL_CANCELED", "DAY". {} was provided'.format(value))
+
 
 class AssetPosition(AutoNumber):
     LONG = ()

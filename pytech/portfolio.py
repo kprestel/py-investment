@@ -16,9 +16,9 @@ from sqlalchemy_utils import generic_relationship
 import pytech.db_utils as db
 import pytech.utils as utils
 from pytech.base import Base
-from pytech.exceptions import AssetExistsError, InvalidActionError, PyInvestmentError
+from pytech.exceptions import AssetExistsError, InvalidActionError, PyInvestmentError, NotAnAssetError
 from pytech.stock import Stock, OwnedAsset, Asset
-from pytech.enums import TradeActions, OrderStatus, AssetPosition
+from pytech.enums import TradeAction, OrderStatus, AssetPosition
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,10 @@ class Portfolio(Base):
     owned_assets = relationship('OwnedAsset', backref='portfolio',
                                 collection_class=attribute_mapped_collection('asset.ticker'),
                                 lazy='joined', cascade='save-update, all, delete-orphan')
+    orders = relationship('Order', backref='portfolio',
+                          collection_class=attribute_mapped_collection('asset.ticker'),
+                          lazy='joined', cascade='save-update, all, delete-orphan')
+
     # assets = association_proxy('owned_assets', 'asset')
 
     def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000):
@@ -75,6 +79,7 @@ class Portfolio(Base):
             self.end_date = utils.parse_date(end_date)
 
         self.owned_assets = {}
+        self.orders = {}
         self.benchmark_ticker = benchmark_ticker
         self.benchmark = web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         self.cash = float(starting_cash)
@@ -134,22 +139,33 @@ class Portfolio(Base):
         """
 
         asset = Asset.get_asset_from_universe(ticker=ticker)
-        action = TradeActions.check_if_valid(action)
+        action = TradeAction.check_if_valid(action)
 
-        if action is TradeActions.SELL:
+        if action is TradeAction.SELL:
             # if selling an asset that is not in the portfolio that means it has to be a short sale.
             position = AssetPosition.SHORT
             qty *= -1
         else:
             position = AssetPosition.LONG
 
-        owned_asset = OwnedAsset(asset=asset, shares_owned=qty, average_share_price=price_per_share,
-                                 position=position, portfolio=self)
+        owned_asset = OwnedAsset(
+            asset=asset,
+            shares_owned=qty,
+            average_share_price=price_per_share,
+            position=position,
+            portfolio=self
+        )
 
         self.cash += owned_asset.total_position_cost
         self.owned_assets[owned_asset.asset.ticker] = owned_asset
-        trade = Trade(qty=qty, price_per_share=price_per_share, ticker=owned_asset.asset.ticker, action=action,
-                      strategy='Open new {} position'.format(position), trade_date=trade_date)
+        trade = Trade(
+            qty=qty,
+            price_per_share=price_per_share,
+            ticker=owned_asset.asset.ticker,
+            action=action,
+            strategy='Open new {} position'.format(position),
+            trade_date=trade_date
+        )
         with db.transactional_session(auto_close=False) as session:
             session.add(session.merge(self))
             session.add(trade)
@@ -176,9 +192,9 @@ class Portfolio(Base):
 
         This method processes the trade and then writes the results to the database.
         """
-        action = TradeActions.check_if_valid(action)
+        action = TradeAction.check_if_valid(action)
 
-        if action.name == 'SELL':
+        if action == TradeAction.SELL:
             qty *= -1
 
         owned_asset = owned_asset.make_trade(qty=qty, price_per_share=price_per_share)
@@ -186,15 +202,25 @@ class Portfolio(Base):
         if owned_asset.shares_owned != 0:
             self.owned_assets[owned_asset.asset.ticker] = owned_asset
             self.cash += owned_asset.total_position_cost
-            trade = Trade(qty=qty, price_per_share=price_per_share, ticker=owned_asset.asset.ticker,
-                          strategy='Update an existing {} position'.format(owned_asset.position), action=action,
-                          trade_date=trade_date)
+            trade = Trade(
+                qty=qty,
+                price_per_share=price_per_share,
+                ticker=owned_asset.asset.ticker,
+                strategy='Update an existing {} position'.format(owned_asset.position),
+                action=action,
+                trade_date=trade_date
+            )
         else:
             self.cash += owned_asset.total_position_value
             del self.owned_assets[owned_asset.asset.ticker]
-            trade = Trade(qty=qty, price_per_share=price_per_share, ticker=owned_asset.asset.ticker,
-                          strategy='Close an existing {} position'.format(owned_asset.position), action=action,
-                          trade_date=trade_date)
+            trade = Trade(
+                qty=qty,
+                price_per_share=price_per_share,
+                ticker=owned_asset.asset.ticker,
+                strategy='Close an existing {} position'.format(owned_asset.position),
+                action=action,
+                trade_date=trade_date
+            )
         with db.transactional_session() as session:
             session.add(session.merge(self))
             session.add(trade)
@@ -233,20 +259,132 @@ class Portfolio(Base):
         for ticker, stock in self.owned_assets.items():
             yield stock.simple_moving_average()
 
+
 class Order(Base):
     """Hold open orders"""
+
     id = Column(Integer, primary_key=True)
     asset_id = Column(Integer)
     asset_type = Column(String)
     asset = generic_relationship(asset_id, asset_type)
+    portfolio_id = Column(Integer, ForeignKey('portfolio.id'), primary_key=True)
     status = Column(String)
     created = Column(DateTime)
+    close_date = Column(DateTime)
+    commission = Column(Numeric)
     stop = Column(Numeric)
     limit = Column(Numeric)
     stop_reached = Column(Boolean)
     limit_reached = Column(Boolean)
     qty = Column(Integer)
+    filled = Column(Integer)
+    action = Column(String)
+    reason = Column(String)
 
+    def __init__(self, asset, portfolio, action, stop=None, limit=None, qty=0, filled=0, commission=0,
+                 created=datetime.now()):
+        """
+        Order constructor
+
+        :param asset: The asset for which the order is associated with
+        :type asset: Asset
+        :param portfolio: The portfolio that the asset is associated with
+        :type portfolio: Portfolio
+        :param action: Either BUY or SELL
+        :type action: TradeAction
+        :param stop: The price at which to execute a stop order. If this is not a stop order then leave as None
+        :type stop: str
+        :param limit: The price at which to execute a limit order. If this is not a limit order then leave as None
+        :type limit: str
+        :param qty: The amount of shares the order is for.
+            This should be negative if it is a sell order and positive if it is a buy order.
+        :type qty: int
+        :param filled: How many shares of the order have already been filled, if any.
+        :type filled: int
+        :param commission: The amount of commission associated with placing the order.
+        :type commission: int
+        :param created: The date and time that the order was created
+        :type created: datetime
+        """
+
+        if issubclass(asset, Asset):
+            self.asset = asset
+        else:
+            raise NotAnAssetError('asset must be an instance of a subclass of the Asset class. {} was provided'
+                                  .format(type(asset)))
+
+        self.portfolio = portfolio
+        self.action = TradeAction.check_if_valid(action)
+
+        if self.action == TradeAction.SELL:
+            if qty > 0:
+                self.qty = qty * -1
+            else:
+                self.qty = qty
+        else:
+            self.qty = qty
+
+        self.commission = commission
+        self.stop = stop
+        self.limit = limit
+        self.stop_reached = False
+        self.limit_reached = False
+        self.filled = filled
+        self._status = OrderStatus.OPEN
+        self.reason = None
+        self.created = created
+        self.close_date = None
+
+    @property
+    def status(self):
+        if not self.open_amount:
+            return OrderStatus.FILLED
+        elif self._status == OrderStatus.HELD and self.filled:
+            return OrderStatus.OPEN
+        else:
+            return self._status
+
+    @status.setter
+    def status(self, status):
+        self._status = OrderStatus.check_if_valid(status)
+
+    @property
+    def triggered(self):
+        if self.stop is not None and not self.stop_reached:
+            return False
+
+        if self.limit is not None and not self.limit_reached:
+            return False
+
+        return True
+
+    @property
+    def open(self):
+        return self.status in [OrderStatus.OPEN, OrderStatus.HELD]
+
+    @property
+    def open_amount(self):
+        return self.qty - self.filled
+
+    def cancel(self, reason=''):
+        self.status = OrderStatus.CANCELLED
+        self.reason = reason
+
+    def reject(self, reason=''):
+        self.status = OrderStatus.REJECTED
+        self.reason = reason
+
+    def hold(self, reason=''):
+        self.status = OrderStatus.HELD
+        self.reason = reason
+
+    def check_order_triggers(self):
+        """
+        Check if any of the order's triggers should be pulled and execute a trade and then delete the order.
+        :return:
+        :rtype:
+        """
+        pass
 
 
 class Trade(Base):
@@ -284,7 +422,7 @@ class Trade(Base):
             self.trade_date = datetime.now()
 
         try:
-            self.action = TradeActions.check_if_valid(action)
+            self.action = TradeAction.check_if_valid(action)
         except PyInvestmentError:
             raise InvalidActionError('action must be either "BUY" or "SELL". {} was provided.'.format(action))
 
@@ -306,5 +444,3 @@ class Trade(Base):
             return corresponding_trade.id
         except AttributeError:
             return None
-
-

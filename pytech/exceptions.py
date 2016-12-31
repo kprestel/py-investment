@@ -23,6 +23,18 @@ class AssetNotInUniverseError(PyInvestmentError):
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
 
+class NotAnAssetError(PyInvestmentError):
+    """Raised when a subclass of :class:``Asset`` is required but another object is provided"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+
+
+class NotAPortfolioError(PyInvestmentError):
+    """Raised when a :class:``Portfolio`` is required but another object is provided"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+
+
 class InvalidPositionError(PyInvestmentError):
     """Raised when a position is not either long or short"""
     def __init__(self, *args, **kwargs):
@@ -31,5 +43,17 @@ class InvalidPositionError(PyInvestmentError):
 
 class InvalidActionError(PyInvestmentError):
     """Raised when a :class:``Trade`` action is not either buy or sell"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+
+
+class InvalidOrderStatusError(PyInvestmentError):
+    """Raised when an order status is not valid"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+
+
+class InvalidOrderTypeError(PyInvestmentError):
+    """Raised when an order type is not valid"""
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
