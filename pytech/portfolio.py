@@ -36,6 +36,7 @@ class Portfolio(Base):
     benchmark_ticker = Column(String)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
+    trading_cal = Column(String)
     owned_assets = relationship('OwnedAsset', backref='portfolio',
                                 collection_class=attribute_mapped_collection('asset.ticker'),
                                 lazy='joined', cascade='save-update, all, delete-orphan')
@@ -45,7 +46,7 @@ class Portfolio(Base):
 
     # assets = association_proxy('owned_assets', 'asset')
 
-    def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000):
+    def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000, trading_cal='NYSE'):
         """
         :param start_date: a date, the start date to the load the benchmark as of.
             (default: end_date - 365 days)
@@ -59,6 +60,9 @@ class Portfolio(Base):
         :param starting_cash: the amount of dollars to allocate to the portfolio initially
             (default: 10000000)
         :type starting_cash: float
+        :param trading_cal: The name of the trading calendar to use.
+            default: NYSE
+        :type trading_cal: str
         """
 
         if start_date is None:
@@ -72,6 +76,8 @@ class Portfolio(Base):
         else:
             self.end_date = utils.parse_date(end_date)
 
+
+        self.trading_cal = trading_cal
         self.owned_assets = {}
         self.orders = {}
         self.benchmark_ticker = benchmark_ticker

@@ -1,6 +1,10 @@
 from datetime import datetime
 from sys import float_info
 import numpy as np
+import pandas as pd
+from pandas.tseries.offsets import DateOffset
+import pandas_market_calendars as mcal
+from dateutil.relativedelta import relativedelta
 
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric, Boolean
 from sqlalchemy_utils import generic_relationship
@@ -8,9 +12,12 @@ from sqlalchemy_utils import generic_relationship
 from pytech import Base, utils
 import pytech.db_utils as db
 from pytech.enums import TradeAction, OrderStatus, OrderType, OrderSubType
-from pytech.exceptions import NotAnAssetError, PyInvestmentError, InvalidActionError
+from pytech.exceptions import NotAnAssetError, PyInvestmentError, InvalidActionError, NotAPortfolioError
 from pytech.stock import Asset
+import logging
 
+
+logger = logging.getLogger(__name__)
 
 
 class Order(Base):
@@ -76,14 +83,18 @@ class Order(Base):
         See :class:`pytech.enums.OrderType` to see valid order types
         See :class:`pytech.enums.OrderSubType` to see valid order sub types
         """
+        from pytech import Portfolio
 
         if issubclass(asset.__class__, Asset):
             self.asset = asset
         else:
-            raise NotAnAssetError('asset must be an instance of a subclass of the Asset class. {} was provided'
-                                  .format(type(asset)))
+            raise NotAnAssetError(asset=type(asset))
 
-        self.portfolio = portfolio
+        if isinstance(portfolio, Portfolio):
+            self.portfolio = portfolio
+        else:
+            raise NotAPortfolioError(portfolio=type(portfolio))
+
         # TODO: validate that all of these inputs make sense together. e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)
         self.order_type = OrderType.check_if_valid(order_type)
@@ -210,7 +221,23 @@ class Order(Base):
     def check_order_expiration(self):
         """Check if the order should be closed due to passage of time."""
 
+        trading_cal = mcal.get_calendar(self.portfolio.trading_cal)
+        schedule = trading_cal.schedule(start_date=self.portfolio.start_date, end_date=self.portfolio.end_date)
 
+        if self.order_subtype is OrderSubType.DAY:
+            if not trading_cal.open_at_time(schedule, pd.Timestamp(datetime.now())):
+                logger.info('Canceling trade.')
+                self.cancel(reason='Market closed without executing order.')
+        elif self.order_subtype is OrderSubType.GOOD_TIL_CANCELED:
+            time_passed = relativedelta(self.created, datetime.now())
+            expr_date = self.created + DateOffset(days=self.max_days_open)
+            if datetime.today() == expr_date.date():
+                if not trading_cal.open_at_time(schedule, pd.Timestamp(datetime.now())):
+                    logger.info('Canceling trade.')
+                    self.cancel(reason='Max days of {} had passed without the underlying order executing.'
+                                .format(self.max_days_open))
+        else:
+            return
 
 
 class Trade(Base):

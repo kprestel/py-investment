@@ -17,6 +17,7 @@ numpy==1.11.2
 ordereddict==1.1
 pandas==0.19.0
 pandas-datareader==0.2.1
+pandas-market-calendars==0.1
 parsel==1.0.3
 pep8==1.7.0
 py==1.4.31
@@ -38,6 +39,7 @@ service-identity==16.0.0
 six==1.10.0
 SQLAlchemy==1.1.4
 SQLAlchemy-Utils==0.32.11
+toolz==0.8.2
 Twisted==16.5.0
 w3lib==1.15.0
 zope.interface==4.3.2

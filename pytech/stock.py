@@ -1092,8 +1092,7 @@ class OwnedAsset(Base):
             self.asset = asset
         else:
             raise NotAnAssetError(asset=type(asset))
-            # raise NotAnAssetError('asset must be an instance of a subclass of the Asset class. {} was provided'
-            #                       .format(type(asset)))
+
         self.portfolio = portfolio
         self.position = AssetPosition.check_if_valid(position)
 
