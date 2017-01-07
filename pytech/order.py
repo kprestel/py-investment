@@ -36,7 +36,7 @@ class Order(Base):
     order_type = Column(String)
 
     def __init__(self, asset, portfolio, action, order_type, stop=None, limit=None, qty=0, filled=0, commission=0,
-                 created=datetime.now(), order_subtype=OrderSubType.DAY):
+                 created=datetime.now(), order_subtype=OrderSubType.DAY, max_days_open=None):
         """
         Order constructor
 
@@ -64,6 +64,11 @@ class Order(Base):
         :type commission: int
         :param created: The date and time that the order was created
         :type created: datetime
+        :param max_days_open: The max calendar days that an order can stay open without being cancelled.
+            This parameter is not relevant to Day orders since they will be closed at the end of the day regardless.
+            default: None if the order_type is Day
+            default: 90 if the order_type is not Day
+        :type max_days_open: int
         :raises NotAnAssetError, InvalidActionError:
 
         NOTES
@@ -84,6 +89,11 @@ class Order(Base):
         self.order_type = OrderType.check_if_valid(order_type)
         self.order_subtype = OrderSubType.check_if_valid(order_subtype)
 
+        if self.order_subtype is not OrderSubType.DAY and max_days_open is None:
+            self.max_days_open = 90
+        else:
+            self.max_days_open = max_days_open
+
         if self.action is TradeAction.SELL:
             if qty > 0:
                 self.qty = qty * -1
@@ -101,6 +111,8 @@ class Order(Base):
         self._status = OrderStatus.OPEN
         self.reason = None
         self.created = utils.parse_date(created)
+        # the last time the order changed
+        self.last_updated = self.created
         self.close_date = None
 
     @property
@@ -152,11 +164,53 @@ class Order(Base):
         :return:
         :rtype:
         """
-
-
+        if self.order_type is OrderType.MARKET:
+            return True
 
         if self.triggered:
             return
+
+        current_price = self.asset.get_price_quote()
+        current_price = current_price.price
+
+        if self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.BUY:
+            if current_price >= self.stop:
+                self.stop_reached = True
+                self.last_updated = datetime.now()
+                if current_price >= self.limit:
+                    self.limit_reached = True
+        elif self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.SELL:
+            if current_price <= self.stop:
+                self.stop_reached = True
+                self.last_updated = datetime.now()
+                if current_price >= self.limit:
+                    self.limit_reached = True
+        elif self.order_type is OrderType.STOP and self.action is TradeAction.BUY:
+            if current_price >= self.stop:
+                self.stop_reached = True
+                self.last_updated = datetime.now()
+        elif self.order_type is OrderType.STOP and self.action is TradeAction.SELL:
+            if current_price <= self.stop:
+                self.stop_reached = True
+                self.last_updated = datetime.now()
+        elif self.order_type is OrderType.LIMIT and self.action is TradeAction.BUY:
+            if current_price >= self.limit:
+                self.limit_reached = True
+                self.last_updated = datetime.now()
+        elif self.order_type is OrderType.LIMIT and self.action is TradeAction.SELL:
+            if current_price <= self.limit:
+                self.limit_reached = True
+                self.last_updated = datetime.now()
+
+        if self.stop_reached and self.order_type is OrderType.STOP_LIMIT:
+            # change the STOP_LIMIT order to a LIMIT order
+            self.stop = None
+            self.order_type = OrderType.LIMIT
+
+    def check_order_expiration(self):
+        """Check if the order should be closed due to passage of time."""
+
+
 
 
 class Trade(Base):

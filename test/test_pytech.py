@@ -5,7 +5,7 @@ from os.path import join
 import pytest
 import pandas as pd
 from datetime import datetime
-from pytech.exceptions import InvalidActionError
+from pytech.exceptions import InvalidActionError, NotAnAssetError
 
 from sqlalchemy import create_engine
 from sqlalchemy import event
@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from pytech.base import Base
 from pytech.portfolio import Portfolio
-from pytech.stock import Stock, Fundamental, Asset
+from pytech.stock import Stock, Fundamental, Asset, OwnedAsset
 
 import logging
 
@@ -261,6 +261,16 @@ class TestPortfolio(object):
         portfolio = Portfolio()
         with pytest.raises(InvalidActionError):
             portfolio.make_trade(ticker='AAPL', qty=111, action='nothing')
+
+
+class TestOwnedAsset(object):
+
+    def test_owned_asset_constructor_exceptions(self):
+        portfolio = Portfolio()
+        with pytest.raises(NotAnAssetError):
+            owned_asset = OwnedAsset(asset='not an asset', portfolio=portfolio, shares_owned=12, position='LONG')
+
+
 
 
 @pytest.mark.skip(reason='I will fix it later')

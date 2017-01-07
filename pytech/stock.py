@@ -114,7 +114,7 @@ class Asset(Base, AbstractConcreteBase):
             if asset is not None:
                 return asset
             else:
-                raise AssetNotInUniverseError('Could not locate an asset with the ticker: {}'.format(ticker))
+                raise AssetNotInUniverseError(ticker=ticker)
 
     def get_price_quote(self):
         quote = namedtuple('Quote', 'price time')
@@ -1091,8 +1091,9 @@ class OwnedAsset(Base):
         if issubclass(asset.__class__, Asset):
             self.asset = asset
         else:
-            raise NotAnAssetError('asset must be an instance of a subclass of the Asset class. {} was provided'
-                                  .format(type(asset)))
+            raise NotAnAssetError(asset=type(asset))
+            # raise NotAnAssetError('asset must be an instance of a subclass of the Asset class. {} was provided'
+            #                       .format(type(asset)))
         self.portfolio = portfolio
         self.position = AssetPosition.check_if_valid(position)
 

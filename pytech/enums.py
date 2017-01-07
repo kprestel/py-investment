@@ -1,6 +1,6 @@
 from enum import Enum
 from pytech.exceptions import PyInvestmentError, InvalidActionError, InvalidPositionError, InvalidOrderStatusError, \
-    InvalidOrderTypeError
+    InvalidOrderTypeError, InvalidOrderSubTypeError
 
 
 class AutoNumber(Enum):
@@ -31,7 +31,7 @@ class TradeAction(AutoNumber):
         if name is not None:
             return name
         else:
-            raise InvalidActionError('action must either be "BUY" or "SELL". {} was provided'.format(value))
+            raise InvalidActionError(action=value)
 
 
 class OrderStatus(AutoNumber):
@@ -47,9 +47,7 @@ class OrderStatus(AutoNumber):
         if name is not None:
             return name
         else:
-            raise InvalidOrderStatusError(
-                'order_status must either be "OPEN", "FILLED", "CANCELLED", "REJECTED", or "HELD". {} was provided'
-                .format(value))
+            raise InvalidOrderStatusError(order_status=value)
 
 
 class OrderType(AutoNumber):
@@ -66,12 +64,11 @@ class OrderType(AutoNumber):
         if name is not None:
             return name
         else:
-            raise InvalidOrderTypeError('order_type must either be "STOP", "LIMIT", "STOP_LIMIT", or "MARKET".'
-                                        '{} was provided'.format(value))
+            raise InvalidOrderTypeError(order_type=value)
 
 
 class OrderSubType(AutoNumber):
-    """Valid OrderSubtypes """
+    """Valid OrderSubtypes"""
     ALL_OR_NONE = ()
     GOOD_TIL_CANCELED = ()
     DAY = ()
@@ -82,8 +79,7 @@ class OrderSubType(AutoNumber):
         if name is not None:
             return name
         else:
-            raise InvalidOrderTypeError('order_subtype must either be "ALL_OR_NONE", "GOOD_TIL_CANCELED", or "DAY".'
-                                        '{} was provided'.format(value))
+            raise InvalidOrderSubTypeError(order_subtype=value)
 
 
 class AssetPosition(AutoNumber):
@@ -96,4 +92,4 @@ class AssetPosition(AutoNumber):
         if name is not None:
             return name
         else:
-            raise InvalidPositionError('action must either be "BUY" or "SELL". {} was provided'.format(value))
+            raise InvalidPositionError(position=value)

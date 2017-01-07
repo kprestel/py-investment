@@ -4,8 +4,23 @@ Hold exceptions used throughout the package
 
 class PyInvestmentError(Exception):
     """Base exception class for all PyInvestment exceptions"""
+
+    msg = None
+
     def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+        self.kwargs = kwargs
+        # super().__init__(self, *args, **kwargs)
+
+    def message(self):
+        return str(self)
+
+    def __str__(self):
+        msg = self.msg.format(**self.kwargs)
+        return msg
+
+    __unicode__ = __str__
+    __repr__ = __str__
+
 
 class AssetExistsError(PyInvestmentError):
     """
@@ -13,47 +28,54 @@ class AssetExistsError(PyInvestmentError):
     and already is in the table.  In the event this exception is raised the asset should be updated to whatever the new
     attributes are.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+
+    msg = 'Asset with ticker: {ticker} already exists.'
 
 class AssetNotInUniverseError(PyInvestmentError):
     """
     Raised when an :class:``Asset`` that is not the the :class:``AssetUniverse`` is traded.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+
+    msg = 'Could not locate an asset with the ticker: {ticker}.'
 
 class NotAnAssetError(PyInvestmentError):
     """Raised when a subclass of :class:``Asset`` is required but another object is provided"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+
+    msg = 'asset must be an instance of a subclass of the Asset class. {asset} was provided.'
 
 
 class NotAPortfolioError(PyInvestmentError):
     """Raised when a :class:``Portfolio`` is required but another object is provided"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+
+    msg = 'portfolio must be an instance of the portfolio class. {portfolio} was provided.'
 
 
 class InvalidPositionError(PyInvestmentError):
     """Raised when a position is not either long or short"""
+
+    msg = 'action must either be "BUY" or "SELL". {position} was provided.'
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
 
 
 class InvalidActionError(PyInvestmentError):
     """Raised when a :class:``Trade`` action is not either buy or sell"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+
+    msg = 'action must either be "BUY" or "SELL". {action} was provided'
 
 
 class InvalidOrderStatusError(PyInvestmentError):
     """Raised when an order status is not valid"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+
+    msg = 'order_status must either be "OPEN", "FILLED", "CANCELLED", "REJECTED", or "HELD". {order_status} was provided.'
 
 
 class InvalidOrderTypeError(PyInvestmentError):
     """Raised when an order type is not valid"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+
+    msg = 'order_type must either be "STOP", "LIMIT", "STOP_LIMIT", or "MARKET". {order_type} was provided.'
+
+class InvalidOrderSubTypeError(PyInvestmentError):
+    """Raised when an order subtype is not valid"""
+
+    msg = 'order_subtype must either be "ALL_OR_NONE", "GOOD_TIL_CANCELED", or "DAY". {order_subtype} was provided.'
