@@ -12,10 +12,10 @@ from sqlalchemy_utils import generic_relationship
 from pytech import Base, utils
 import pytech.db_utils as db
 from pytech.enums import TradeAction, OrderStatus, OrderType, OrderSubType
-from pytech.exceptions import NotAnAssetError, PyInvestmentError, InvalidActionError, NotAPortfolioError
+from pytech.exceptions import NotAnAssetError, PyInvestmentError, InvalidActionError, NotAPortfolioError, \
+    UntriggeredTradeError
 from pytech.stock import Asset
 import logging
-
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,10 @@ class Order(Base):
     action = Column(String)
     reason = Column(String)
     order_type = Column(String)
+    LOGGER_NAME = 'order'
 
-    def __init__(self, asset, portfolio, action, order_type, stop=None, limit=None, qty=0, filled=0, commission=0,
-                 created=datetime.now(), order_subtype=OrderSubType.DAY, max_days_open=None):
+    def __init__(self, asset, portfolio, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
+                 filled=0, commission=0, created=datetime.now(), max_days_open=None):
         """
         Order constructor
 
@@ -85,6 +86,8 @@ class Order(Base):
         """
         from pytech import Portfolio
 
+        self.logger = logging.getLogger(self.LOGGER_NAME)
+
         if issubclass(asset.__class__, Asset):
             self.asset = asset
         else:
@@ -98,9 +101,12 @@ class Order(Base):
         # TODO: validate that all of these inputs make sense together. e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)
         self.order_type = OrderType.check_if_valid(order_type)
-        self.order_subtype = OrderSubType.check_if_valid(order_subtype)
 
-        if self.order_subtype is not OrderSubType.DAY and max_days_open is None:
+        self.order_subtype = OrderSubType.check_if_valid(order_subtype) or OrderSubType.DAY
+
+        if self.order_subtype is OrderSubType.DAY:
+            self.max_days_open = 1
+        elif max_days_open is None:
             self.max_days_open = 90
         else:
             self.max_days_open = max_days_open
@@ -141,6 +147,15 @@ class Order(Base):
 
     @property
     def triggered(self):
+        """
+        For a market order, True.
+        For a stop order, True IF stop_reached.
+        For a limit order, True IF limit_reached.
+        """
+
+        if self.order_type is OrderType.MARKET:
+            return True
+
         if self.stop is not None and not self.stop_reached:
             return False
 
@@ -169,9 +184,10 @@ class Order(Base):
         self.status = OrderStatus.HELD
         self.reason = reason
 
-    def check_order_triggers(self):
+    def check_triggers(self):
         """
         Check if any of the order's triggers should be pulled and execute a trade and then delete the order.
+
         :return:
         :rtype:
         """
@@ -179,7 +195,7 @@ class Order(Base):
             return True
 
         if self.triggered:
-            return
+            return True
 
         current_price = self.asset.get_price_quote()
         current_price = current_price.price
@@ -218,24 +234,36 @@ class Order(Base):
             self.stop = None
             self.order_type = OrderType.LIMIT
 
-    def check_order_expiration(self):
-        """Check if the order should be closed due to passage of time."""
+        return self.triggered
+
+    def check_order_expiration(self, current_date=datetime.now()):
+        """
+        Check if the order should be closed due to passage of time and update the order's status.
+
+        :param current_date: This is used to facilitate backtesting, so that the current date can be mocked in order to
+            accurately trigger/cancel orders in the past.
+            (default: datetime.now())
+        :type current_date: datetime
+        """
 
         trading_cal = mcal.get_calendar(self.portfolio.trading_cal)
         schedule = trading_cal.schedule(start_date=self.portfolio.start_date, end_date=self.portfolio.end_date)
 
         if self.order_subtype is OrderSubType.DAY:
-            if not trading_cal.open_at_time(schedule, pd.Timestamp(datetime.now())):
-                logger.info('Canceling trade.')
-                self.cancel(reason='Market closed without executing order.')
+            if not trading_cal.open_at_time(schedule, pd.Timestamp(current_date)):
+                reason = 'Market closed without executing order.'
+                self.logger.info('Canceling trade for asset: {} due to {}'.format(self.asset.ticker, reason))
+                self.cancel(reason=reason)
         elif self.order_subtype is OrderSubType.GOOD_TIL_CANCELED:
-            time_passed = relativedelta(self.created, datetime.now())
             expr_date = self.created + DateOffset(days=self.max_days_open)
-            if datetime.today() == expr_date.date():
-                if not trading_cal.open_at_time(schedule, pd.Timestamp(datetime.now())):
-                    logger.info('Canceling trade.')
-                    self.cancel(reason='Max days of {} had passed without the underlying order executing.'
-                                .format(self.max_days_open))
+            # check if the expiration date is today.
+            if current_date.date() == expr_date.date():
+                # if the expiration date is today then check if the market has closed.
+                if not trading_cal.open_at_time(schedule, pd.Timestamp(current_date)):
+                    reason = 'Max days of {} had passed without the underlying order executing.'.format(
+                        self.max_days_open)
+                    self.logger.info('Canceling trade for asset: {} due to {}'.format(self.asset.ticker, reason))
+                    self.cancel(reason=reason)
         else:
             return
 
@@ -258,7 +286,7 @@ class Trade(Base):
     # owned_stock = relationship('OwnedStock')
     # corresponding_trade = relationship('Trade', remote_side=[id])
 
-    def __init__(self, qty, price_per_share, strategy, action, trade_date=None, ticker=None):
+    def __init__(self, qty, price_per_share, action, strategy, trade_date=None, ticker=None):
         """
         :param trade_date: datetime, corresponding to the date and time of the trade date
         :param qty: int, number of shares traded
@@ -266,16 +294,27 @@ class Trade(Base):
             price per individual share in the trade or the average share price in the trade
         :param ticker:
             a :class: Stock, the asset object that was traded
-        :param action: str, must be *buy* or *sell* depending on what kind of trade it was
+        :param action: :class:``enum.TradeAction``
+        :type action: str or :class:``enum.TradeAction``
         :param position: str, must be *long* or *short*
+
+        .. note::
+
+        Valid **action** parameter values are:
+
+        * TradeAction.BUY
+        * TradeAction.SELL
+        * BUY
+        * SELL
         """
+
         if trade_date:
             self.trade_date = utils.parse_date(trade_date)
         else:
             self.trade_date = datetime.now()
 
         self.action = TradeAction.check_if_valid(action)
-        self.strategy = strategy.lower()
+        self.strategy = strategy
         self.ticker = ticker
         self.qty = qty
         self.price_per_share = price_per_share
@@ -284,6 +323,7 @@ class Trade(Base):
     @classmethod
     def _get_corresponding_trade_id(cls, ticker):
         """Get the most recent trade's id"""
+
         with db.query_session() as session:
             corresponding_trade = session.query(cls) \
                 .filter(cls.ticker == ticker) \
@@ -293,6 +333,34 @@ class Trade(Base):
             return corresponding_trade.id
         except AttributeError:
             return None
+
+    @classmethod
+    def from_order(cls, order, execution_price=None):
+        """
+        Make a trade from a triggered order object.
+
+        :raises: UntriggeredTradeError if the order has not been triggered.
+        """
+
+        if not order.triggered:
+            raise UntriggeredTradeError(id=order.id)
+
+        if execution_price is None:
+            exec_price = order.asset.get_price_quote()
+            execution_price = exec_price.price
+        else:
+            execution_price = execution_price
+
+        trade_dict = {
+            'ticker': order.asset.ticker,
+            'qty': order.qty,
+            'action': order.action,
+            'price_per_share': execution_price,
+            'strategy': order.order_type.name
+        }
+
+        return cls(**trade_dict)
+
 
 def asymmetric_round_price_to_penny(price, prefer_round_down, diff=(0.0095 - .005)):
     """

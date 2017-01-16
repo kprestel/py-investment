@@ -75,7 +75,19 @@ class InvalidOrderTypeError(PyInvestmentError):
 
     msg = 'order_type must either be "STOP", "LIMIT", "STOP_LIMIT", or "MARKET". {order_type} was provided.'
 
+
+class InvalidOrderTypeParameters(PyInvestmentError):
+    """Raised when an :class:``pytech.order.Order`` constructor args are not logically correct."""
+
+    msg = ''
+
 class InvalidOrderSubTypeError(PyInvestmentError):
     """Raised when an order subtype is not valid"""
 
     msg = 'order_subtype must either be "ALL_OR_NONE", "GOOD_TIL_CANCELED", or "DAY". {order_subtype} was provided.'
+
+
+class UntriggeredTradeError(PyInvestmentError):
+    """Raised when a :class:``pytech.order.Trade`` is made from an order that has not been triggered"""
+
+    msg = 'The order being traded has not been triggered yet. order_id: {id}'

@@ -1076,14 +1076,19 @@ class OwnedAsset(Base):
     """
 
     asset_id = Column(Integer)
+    #: The type of asset it is. For example if for a Stock asset the **asset_type** would be 'stock'
     asset_type = Column(String)
+    #: The relation to the :class:``Asset`` instance
     asset = generic_relationship(asset_id, asset_type)
     portfolio_id = Column(Integer, ForeignKey('portfolio.id'), primary_key=True)
     purchase_date = Column(DateTime)
     average_share_price_paid = Column(Numeric)
     shares_owned = Column(Numeric)
     total_position_value = Column(Numeric)
+    #: The total amount of capital invested in an asset.
+    #: This will be negative for a long position and positive for a short position
     total_position_cost = Column(Numeric)
+    #: Long or Short
     position = Column(String)
 
     def __init__(self, asset, portfolio, shares_owned, position, average_share_price=None, purchase_date=None):
@@ -1149,7 +1154,6 @@ class OwnedAsset(Base):
         :param price: price per share
         :type price: long
         """
-        # if self.position == 'short':
         if self.position is AssetPosition.SHORT:
             # short positions should have a negative number of shares owned but a positive total cost
             self.total_position_cost = (price * qty) * -1
@@ -1165,7 +1169,6 @@ class OwnedAsset(Base):
         quote = self.asset.get_price_quote()
         self.latest_price = quote.price
         self.latest_price_time = quote.time
-        # if self.position == 'short':
         if self.position is AssetPosition.SHORT:
             self.total_position_value = (self.latest_price * self.shares_owned) * -1
         else:
@@ -1232,23 +1235,6 @@ class OwnedAsset(Base):
         """
 
         return self.portfolio.benchmark
-        # from pytech.portfolio import Portfolio
-        #
-        # with db.query_session() as session:
-        #     benchmark_ticker = \
-        #         session.query(Portfolio.benchmark_ticker) \
-        #             .filter(Portfolio.id == self.portfolio_id) \
-        #             .first()
-        # if not benchmark_ticker:
-        #     return web.DataReader('^GSPC', 'yahoo', start=self.start_date, end=self.end_date)
-        # else:
-        #     return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
-
-        # @classmethod
-        # def from_list(cls, tickers, purchase_date, end, get_ohlcv=True, get_fundamentals=True):
-        #     super()._init_spiders(tickers=tickers, start_date=purchase_date, end_date=end)
-        # for ticker in tickers:
-        #     yield cls(ticker=ticker)
 
 
 class Fundamental(Base, HasStock):

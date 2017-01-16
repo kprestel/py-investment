@@ -9,7 +9,7 @@ from sqlalchemy.orm.collections import attribute_mapped_collection
 
 import pytech.db_utils as db
 import pytech.utils as utils
-from pytech.order import Trade
+from pytech.order import Trade, Order
 from pytech.base import Base
 from pytech.enums import AssetPosition, TradeAction
 from pytech.stock import Asset, OwnedAsset
@@ -37,21 +37,23 @@ class Portfolio(Base):
     start_date = Column(DateTime)
     end_date = Column(DateTime)
     trading_cal = Column(String)
+    data_frequency = Column(String)
     owned_assets = relationship('OwnedAsset', backref='portfolio',
                                 collection_class=attribute_mapped_collection('asset.ticker'),
                                 lazy='joined', cascade='save-update, all, delete-orphan')
-    orders = relationship('Order', backref='portfolio',
-                          collection_class=attribute_mapped_collection('asset.ticker'),
-                          lazy='joined', cascade='save-update, all, delete-orphan')
+    orders = relationship('Order', backref='portfolio', lazy='joined', cascade='save-update, all, delete-orphan')
+
+    LOGGER_NAME = 'portfolio'
 
     # assets = association_proxy('owned_assets', 'asset')
 
-    def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000, trading_cal='NYSE'):
+    def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000,
+                 trading_cal='NYSE', data_frequency='daily'):
         """
-        :param start_date: a date, the start date to the load the benchmark as of.
+        :param start_date: a date, the start date to start the simulation as of.
             (default: end_date - 365 days)
         :type start_date: datetime
-        :param end_date: the end date to load the benchmark as of.
+        :param end_date: the end date to end the simulation as of.
             (default: ``datetime.now()``)
         :type end_date: datetime
         :param benchmark_ticker: the ticker of the market index or benchmark to compare the portfolio against.
@@ -61,8 +63,9 @@ class Portfolio(Base):
             (default: 10000000)
         :type starting_cash: float
         :param trading_cal: The name of the trading calendar to use.
-            default: NYSE
+            (default: NYSE)
         :type trading_cal: str
+        :param data_frequency: The frequency of how often data should be updated.
         """
 
         if start_date is None:
@@ -76,19 +79,109 @@ class Portfolio(Base):
         else:
             self.end_date = utils.parse_date(end_date)
 
-
         self.trading_cal = trading_cal
         self.owned_assets = {}
-        self.orders = {}
+        self.orders = []
         self.benchmark_ticker = benchmark_ticker
         self.benchmark = web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         self.cash = float(starting_cash)
+        self.data_frequency = data_frequency
+        self.logger = logging.getLogger(self.LOGGER_NAME)
 
     @orm.reconstructor
     def init_on_load(self):
         """Recreate the benchmark series on load from DB"""
 
         self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
+
+    def make_order(self, ticker, action, order_type, stop_price=None, limit_price=None, qty=0,
+                   date_placed=datetime.now(), order_subtype=None):
+        """
+        Open a new order.
+
+        :param ticker:
+        :type ticker:
+        :param action:
+        :type action:
+        :param order_type:
+        :type order_type:
+        :param stop_price:
+        :type stop_price:
+        :param limit_price:
+        :type limit_price:
+        :param qty:
+        :type qty:
+        :param filled:
+        :type filled:
+        :param commission:
+        :type commission:
+        :param date_placed:
+        :type date_placed:
+        :param order_subtype:
+        :type order_subtype:
+        :param max_days_open:
+        :type max_days_open:
+        :return:
+        :rtype:
+        """
+
+        try:
+            asset = self.owned_assets[ticker]
+        except KeyError:
+            asset = Asset.get_asset_from_universe(ticker=ticker)
+
+        order = Order(
+            asset=asset,
+            portfolio=self,
+            action=action,
+            order_type=order_type,
+            order_subtype=order_subtype,
+            stop=stop_price,
+            limit=limit_price,
+            qty=qty,
+            created=date_placed
+        )
+
+        with db.transactional_session() as session:
+            self.orders.append(order)
+            session.add(self)
+
+    def check_order_triggers(self):
+        """Check if any order has been triggered and if they have execute the trade."""
+
+        for order in self.orders:
+            if order.open_amount == 0:
+                continue
+
+            if order.check_triggers():
+                self._process_order(order)
+
+    def _process_order(self, order):
+        """
+        Get the execution trade price that includes any slippage or commission.
+
+        :param order:
+        :type order:
+        :return:
+        :rtype:
+
+        This is a place holder/WIP. The idea is that the portfolio obj will have slippage and commission attributes or
+        objects associated with it so we can process it here.
+        """
+
+        # TODO: make this care/calculate the execution price based on commission and slippage.
+        exec_price = order.asset.get_price_quote()
+        exec_price = exec_price.price
+
+        trade = Trade.from_order(order=order, execution_price=exec_price)
+        order.filled += trade.qty
+
+        if not order.open:
+            self.orders.remove(order)
+
+        with db.transactional_session() as session:
+            session.add(trade)
+            session.add(session.merge(self))
 
     def make_trade(self, ticker, qty, action, price_per_share=None, trade_date=None):
         """
@@ -98,21 +191,30 @@ class Portfolio(Base):
         :type ticker: str
         :param qty: the number of shares to trade
         :type qty: int
-        :param action: **buy** or **sell** depending on the trade
-        :type action: str
+        :param action: :class:``enum.TradeAction``
+        :type action: str or :class:``enum.TradeAction``
         :param price_per_share: the cost per share in the trade
         :type price_per_share: long
         :param trade_date: the date and time that the trade is taking place
         :type trade_date: datetime
 
-        This method will add the asset to the :class:``Portfolio`` asset dict and update the db to reflect the trade
+        This method will add the asset to the :class:``Portfolio`` asset dict and update the db to reflect the trade.
+
+        Valid **action** parameter values are:
+
+        * TradeAction.BUY
+        * TradeAction.SELL
+        * BUY
+        * SELL
         """
 
         try:
             asset = self.owned_assets[ticker]
+            self.logger.info('Updating {} position'.format(ticker))
             self._update_existing_position(qty=qty, action=action, price_per_share=price_per_share,
                                            trade_date=trade_date, owned_asset=asset)
         except KeyError:
+            self.logger.info('Opening new position in {}'.format(ticker))
             self._open_new_position(ticker=ticker, qty=qty, action=action, price_per_share=price_per_share,
                                     trade_date=trade_date)
 
@@ -238,14 +340,18 @@ class Portfolio(Base):
         """
 
         total_value = 0.0
+
         for asset in self.owned_assets.values():
             asset.update_total_position_value()
             total_value += asset.total_position_value
+
         if include_cash:
             total_value += self.cash
+
         with db.transactional_session() as session:
             # update the owned stocks in the db
             session.add(self)
+
         return total_value
 
     def return_on_owned_assets(self):
