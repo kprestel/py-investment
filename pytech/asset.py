@@ -70,12 +70,19 @@ class Asset(Base, AbstractConcreteBase):
     The child class is responsible for giving each instance a ticker to identify it.
 
     If the child class needs any more fields it is responsible for creating them at the class level as well as
-    populating them via the child's constructor.
+    populating them via the child's constructor, in addition to calling the ``Asset`` constructor.
 
     Any child class instance of this base class is considered to be a part of the **Asset Universe** or the assets that
     are eligible to be traded.  If a child instance of an Asset does not yet exist in the universe and the
     :class:``~pytech.portfolio.Portfolio`` tries to trade it an exception will occur.
     """
+
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String, unique=True)
+
+    def __init__(self, ticker):
+        self.ticker = ticker
+        self.ohlcv = None
 
     @declared_attr
     def __tablename__(cls):
@@ -93,9 +100,6 @@ class Asset(Base, AbstractConcreteBase):
             'polymorphic_identity': name.lower(),
             'concrete': True
         }
-
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String, unique=True)
 
     @classmethod
     def get_asset_from_universe(cls, ticker):
@@ -116,13 +120,38 @@ class Asset(Base, AbstractConcreteBase):
             else:
                 raise AssetNotInUniverseError(ticker=ticker)
 
-    def get_price_quote(self):
+    def get_price_quote(self, d=None, column='Adj Close'):
+        """
+        Get the price of an Asset.
+
+        :param date or datetime d: The datetime of when to retrieve the price quote from.
+            (default: ``date.today()``)
+        :param str column: The header of the column to use to get the price quote from.
+            (default: ``Adj Close``
+        :return: namedtuple with price and the the datetime
+        :rtype: namedtuple
+        """
         quote = namedtuple('Quote', 'price time')
-        df = web.get_quote_yahoo(self.ticker)
-        d = date.today()
-        time = utils.parse_date(df['time'][0]).time()
-        dt = datetime.combine(d, time=time)
-        return quote(price=df['last'], time=dt)
+        if d is None:
+            df = web.get_quote_yahoo(self.ticker)
+            d = date.today()
+            time = utils.parse_date(df['time'][0]).time()
+            dt = datetime.combine(d, time=time)
+            return quote(price=df['last'], time=dt)
+        else:
+            price = self.ohlcv.ix[d][column][0]
+            return quote(price=price, time=d)
+
+    def get_volume(self, dt):
+        """
+        Get the current volume traded for the ``Asset``
+
+        :param datetime dt: The datetime to get the volume for.
+        :return: The volume for the ``Asset``
+        :rtype: int
+        """
+
+        return self.ohlcv.ix[dt]['Volume'][0]
 
 
 class Stock(Asset):
@@ -147,7 +176,9 @@ class Stock(Asset):
                                 lazy='joined')
 
     def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
-        self.ticker = ticker
+
+        super().__init__(ticker)
+
         if start_date is None:
             self.start_date = datetime.now() - timedelta(days=365)
         else:
@@ -160,8 +191,8 @@ class Stock(Asset):
 
         if self.start_date >= self.end_date:
             raise ValueError(
-                'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
-                                                                                             str(end_date)))
+                    'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
+                                                                                                 str(end_date)))
         self.get_ohlcv = get_ohlcv
         if get_ohlcv:
             self.get_ohlcv_series()
@@ -169,7 +200,6 @@ class Stock(Asset):
             self.start_price = self.ohlcv[['Adj Close']].head(1).iloc[0]['Adj Close']
             self.end_price = self.ohlcv[['Adj Close']].tail(1).iloc[0]['Adj Close']
         else:
-            self.ohlcv = None
             self.beta = None
             self.start_price = None
             self.end_price = None
@@ -270,11 +300,13 @@ class Stock(Asset):
         print(Base.metadata)
         try:
             # TODO: parse dates
-            df = pd.read_sql(sql, con=conn, params={'asset_id': self.id})
+            df = pd.read_sql(sql, con=conn, params={
+                'asset_id': self.id
+                })
         except OperationalError:
             logger.exception('error in query')
             sma_ts = pd.Series(
-                self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean()).dropna()
+                    self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean()).dropna()
             db.df_to_sql(sma_ts, 'sma_test', asset_id=self.id)
             print('creating')
             print(sma_ts)
@@ -517,11 +549,11 @@ class Stock(Asset):
         """
 
         ema_fast = pd.Series(
-            self.ohlcv[column].ewm(ignore_na=False, min_periods=period_fast - 1, span=period_fast).mean(),
-            name='EMA_fast')
+                self.ohlcv[column].ewm(ignore_na=False, min_periods=period_fast - 1, span=period_fast).mean(),
+                name='EMA_fast')
         ema_slow = pd.Series(
-            self.ohlcv[column].ewm(ignore_na=False, min_periods=period_slow - 1, span=period_slow).mean(),
-            name='EMA_slow')
+                self.ohlcv[column].ewm(ignore_na=False, min_periods=period_slow - 1, span=period_slow).mean(),
+                name='EMA_slow')
         macd_series = pd.Series(ema_fast - ema_slow, name='MACD')
         macd_signal_series = pd.Series(macd_series.ewm(ignore_na=False, span=signal).mean(), name='MACD_Signal')
         return pd.concat([macd_signal_series, macd_series], axis=1)
@@ -1083,7 +1115,7 @@ class OwnedAsset(Base):
     portfolio_id = Column(Integer, ForeignKey('portfolio.id'), primary_key=True)
     purchase_date = Column(DateTime)
     average_share_price_paid = Column(Numeric)
-    shares_owned = Column(Numeric)
+    shares_owned = Column(Integer)
     total_position_value = Column(Numeric)
     #: The total amount of capital invested in an asset.
     #: This will be negative for a long position and positive for a short position
@@ -1116,8 +1148,16 @@ class OwnedAsset(Base):
             self.latest_price = quote.price
             self.latest_price_time = quote.time
 
-        self.shares_owned = shares_owned
+        self._shares_owned = shares_owned
         self._set_position_cost_and_value(qty=shares_owned, price=self.average_share_price_paid)
+
+    @property
+    def shares_owned(self):
+        return self._shares_owned
+
+    @shares_owned.setter
+    def shares_owned(self, shares_owned):
+        self._shares_owned = int(shares_owned)
 
     def make_trade(self, qty, price_per_share=None):
         """
@@ -1176,6 +1216,7 @@ class OwnedAsset(Base):
 
     def return_on_investment(self):
         """Get the current return on investment for a given :class:``OwnedAsset``"""
+
         self.update_total_position_value()
         return (self.total_position_value + self.total_position_cost) / (self.total_position_cost * -1)
 
@@ -1190,6 +1231,7 @@ class OwnedAsset(Base):
 
         Best used to gauge the accuracy of the beta.
         """
+
         pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
         return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
 

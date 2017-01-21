@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 
 import pytest
-from pytech.stock import Stock, Fundamental
+from pytech.asset import Stock, Fundamental
 
 
 

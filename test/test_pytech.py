@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from pytech.base import Base
 from pytech.portfolio import Portfolio
-from pytech.stock import Stock, Fundamental, Asset, OwnedAsset
+from pytech.asset import Stock, Fundamental, Asset, OwnedAsset
 
 import logging
 

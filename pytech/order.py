@@ -7,6 +7,7 @@ import pandas_market_calendars as mcal
 from dateutil.relativedelta import relativedelta
 
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric, Boolean
+from sqlalchemy.orm import relationship
 from sqlalchemy_utils import generic_relationship
 
 from pytech import Base, utils
@@ -14,7 +15,7 @@ import pytech.db_utils as db
 from pytech.enums import TradeAction, OrderStatus, OrderType, OrderSubType
 from pytech.exceptions import NotAnAssetError, PyInvestmentError, InvalidActionError, NotAPortfolioError, \
     UntriggeredTradeError
-from pytech.stock import Asset
+from pytech.asset import Asset
 import logging
 
 logger = logging.getLogger(__name__)
@@ -32,8 +33,8 @@ class Order(Base):
     created = Column(DateTime)
     close_date = Column(DateTime)
     commission = Column(Numeric)
-    stop = Column(Numeric)
-    limit = Column(Numeric)
+    stop_price = Column(Numeric)
+    limit_price = Column(Numeric)
     stop_reached = Column(Boolean)
     limit_reached = Column(Boolean)
     qty = Column(Integer)
@@ -48,36 +49,27 @@ class Order(Base):
         """
         Order constructor
 
-        :param asset: The asset for which the order is associated with
-        :type asset: Asset
-        :param portfolio: The portfolio that the asset is associated with
-        :type portfolio: Portfolio
-        :param action: Either BUY or SELL
-        :type action: TradeAction
-        :param order_type: The type of order to create.
-        :type order_type: str, or :class:``pytech.enums.OrderType``
-        :param order_subtype: The order subtype to create
-            default: :class:``pytech.enums.OrderSubType.DAY``
-        :type order_subtype: str or :class:``pytech.enums.OrderSubType``
-        :param stop: The price at which to execute a stop order. If this is not a stop order then leave as None
-        :type stop: str
-        :param limit: The price at which to execute a limit order. If this is not a limit order then leave as None
-        :type limit: str
-        :param qty: The amount of shares the order is for.
+        :param Asset asset: The asset for which the order is associated with
+        :param Portfolio portfolio: The :py:class:`pytech.portfolio.Portfolio` that the asset is associated with
+        :param TradeAction action: Either BUY or SELL
+        :param OrderType order_type: The type of order to create.
+            Also can be a str.
+        :param OrderSubType order_subtype: The order subtype to create
+            default: :py:class:`pytech.enums.OrderSubType.DAY`
+        :param float stop: The price at which to execute a stop order. If this is not a stop order then leave as None
+        :param float limit: The price at which to execute a limit order. If this is not a limit order then leave as None
+        :param int qty: The amount of shares the order is for.
             This should be negative if it is a sell order and positive if it is a buy order.
-        :type qty: int
-        :param filled: How many shares of the order have already been filled, if any.
-        :type filled: int
-        :param commission: The amount of commission associated with placing the order.
-        :type commission: int
-        :param created: The date and time that the order was created
-        :type created: datetime
-        :param max_days_open: The max calendar days that an order can stay open without being cancelled.
+        :param int filled: How many shares of the order have already been filled, if any.
+        :param float commission: The amount of commission associated with placing the order.
+        :param datetime created: The date and time that the order was created
+        :param int max_days_open: The max calendar days that an order can stay open without being cancelled.
             This parameter is not relevant to Day orders since they will be closed at the end of the day regardless.
             default: None if the order_type is Day
             default: 90 if the order_type is not Day
-        :type max_days_open: int
-        :raises NotAnAssetError, InvalidActionError:
+        :raises NotAnAssetError: If the asset passed in is not an asset
+        :raises InvalidActionError: If the action passed in is not a valid action
+        :raises NotAPortfolioError: If the portfolio passed in is not a portfolio
 
         NOTES
         -----
@@ -109,19 +101,12 @@ class Order(Base):
         elif max_days_open is None:
             self.max_days_open = 90
         else:
-            self.max_days_open = max_days_open
+            self.max_days_open = int(max_days_open)
 
-        if self.action is TradeAction.SELL:
-            if qty > 0:
-                self.qty = qty * -1
-            else:
-                self.qty = qty
-        else:
-            self.qty = qty
-
+        self._qty = qty
         self.commission = commission
-        self.stop = stop
-        self.limit = limit
+        self.stop_price = stop
+        self.limit_price = limit
         self.stop_reached = False
         self.limit_reached = False
         self.filled = filled
@@ -131,6 +116,11 @@ class Order(Base):
         # the last time the order changed
         self.last_updated = self.created
         self.close_date = None
+
+        if self.stop_price is None and self.limit_price is None and self.order_type is not OrderType.MARKET:
+            self.logger.warning('stop_price and limit_price were both None and OrderType was not MARKET. Changing '
+                                'order_type to a MARKET order')
+            self.order_type = OrderType.MARKET
 
     @property
     def status(self):
@@ -146,6 +136,24 @@ class Order(Base):
         self._status = OrderStatus.check_if_valid(status)
 
     @property
+    def qty(self):
+        return self._qty
+
+    @qty.setter
+    def qty(self, qty):
+        """Ensure qty is an integer and if it is a **sell** order qty should be negative."""
+
+        if self.action is TradeAction.SELL:
+            if int(qty) > 0:
+                # qty should be negative if it is a sell order.
+                self._qty = int(qty * -1)
+            else:
+                self._qty = int(qty)
+        else:
+            self._qty = int(qty)
+
+
+    @property
     def triggered(self):
         """
         For a market order, True.
@@ -156,10 +164,10 @@ class Order(Base):
         if self.order_type is OrderType.MARKET:
             return True
 
-        if self.stop is not None and not self.stop_reached:
+        if self.stop_price is not None and not self.stop_reached:
             return False
 
-        if self.limit is not None and not self.limit_reached:
+        if self.limit_price is not None and not self.limit_reached:
             return False
 
         return True
@@ -184,54 +192,62 @@ class Order(Base):
         self.status = OrderStatus.HELD
         self.reason = reason
 
-    def check_triggers(self):
+    def check_triggers(self, current_price=None, dt=None):
         """
         Check if any of the order's triggers should be pulled and execute a trade and then delete the order.
 
-        :return:
-        :rtype:
+        :param datetime dt: The current datetime.
+            (default: ``datetime.now()``)
+        :param float current_price: The current price to check the triggers against.
+            (default: ``None``)
+            If left at the default then the current price will retrieved.
+        :return: True if the order is triggered otherwise False
+        :rtype: bool
         """
-        if self.order_type is OrderType.MARKET:
+
+        if self.order_type is OrderType.MARKET or self.triggered:
             return True
 
-        if self.triggered:
-            return True
-
-        current_price = self.asset.get_price_quote()
-        current_price = current_price.price
+        if current_price is None and dt is None:
+            current_price = self.asset.get_price_quote()
+            current_price = current_price.price
+            dt = datetime.now()
+        elif current_price is None:
+            current_price = self.asset.get_price_quote(d=dt)
+            current_price = current_price.price
 
         if self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.BUY:
-            if current_price >= self.stop:
+            if current_price >= self.stop_price:
                 self.stop_reached = True
-                self.last_updated = datetime.now()
-                if current_price >= self.limit:
+                self.last_updated = dt
+                if current_price >= self.limit_price:
                     self.limit_reached = True
         elif self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.SELL:
-            if current_price <= self.stop:
+            if current_price <= self.stop_price:
                 self.stop_reached = True
-                self.last_updated = datetime.now()
-                if current_price >= self.limit:
+                self.last_updated = dt
+                if current_price >= self.limit_price:
                     self.limit_reached = True
         elif self.order_type is OrderType.STOP and self.action is TradeAction.BUY:
-            if current_price >= self.stop:
+            if current_price >= self.stop_price:
                 self.stop_reached = True
-                self.last_updated = datetime.now()
+                self.last_updated = dt
         elif self.order_type is OrderType.STOP and self.action is TradeAction.SELL:
-            if current_price <= self.stop:
+            if current_price <= self.stop_price:
                 self.stop_reached = True
-                self.last_updated = datetime.now()
+                self.last_updated = dt
         elif self.order_type is OrderType.LIMIT and self.action is TradeAction.BUY:
-            if current_price >= self.limit:
+            if current_price >= self.limit_price:
                 self.limit_reached = True
-                self.last_updated = datetime.now()
+                self.last_updated = dt
         elif self.order_type is OrderType.LIMIT and self.action is TradeAction.SELL:
-            if current_price <= self.limit:
+            if current_price <= self.limit_price:
                 self.limit_reached = True
-                self.last_updated = datetime.now()
+                self.last_updated = dt
 
         if self.stop_reached and self.order_type is OrderType.STOP_LIMIT:
             # change the STOP_LIMIT order to a LIMIT order
-            self.stop = None
+            self.stop_price = None
             self.order_type = OrderType.LIMIT
 
         return self.triggered
@@ -240,10 +256,9 @@ class Order(Base):
         """
         Check if the order should be closed due to passage of time and update the order's status.
 
-        :param current_date: This is used to facilitate backtesting, so that the current date can be mocked in order to
+        :param datetime current_date: This is used to facilitate backtesting, so that the current date can be mocked in order to
             accurately trigger/cancel orders in the past.
             (default: datetime.now())
-        :type current_date: datetime
         """
 
         trading_cal = mcal.get_calendar(self.portfolio.trading_cal)
@@ -268,9 +283,23 @@ class Order(Base):
             return
 
 
+    def get_available_volume(self, dt):
+        """
+        Get the available volume to trade.  This will the min of open_amount and the assets volume.
+        :param datetime dt:
+        :return: The number of shares available to trade
+        :rtype: int
+        """
+
+        return int(min(self.asset.get_volume(dt=dt), abs(self.open_amount)))
+
+
+
 class Trade(Base):
     """
-    This class is used to make trades and keep trade of past trades
+    This class is used to make trades and keep trade of past trades.
+
+    Trades must be created as a result of an :class:``Order`` executing.
     """
     id = Column(Integer, primary_key=True)
     trade_date = Column(DateTime)
@@ -281,22 +310,25 @@ class Trade(Base):
     corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
     net_trade_value = Column(Numeric)
     ticker = Column(String)
+    order = relationship('Order', backref='trade')
+    order_id = Column(Integer, ForeignKey('order.id'))
+    commission = Column(Integer)
 
     # owned_stock_id = Column(Integer, ForeignKey('owned_stock.id'))
     # owned_stock = relationship('OwnedStock')
     # corresponding_trade = relationship('Trade', remote_side=[id])
 
-    def __init__(self, qty, price_per_share, action, strategy, trade_date=None, ticker=None):
+    def __init__(self, qty, price_per_share, action, strategy, order, commission=0.0, trade_date=None, ticker=None):
         """
-        :param trade_date: datetime, corresponding to the date and time of the trade date
-        :param qty: int, number of shares traded
-        :param price_per_share: float
-            price per individual share in the trade or the average share price in the trade
-        :param ticker:
-            a :class: Stock, the asset object that was traded
-        :param action: :class:``enum.TradeAction``
-        :type action: str or :class:``enum.TradeAction``
-        :param position: str, must be *long* or *short*
+        :param datetime trade_date: corresponding to the date and time of the trade date
+        :param int qty: number of shares traded
+        :param float price_per_share: price per individual share in the trade or the average share price in the trade
+        :param Asset ticker: a :py:class:`~.asset.Asset`, the ``asset`` object that was traded
+        :param Order order: a :py:class:`~.order.Order` that was executed as a result of the order executing
+        :param float commission: the amount of commission paid to execute this trade
+            (default: 0.0)
+        :param TradeAction or str action: :py:class:`~.enum.TradeAction`
+        :param str position: must be *long* or *short*
 
         .. note::
 
@@ -306,6 +338,9 @@ class Trade(Base):
         * TradeAction.SELL
         * BUY
         * SELL
+
+        `commission` is not necessarily the same commission associated with the ``order`` this will depend on the
+        type of :class:``AbstractCommissionModel`` used.
         """
 
         if trade_date:
@@ -319,6 +354,9 @@ class Trade(Base):
         self.qty = qty
         self.price_per_share = price_per_share
         self.corresponding_trade_id = self._get_corresponding_trade_id(ticker=ticker)
+        self.order = order
+        self.order_id = order.id
+        self.commission = commission
 
     @classmethod
     def _get_corresponding_trade_id(cls, ticker):
@@ -335,11 +373,15 @@ class Trade(Base):
             return None
 
     @classmethod
-    def from_order(cls, order, execution_price=None):
+    def from_order(cls, order, trade_date, execution_price=None, strategy=None):
         """
         Make a trade from a triggered order object.
 
-        :raises: UntriggeredTradeError if the order has not been triggered.
+        :param Order order: The ``order`` object creating the trade.
+        :param float execution_price: The price that the trade will be executed at.
+        :raises UntriggeredTradeError: if the order has not been triggered.
+        :return: a new ``trade``
+        :rtype: Trade
         """
 
         if not order.triggered:
@@ -351,12 +393,17 @@ class Trade(Base):
         else:
             execution_price = execution_price
 
+        if strategy is None:
+            strategy = order.order_type.name
+
         trade_dict = {
             'ticker': order.asset.ticker,
-            'qty': order.qty,
+            'qty': order.get_available_volume(dt=trade_date),
             'action': order.action,
             'price_per_share': execution_price,
-            'strategy': order.order_type.name
+            'strategy': strategy,
+            'order': order,
+            'trade_date': trade_date
         }
 
         return cls(**trade_dict)
