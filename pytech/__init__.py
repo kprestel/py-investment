@@ -1,4 +1,5 @@
-from os.path import dirname, join
+from os.path import dirname, join, pardir
+import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -6,7 +7,20 @@ from sqlalchemy.orm import sessionmaker
 # from pytech.portfolio import Portfolio
 import logging
 PROJECT_DIR = dirname(__file__)
-DATABASE_LOCATION = join(PROJECT_DIR, 'pytech.sqlite')
+RESOURCE_DIR = join(pardir, 'resources')
+DATA_DIR = join(RESOURCE_DIR, 'data')
+
+try:
+    os.makedirs(RESOURCE_DIR)
+except OSError:
+    pass
+
+try:
+    os.makedirs(DATA_DIR)
+except OSError:
+    pass
+
+DATABASE_LOCATION = join(RESOURCE_DIR, 'pytech.sqlite')
 cs = 'sqlite+pysqlite:///{}'.format(DATABASE_LOCATION)
 engine = create_engine(cs, connect_args={'check_same_thread':False}, poolclass=StaticPool)
 

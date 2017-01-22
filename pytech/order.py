@@ -75,6 +75,8 @@ class Order(Base):
         -----
         See :class:`pytech.enums.OrderType` to see valid order types
         See :class:`pytech.enums.OrderSubType` to see valid order sub types
+        See :py:func:`asymmetric_round_price_to_penny` for more information on how
+            `stop_price` and `limit_price` will get rounded.
         """
         from pytech import Portfolio
 
@@ -105,8 +107,8 @@ class Order(Base):
 
         self._qty = qty
         self.commission = commission
-        self.stop_price = stop
-        self.limit_price = limit
+        self._stop_price = stop
+        self._limit_price = limit
         self.stop_reached = False
         self.limit_reached = False
         self.filled = filled
@@ -134,6 +136,26 @@ class Order(Base):
     @status.setter
     def status(self, status):
         self._status = OrderStatus.check_if_valid(status)
+
+    @property
+    def stop_price(self):
+        return self._stop_price
+
+    @stop_price.setter
+    def stop_price(self, stop_price):
+        """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
+        pref_round_down = self.action is not TradeAction.BUY
+        self._stop_price = asymmetric_round_price_to_penny(stop_price, prefer_round_down=pref_round_down)
+
+    @property
+    def limit_price(self):
+        return self._limit_price
+
+    @limit_price.setter
+    def limit_price(self, limit_price):
+        """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
+        pref_round_down = self.action is TradeAction.BUY
+        self._limit_price = asymmetric_round_price_to_penny(limit_price, prefer_round_down=pref_round_down)
 
     @property
     def qty(self):
