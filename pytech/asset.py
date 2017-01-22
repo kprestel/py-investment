@@ -26,6 +26,7 @@ from twisted.internet import reactor
 import pytech.db_utils as db
 import pytech.utils as utils
 from crawler.spiders.edgar import EdgarSpider
+from pytech import DATA_DIR
 from pytech.base import Base
 from pytech.exceptions import InvalidPositionError, AssetNotInUniverseError, PyInvestmentError, NotAnAssetError
 from pytech.enums import AssetPosition
@@ -84,6 +85,7 @@ class Asset(Base, AbstractConcreteBase):
     def __init__(self, ticker):
         self.ticker = ticker
         self.ohlcv = None
+        self.file_path = os.path.join(DATA_DIR, (ticker + '.csv'))
 
     @declared_attr
     def __tablename__(cls):
@@ -232,16 +234,10 @@ class Stock(Asset):
         """
         Load the ohlcv timeseries.
 
-        :param data_source:
-            set where to get the data from. see pandas DataReader docs for more valid options.
+        :param str data_source: set where to get the data from. see pandas DataReader docs for more valid options.
             (default: yahoo)
-        :type data_source: str
-        :param start_date:
-            when to load the timeseries as of
-        :type start_date: DateTime
-        :param end_date:
-            when to end the timeseries
-        :type end_date: DateTime
+        :param datetime start_date: When to load the timeseries as of.
+        :param datetime end_date: When to end the timeseries.
 
         This method will get called on the initial creation of the :class:``Stock`` object with whatever start and end
         dates that the object is created with.
@@ -251,6 +247,13 @@ class Stock(Asset):
         """
 
         # TODO: concatenate the new series to any existing series
+
+        def get_ohlcv_from_web(start_date, end_date, data_source):
+            try:
+                return web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
+            except:
+                logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
+                return None
 
         if start_date is not None:
             start_date = utils.parse_date(start_date)
@@ -263,10 +266,22 @@ class Stock(Asset):
             end_date = self.end_date
 
         try:
-            self.ohlcv = web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
-        except:
-            logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
-            return None
+            temp_df = pd.read_csv(self.file_path, parse_dates=['Date'])
+            temp_df.set_index('Date')
+        except IOError:
+            # if the file_path does not exist then default to the web
+            ohlcv = get_ohlcv_from_web(start_date=start_date, end_date=end_date, data_source=data_source)
+            ohlcv.to_csv(self.file_path)
+            self.ohlcv = ohlcv
+        else:
+            # TODO: get any missing data
+            max_date = temp_df.index.max()
+            min_date = temp_df.index.min()
+            # if max_date < end_date:
+            #     pass
+            self.ohlcv = temp_df
+
+
 
     def get_fundamentals(self):
         """

@@ -41,7 +41,9 @@ class Portfolio(Base):
     owned_assets = relationship('OwnedAsset', backref='portfolio',
                                 collection_class=attribute_mapped_collection('asset.ticker'),
                                 lazy='joined', cascade='save-update, all, delete-orphan')
-    orders = relationship('Order', backref='portfolio', lazy='joined', cascade='save-update, all, delete-orphan')
+    orders = relationship('Order', backref='portfolio',
+                          collection_class=attribute_mapped_collection('asset.ticker'),
+                          lazy='joined', cascade='save-update, all, delete-orphan')
 
     LOGGER_NAME = 'portfolio'
 
@@ -76,7 +78,7 @@ class Portfolio(Base):
 
         self.trading_cal = trading_cal
         self.owned_assets = {}
-        self.orders = []
+        self.orders = {}
         self.benchmark_ticker = benchmark_ticker
         self.benchmark = web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         self.cash = float(starting_cash)
@@ -125,7 +127,7 @@ class Portfolio(Base):
         )
 
         with db.transactional_session() as session:
-            self.orders.append(order)
+            self.orders[ticker] = order
             session.add(self)
 
     def check_order_triggers(self, dt=None, current_price=None):
@@ -138,12 +140,13 @@ class Portfolio(Base):
 
         closed_orders = []
 
-        for order in self.orders:
+        for order in self.orders.values():
             if order.open_amount == 0 or not order.open:
                 closed_orders.append(order)
                 continue
 
             if order.check_triggers(dt=dt, current_price=current_price):
+                # make_trade will return the order if it closed
                 closed_orders.append(self.make_trade(order=order, price_per_share=current_price, trade_date=dt))
                 # self._process_triggered_order(order, dt=dt, current_price=current_price)
 
@@ -160,7 +163,7 @@ class Portfolio(Base):
         with db.transactional_session() as session:
             for order in closed_orders:
                 if order is not None:
-                    self.orders.remove(order)
+                    del self.orders[order.asset.ticker]
                     session.delete(order)
             session.add(session.merge(self))
 
