@@ -1,6 +1,6 @@
 from dateutil import parser
 from datetime import date, datetime
-
+from decimal import Decimal
 
 def parse_date(date_to_parse):
     try:
@@ -15,4 +15,3 @@ def parse_date(date_to_parse):
             return date_to_parse
     except AttributeError:
         return date_to_parse
-
