@@ -33,8 +33,8 @@ class Order(Base):
     created = Column(DateTime)
     close_date = Column(DateTime)
     commission = Column(Numeric)
-    stop = Column(Numeric)
-    limit = Column(Numeric)
+    stop_price = Column(Numeric)
+    limit_price = Column(Numeric)
     stop_reached = Column(Boolean)
     limit_reached = Column(Boolean)
     qty = Column(Integer)
@@ -58,26 +58,25 @@ class Order(Base):
             default: :py:class:`pytech.enums.OrderSubType.DAY`
         :param float stop: The price at which to execute a stop order. If this is not a stop order then leave as None
         :param float limit: The price at which to execute a limit order. If this is not a limit order then leave as None
-        :param qty: The amount of shares the order is for.
+        :param int qty: The amount of shares the order is for.
             This should be negative if it is a sell order and positive if it is a buy order.
-        :type qty: int
-        :param filled: How many shares of the order have already been filled, if any.
-        :type filled: int
-        :param commission: The amount of commission associated with placing the order.
-        :type commission: int
-        :param created: The date and time that the order was created
-        :type created: datetime
-        :param max_days_open: The max calendar days that an order can stay open without being cancelled.
+        :param int filled: How many shares of the order have already been filled, if any.
+        :param float commission: The amount of commission associated with placing the order.
+        :param datetime created: The date and time that the order was created
+        :param int max_days_open: The max calendar days that an order can stay open without being cancelled.
             This parameter is not relevant to Day orders since they will be closed at the end of the day regardless.
             default: None if the order_type is Day
             default: 90 if the order_type is not Day
-        :type max_days_open: int
-        :raises NotAnAssetError, InvalidActionError:
+        :raises NotAnAssetError: If the asset passed in is not an asset
+        :raises InvalidActionError: If the action passed in is not a valid action
+        :raises NotAPortfolioError: If the portfolio passed in is not a portfolio
 
         NOTES
         -----
         See :class:`pytech.enums.OrderType` to see valid order types
         See :class:`pytech.enums.OrderSubType` to see valid order sub types
+        See :py:func:`asymmetric_round_price_to_penny` for more information on how
+            `stop_price` and `limit_price` will get rounded.
         """
         from pytech import Portfolio
 
@@ -104,20 +103,12 @@ class Order(Base):
         elif max_days_open is None:
             self.max_days_open = 90
         else:
-            self.max_days_open = max_days_open
+            self.max_days_open = int(max_days_open)
 
-        if self.action is TradeAction.SELL:
-            if qty > 0:
-                # qty should be negative if it is a sell order.
-                self.qty = qty * -1
-            else:
-                self.qty = qty
-        else:
-            self.qty = qty
-
+        self._qty = qty
         self.commission = commission
-        self.stop = stop
-        self.limit = limit
+        self._stop_price = stop
+        self._limit_price = limit
         self.stop_reached = False
         self.limit_reached = False
         self.filled = filled
@@ -127,6 +118,11 @@ class Order(Base):
         # the last time the order changed
         self.last_updated = self.created
         self.close_date = None
+
+        if self.stop_price is None and self.limit_price is None and self.order_type is not OrderType.MARKET:
+            self.logger.warning('stop_price and limit_price were both None and OrderType was not MARKET. Changing '
+                                'order_type to a MARKET order')
+            self.order_type = OrderType.MARKET
 
     @property
     def status(self):
@@ -142,6 +138,44 @@ class Order(Base):
         self._status = OrderStatus.check_if_valid(status)
 
     @property
+    def stop_price(self):
+        return self._stop_price
+
+    @stop_price.setter
+    def stop_price(self, stop_price):
+        """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
+        pref_round_down = self.action is not TradeAction.BUY
+        self._stop_price = asymmetric_round_price_to_penny(stop_price, prefer_round_down=pref_round_down)
+
+    @property
+    def limit_price(self):
+        return self._limit_price
+
+    @limit_price.setter
+    def limit_price(self, limit_price):
+        """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
+        pref_round_down = self.action is TradeAction.BUY
+        self._limit_price = asymmetric_round_price_to_penny(limit_price, prefer_round_down=pref_round_down)
+
+    @property
+    def qty(self):
+        return self._qty
+
+    @qty.setter
+    def qty(self, qty):
+        """Ensure qty is an integer and if it is a **sell** order qty should be negative."""
+
+        if self.action is TradeAction.SELL:
+            if int(qty) > 0:
+                # qty should be negative if it is a sell order.
+                self._qty = int(qty * -1)
+            else:
+                self._qty = int(qty)
+        else:
+            self._qty = int(qty)
+
+
+    @property
     def triggered(self):
         """
         For a market order, True.
@@ -152,10 +186,10 @@ class Order(Base):
         if self.order_type is OrderType.MARKET:
             return True
 
-        if self.stop is not None and not self.stop_reached:
+        if self.stop_price is not None and not self.stop_reached:
             return False
 
-        if self.limit is not None and not self.limit_reached:
+        if self.limit_price is not None and not self.limit_reached:
             return False
 
         return True
@@ -205,37 +239,37 @@ class Order(Base):
             current_price = current_price.price
 
         if self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.BUY:
-            if current_price >= self.stop:
+            if current_price >= self.stop_price:
                 self.stop_reached = True
                 self.last_updated = dt
-                if current_price >= self.limit:
+                if current_price >= self.limit_price:
                     self.limit_reached = True
         elif self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.SELL:
-            if current_price <= self.stop:
+            if current_price <= self.stop_price:
                 self.stop_reached = True
                 self.last_updated = dt
-                if current_price >= self.limit:
+                if current_price >= self.limit_price:
                     self.limit_reached = True
         elif self.order_type is OrderType.STOP and self.action is TradeAction.BUY:
-            if current_price >= self.stop:
+            if current_price >= self.stop_price:
                 self.stop_reached = True
                 self.last_updated = dt
         elif self.order_type is OrderType.STOP and self.action is TradeAction.SELL:
-            if current_price <= self.stop:
+            if current_price <= self.stop_price:
                 self.stop_reached = True
                 self.last_updated = dt
         elif self.order_type is OrderType.LIMIT and self.action is TradeAction.BUY:
-            if current_price >= self.limit:
+            if current_price >= self.limit_price:
                 self.limit_reached = True
                 self.last_updated = dt
         elif self.order_type is OrderType.LIMIT and self.action is TradeAction.SELL:
-            if current_price <= self.limit:
+            if current_price <= self.limit_price:
                 self.limit_reached = True
                 self.last_updated = dt
 
         if self.stop_reached and self.order_type is OrderType.STOP_LIMIT:
             # change the STOP_LIMIT order to a LIMIT order
-            self.stop = None
+            self.stop_price = None
             self.order_type = OrderType.LIMIT
 
         return self.triggered

@@ -171,20 +171,16 @@ class Portfolio(Base):
         """
         Buy or sell an asset from the asset universe.
 
-        :param ticker: the ticker of the :class:``Asset`` to trade
-        :type ticker: str
-        :param qty: the number of shares to trade
-        :type qty: int
-        :param action: :class:``enum.TradeAction``
-        :type action: str or :class:``enum.TradeAction``
+        :param str ticker: The ticker of the :class:``Asset`` to trade.
+        :param int qty: the number of shares to trade
+        :param TradeAction or str action: :py:class:``enum.TradeAction`` see comments below.
         :param float price_per_share: the cost per share in the trade
-        :param trade_date: the date and time that the trade is taking place
-        :type trade_date: datetime
+        :param datetime trade_date: The date and time that the trade is taking place.
         :return: ``order`` if the order is no longer open so it can be removed from the ``portfolio`` order dict
             and ``None`` if the order is still open
         :rtype: Order or None
 
-        This method will add the asset to the :class:``Portfolio`` asset dict and update the db to reflect the trade.
+        This method will add the asset to the :py:class:``Portfolio`` asset dict and update the db to reflect the trade.
 
         Valid **action** parameter values are:
 
@@ -358,11 +354,9 @@ class Portfolio(Base):
         """
         Calculate the total value of the ``Portfolio`` owned_assets
 
-        :param include_cash:
-            should cash be included in the calculation, or just get the total value of the owned_assets
-        :type include_cash: bool
-        :return:
-            the total value of the portfolio at a given moment in time
+        :param bool include_cash: Should cash be included in the calculation, or just get the total value of the
+            owned_assets.
+        :return: The total value of the portfolio at a given moment in time.
         :rtype: float
         """
 
