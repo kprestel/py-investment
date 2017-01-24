@@ -13,6 +13,7 @@ from pytech.order import Trade, Order
 from pytech.base import Base
 from pytech.enums import AssetPosition, TradeAction
 from pytech.asset import Asset, OwnedAsset
+from pytech.blotter import Blotter
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +42,10 @@ class Portfolio(Base):
     owned_assets = relationship('OwnedAsset', backref='portfolio',
                                 collection_class=attribute_mapped_collection('asset.ticker'),
                                 lazy='joined', cascade='save-update, all, delete-orphan')
-    orders = relationship('Order', backref='portfolio',
-                          collection_class=attribute_mapped_collection('asset.ticker'),
-                          lazy='joined', cascade='save-update, all, delete-orphan')
+    blotter = relationship('Blotter', uselist=False, back_populates='portfolio')
+    # orders = relationship('Order', backref='portfolio',
+    #                       collection_class=attribute_mapped_collection('asset.ticker'),
+    #                       lazy='joined', cascade='save-update, all, delete-orphan')
 
     LOGGER_NAME = 'portfolio'
 
@@ -84,6 +86,7 @@ class Portfolio(Base):
         self.cash = float(starting_cash)
         self.data_frequency = data_frequency
         self.logger = logging.getLogger(self.LOGGER_NAME)
+        self.blotter = Blotter(portfolio=self)
 
     @orm.reconstructor
     def init_on_load(self):
@@ -91,264 +94,18 @@ class Portfolio(Base):
 
         self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
-    def make_order(self, ticker, action, order_type, stop_price=None, limit_price=None, qty=0,
-                   date_placed=datetime.now(), order_subtype=None):
+    def get_owned_asset(self, ticker):
         """
-        Open a new order.
+        Return the :py:class:`pytech.asset.OwnedAsset` instance if it exists.
 
-        :param str ticker: the ticker of the :py:class:`~asset.Asset` to place an order for
-        :param TradeAction or str action: **BUY** or **SELL**
-        :param OrderType order_type: the type of order
-        :param float stop_price: If creating a stop order this is the stop price.
-        :param float limit_price: If creating a limit order this is the price that will trigger the ``order``.
-        :param int qty: The number of shares to place an ``order`` for.
-        :param datetime date_placed: The date and time the order is created.
-        :param OrderSubType order_subtype: The type of order subtype
-            (default: ``OrderSubType.DAY``)
-        :param int max_days_open: Number of days to leave the ``order`` open before it expires.
-        :return: None
+        This method is also used to check if an asset is owned.
+
+        :param str ticker: The ticker of the asset to get.
+        :return: The ``OwnedAsset`` instance or None if it does not exist.
         """
 
-        try:
-            asset = self.owned_assets[ticker]
-        except KeyError:
-            asset = Asset.get_asset_from_universe(ticker=ticker)
+        return self.owned_assets.get(ticker)
 
-        order = Order(
-            asset=asset,
-            portfolio=self,
-            action=action,
-            order_type=order_type,
-            order_subtype=order_subtype,
-            stop=stop_price,
-            limit=limit_price,
-            qty=qty,
-            created=date_placed
-        )
-
-        with db.transactional_session() as session:
-            self.orders[ticker] = order
-            session.add(self)
-
-    def check_order_triggers(self, dt=None, current_price=None):
-        """
-        Check if any order has been triggered and if they have execute the trade.
-
-        :param datetime dt: current datetime
-        :param float current_price: The current price of the asset.
-        """
-
-        closed_orders = []
-
-        for order in self.orders.values():
-            if order.open_amount == 0 or not order.open:
-                closed_orders.append(order)
-                continue
-
-            if order.check_triggers(dt=dt, current_price=current_price):
-                # make_trade will return the order if it closed
-                closed_orders.append(self.make_trade(order=order, price_per_share=current_price, trade_date=dt))
-                # self._process_triggered_order(order, dt=dt, current_price=current_price)
-
-        self.purge_closed_orders(closed_orders)
-
-    def purge_closed_orders(self, closed_orders):
-        """
-        Remove any order that is no longer open.
-
-        :param iterable closed_orders:
-        :return:
-        """
-
-        with db.transactional_session() as session:
-            for order in closed_orders:
-                if order is not None:
-                    del self.orders[order.asset.ticker]
-                    session.delete(order)
-            session.add(session.merge(self))
-
-    def make_trade(self, order, price_per_share, trade_date):
-        """
-        Buy or sell an asset from the asset universe.
-
-        :param str ticker: The ticker of the :class:``Asset`` to trade.
-        :param int qty: the number of shares to trade
-        :param TradeAction or str action: :py:class:``enum.TradeAction`` see comments below.
-        :param float price_per_share: the cost per share in the trade
-        :param datetime trade_date: The date and time that the trade is taking place.
-        :return: ``order`` if the order is no longer open so it can be removed from the ``portfolio`` order dict
-            and ``None`` if the order is still open
-        :rtype: Order or None
-
-        This method will add the asset to the :py:class:``Portfolio`` asset dict and update the db to reflect the trade.
-
-        Valid **action** parameter values are:
-
-        * TradeAction.BUY
-        * TradeAction.SELL
-        * BUY
-        * SELL
-        """
-
-        try:
-            asset = self.owned_assets[order.asset.ticker]
-            self.logger.info('Updating {} position'.format(order.asset.ticker))
-            trade = self._update_existing_position(order=order, trade_date=trade_date, owned_asset=asset,
-                                           price_per_share=price_per_share)
-        except KeyError:
-            self.logger.info('Opening new position in {}'.format(order.asset.ticker))
-            trade = self._open_new_position(order=order, price_per_share=price_per_share, trade_date=trade_date)
-
-        order.filled += trade.qty
-
-        if order.open:
-            return None
-        else:
-            return order
-
-    def _open_new_position(self, price_per_share, trade_date, order):
-        """
-        Create a new :py:class:``~stock.OwnedStock`` object associated with this portfolio as well as update the cash position
-
-        :param int qty: how many shares are being bought or sold.
-            If the position is a **long** position use a negative number to close it and positive to open it.
-            If the position is a **short** position use a negative number to open it and positive to close it.
-        :param float price_per_share: the average price per share in the trade.
-            This should always be positive no matter what the trade's position is.
-        :param datetime trade_date: the date and time the trade takes place
-            (default: now)
-        :param TradeAction or str action: either **BUY** or **SELL**
-        :param Order order: The order
-        :return: None
-        :raises InvalidActionError: If action is not 'BUY' or 'SELL'
-        :raises AssetNotInUniverseError: when an asset is traded that does not yet exist in the Universe
-
-        This method processes the trade and then writes the results to the database. It will create a new instance of
-        :py:class:`~stock.OwnedStock` class and at it to the :py:class:`~portfolio.Portfolio` asset dict.
-
-        .. note::
-
-        Valid **action** parameter values are:
-
-        * TradeAction.BUY
-        * TradeAction.SELL
-        * BUY
-        * SELL
-        """
-
-        # TODO: can I just reference the asset?
-        # asset = Asset.get_asset_from_universe(ticker=order.asset.ticker)
-        # action = TradeAction.check_if_valid(action)
-        asset = order.asset
-
-        if order.action is TradeAction.SELL:
-            # if selling an asset that is not in the portfolio that means it has to be a short sale.
-            position = AssetPosition.SHORT
-            # qty *= -1
-        else:
-            position = AssetPosition.LONG
-
-        owned_asset = OwnedAsset(
-            asset=asset,
-            shares_owned=order.get_available_volume(dt=trade_date),
-            average_share_price=price_per_share,
-            position=position,
-            portfolio=self
-        )
-
-        self.cash += owned_asset.total_position_cost
-        self.owned_assets[owned_asset.asset.ticker] = owned_asset
-        trade = Trade.from_order(
-            order=order,
-            execution_price=price_per_share,
-            trade_date=trade_date,
-            strategy='Open new {} position'.format(position)
-        )
-        # trade = Trade(
-        #     qty=qty,
-        #     price_per_share=price_per_share,
-        #     ticker=owned_asset.asset.ticker,
-        #     action=action,
-        #     strategy='Open new {} position'.format(position),
-        #     trade_date=trade_date
-        # )
-        with db.transactional_session(auto_close=False) as session:
-            session.add(session.merge(self))
-            session.add(trade)
-        return trade
-
-
-    def _update_existing_position(self, price_per_share, trade_date, owned_asset, order):
-        """
-        Update the :class:``OwnedAsset`` associated with this portfolio as well as the cash position
-
-        :param int qty: how many shares are being bought or sold.
-            If the position is a **long** position use a negative number to close it and positive to open it.
-            If the position is a **short** position use a negative number to open it and positive to close it.
-        :param float price_per_share: the average price per share in the trade.
-            This should always be positive no matter what the trade's position is.
-        :param datetime trade_date: the date and time the trade takes place
-            (default: now)
-        :param OwnedAsset owned_asset: the asset that is already in the portfolio
-        :param TradeAction action: **BUY** or **SELL**
-        :param Order order:
-        :raises InvalidActionError:
-
-        This method processes the trade and then writes the results to the database.
-        """
-        # action = TradeAction.check_if_valid(action)
-
-        # if order.action is TradeAction.SELL:
-        #     qty *= -1
-
-        owned_asset = owned_asset.make_trade(qty=order.get_available_volume(dt=trade_date),
-                                             price_per_share=price_per_share)
-
-        if owned_asset.shares_owned != 0:
-            self.owned_assets[owned_asset.asset.ticker] = owned_asset
-            self.cash += owned_asset.total_position_cost
-
-            trade = Trade.from_order(
-                order=order,
-                execution_price=price_per_share,
-                trade_date=trade_date,
-                strategy='Update an existing {} position'.format(owned_asset.position)
-            )
-
-            # trade = Trade(
-            #     qty=qty,
-            #     price_per_share=price_per_share,
-            #     ticker=owned_asset.asset.ticker,
-            #     strategy='Update an existing {} position'.format(owned_asset.position),
-            #     action=action,
-            #     trade_date=trade_date
-            # )
-        else:
-            self.cash += owned_asset.total_position_value
-
-            del self.owned_assets[owned_asset.asset.ticker]
-
-            trade = Trade.from_order(
-                order=order,
-                execution_price=price_per_share,
-                trade_date=trade_date,
-                strategy='Close an existing {} position'.format(owned_asset.position)
-            )
-
-            # trade = Trade(
-            #     qty=qty,
-            #     price_per_share=price_per_share,
-            #     ticker=owned_asset.asset.ticker,
-            #     strategy='Close an existing {} position'.format(owned_asset.position),
-            #     action=action,
-            #     trade_date=trade_date
-            # )
-
-        with db.transactional_session() as session:
-            session.add(session.merge(self))
-            session.add(trade)
-
-        return trade
 
     def get_total_value(self, include_cash=True):
         """

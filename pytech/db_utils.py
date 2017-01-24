@@ -3,11 +3,50 @@ from functools import wraps
 from pytech import Session, engine
 import pandas as pd
 
-def df_to_sql(df, table_name, asset_id):
-    df = pd.DataFrame(df)
-    df['asset_id'] = asset_id
-    df.to_sql(table_name, con=engine, if_exists='append')
-    # return df
+def ohlcv_to_sql(asset):
+    """
+    Write a `pandas.DataFrame` to the DB.
+
+    :param Asset asset: An instance of a `:py:class:pytech.asset.Asset`
+    :return: None, this method only writes to the DB.
+    """
+    df = pd.DataFrame(asset.ohlcv)
+    df['ticker'] = asset.ticker
+    df.to_sql('ohlcv', con=engine, if_exists='append')
+
+def ohlcv_from_sql(asset=None, date_to_load=None):
+    """
+    Retrieve a `pandas.DataFrame` from the DB.
+
+    :param asset: The asset to retrieve the OHLCV of. If left None then all of the OHLCVs in the DB will be loaded.
+    (default: None)
+    :type asset: :py:class:`pytech.asset.Asset` or None
+    :param datetime date_to_load: Only retrieve the OHLCV data for a particular date. Used for things such as backtesting.
+    :return: The OHLCV `pandas.DataFrame`
+    :rtype: `pandas.DataFrame`
+
+    .. note::
+        *
+
+    """
+    # TODO: add date ranges in kwargs.
+    # TODO: add option to load only particular cols.
+
+    if asset is None and date_to_load is None:
+        sql = 'SELECT * FROM ohlcv'
+        params = {}
+    elif asset is None and date_to_load is not None:
+        sql = 'SELECT * FROM ohlcv WHERE trade_date = :trade_date'
+    elif asset is not None and date_to_load is None:
+        sql = 'SELECT * FROM ohlcv WHERE ticker = :ticker'
+    elif asset is not None and date_to_load is not None:
+        sql = 'SELECT * FROM ohlcv WHERE ticker = :ticker AND trade_date = :trade_date'
+    else:
+        raise ValueError('Invalid Arguments')
+
+
+
+
 
 # @contextmanager
 def raw_connection(*args, **kwargs):

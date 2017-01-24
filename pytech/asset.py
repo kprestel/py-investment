@@ -26,7 +26,6 @@ from twisted.internet import reactor
 import pytech.db_utils as db
 import pytech.utils as utils
 from crawler.spiders.edgar import EdgarSpider
-from pytech import DATA_DIR
 from pytech.base import Base
 from pytech.exceptions import InvalidPositionError, AssetNotInUniverseError, PyInvestmentError, NotAnAssetError
 from pytech.enums import AssetPosition
@@ -81,11 +80,9 @@ class Asset(Base, AbstractConcreteBase):
     id = Column(Integer, primary_key=True)
     ticker = Column(String, unique=True)
 
-
     def __init__(self, ticker):
         self.ticker = ticker
         self.ohlcv = None
-        self.file_path = os.path.join(DATA_DIR, (ticker + '.csv'))
 
     @declared_attr
     def __tablename__(cls):
@@ -157,8 +154,6 @@ class Asset(Base, AbstractConcreteBase):
         return self.ohlcv.ix[dt]['Volume'][0]
 
 
-
-
 class Stock(Asset):
     """
     Main class that is used to model stocks and may contain technical and fundamental data about the asset.
@@ -182,7 +177,6 @@ class Stock(Asset):
 
     def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
 
-
         super().__init__(ticker)
 
         if start_date is None:
@@ -197,8 +191,8 @@ class Stock(Asset):
 
         if self.start_date >= self.end_date:
             raise ValueError(
-                'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
-                                                                                             str(end_date)))
+                    'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
+                                                                                                 str(end_date)))
         self.get_ohlcv = get_ohlcv
         if get_ohlcv:
             self.get_ohlcv_series()
@@ -225,21 +219,27 @@ class Stock(Asset):
         # if self.get_ohlcv:
         #     self.get_ohlcv_series()
         # else:
-        #     self.ohlcv = None
+        #     self.ohlcv_to_sql = None
         quote = self.get_price_quote()
         self.latest_price = quote.price
         self.latest_price_time = quote.time
 
     def get_ohlcv_series(self, data_source='yahoo', start_date=None, end_date=None):
         """
-        Load the ohlcv timeseries.
+        Load the ohlcv_to_sql timeseries.
 
-        :param str data_source: set where to get the data from. see pandas DataReader docs for more valid options.
+        :param data_source:
+            set where to get the data from. see pandas DataReader docs for more valid options.
             (default: yahoo)
-        :param datetime start_date: When to load the timeseries as of.
-        :param datetime end_date: When to end the timeseries.
+        :type data_source: str
+        :param start_date:
+            when to load the timeseries as of
+        :type start_date: DateTime
+        :param end_date:
+            when to end the timeseries
+        :type end_date: DateTime
 
-        This method will get called on the initial creation of the :class:``Stock`` object with whatever start and end
+        This method will get called on the initial creation of the :class:`Stock` object with whatever start and end
         dates that the object is created with.
 
         To change the date range that is contained in the timeseries then call this method explicitly with the desired
@@ -247,13 +247,6 @@ class Stock(Asset):
         """
 
         # TODO: concatenate the new series to any existing series
-
-        def get_ohlcv_from_web(start_date, end_date, data_source):
-            try:
-                return web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
-            except:
-                logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
-                return None
 
         if start_date is not None:
             start_date = utils.parse_date(start_date)
@@ -266,22 +259,11 @@ class Stock(Asset):
             end_date = self.end_date
 
         try:
-            temp_df = pd.read_csv(self.file_path, parse_dates=['Date'])
-            temp_df.set_index('Date')
-        except IOError:
-            # if the file_path does not exist then default to the web
-            ohlcv = get_ohlcv_from_web(start_date=start_date, end_date=end_date, data_source=data_source)
-            ohlcv.to_csv(self.file_path)
-            self.ohlcv = ohlcv
-        else:
-            # TODO: get any missing data
-            max_date = temp_df.index.max()
-            min_date = temp_df.index.min()
-            # if max_date < end_date:
-            #     pass
-            self.ohlcv = temp_df
-
-
+            temp_ohlcv = web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
+            self.ohlcv = temp_ohlcv.rename(columns={'Date': 'trade_date'})
+        except:
+            logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
+            return None
 
     def get_fundamentals(self):
         """
@@ -319,12 +301,14 @@ class Stock(Asset):
         print(Base.metadata)
         try:
             # TODO: parse dates
-            df = pd.read_sql(sql, con=conn, params={'asset_id': self.id})
+            df = pd.read_sql(sql, con=conn, params={
+                'asset_id': self.id
+                })
         except OperationalError:
             logger.exception('error in query')
             sma_ts = pd.Series(
-                self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean()).dropna()
-            db.df_to_sql(sma_ts, 'sma_test', asset_id=self.id)
+                    self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean()).dropna()
+            db.ohlcv_to_sql(sma_ts, ticker=self.ticker)
             print('creating')
             print(sma_ts)
             return sma_ts
@@ -566,11 +550,11 @@ class Stock(Asset):
         """
 
         ema_fast = pd.Series(
-            self.ohlcv[column].ewm(ignore_na=False, min_periods=period_fast - 1, span=period_fast).mean(),
-            name='EMA_fast')
+                self.ohlcv[column].ewm(ignore_na=False, min_periods=period_fast - 1, span=period_fast).mean(),
+                name='EMA_fast')
         ema_slow = pd.Series(
-            self.ohlcv[column].ewm(ignore_na=False, min_periods=period_slow - 1, span=period_slow).mean(),
-            name='EMA_slow')
+                self.ohlcv[column].ewm(ignore_na=False, min_periods=period_slow - 1, span=period_slow).mean(),
+                name='EMA_slow')
         macd_series = pd.Series(ema_fast - ema_slow, name='MACD')
         macd_signal_series = pd.Series(macd_series.ewm(ignore_na=False, span=signal).mean(), name='MACD_Signal')
         return pd.concat([macd_signal_series, macd_series], axis=1)
@@ -1036,9 +1020,9 @@ class Stock(Asset):
         :param ticker_list: list of str
             must they must correspond to a valid ticker symbol. They will be used to create the :class: Stock objects
         :param start: date or str date formatted YYYYMMDD
-            when to load the ohlcv and the :class: Fundamental as of
+            when to load the ohlcv_to_sql and the :class: Fundamental as of
         :param end: date or str date formatted YYYYMMDD
-            when to load the ohlcv and the :class: Fundamental as of
+            when to load the ohlcv_to_sql and the :class: Fundamental as of
         :param get_ohlcv: boolean
             if true then a ohlc time series will be created based on the start and end dates
         :return: generator
@@ -1175,7 +1159,6 @@ class OwnedAsset(Base):
     @shares_owned.setter
     def shares_owned(self, shares_owned):
         self._shares_owned = int(shares_owned)
-
 
     def make_trade(self, qty, price_per_share=None):
         """

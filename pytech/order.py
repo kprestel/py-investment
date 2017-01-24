@@ -14,8 +14,8 @@ from pytech import Base, utils
 import pytech.db_utils as db
 from pytech.enums import TradeAction, OrderStatus, OrderType, OrderSubType
 from pytech.exceptions import NotAnAssetError, PyInvestmentError, InvalidActionError, NotAPortfolioError, \
-    UntriggeredTradeError
-from pytech.asset import Asset
+    UntriggeredTradeError, NotABlotterError
+from pytech.asset import Asset, OwnedAsset
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class Order(Base):
     asset_id = Column(Integer)
     asset_type = Column(String)
     asset = generic_relationship(asset_id, asset_type)
-    portfolio_id = Column(Integer, ForeignKey('portfolio.id'), primary_key=True)
+    blotter_id = Column(Integer, ForeignKey('blotter.id'), primary_key=True)
     status = Column(String)
     created = Column(DateTime)
     close_date = Column(DateTime)
@@ -44,13 +44,13 @@ class Order(Base):
     order_type = Column(String)
     LOGGER_NAME = 'order'
 
-    def __init__(self, asset, portfolio, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
+    def __init__(self, asset, blotter, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
                  filled=0, commission=0, created=datetime.now(), max_days_open=None):
         """
         Order constructor
 
         :param Asset asset: The asset for which the order is associated with
-        :param Portfolio portfolio: The :py:class:`pytech.portfolio.Portfolio` that the asset is associated with
+        :param Portfolio blotter: The :py:class:`pytech.blotter.Blotter` that the asset is associated with
         :param TradeAction action: Either BUY or SELL
         :param OrderType order_type: The type of order to create.
             Also can be a str.
@@ -65,8 +65,8 @@ class Order(Base):
         :param datetime created: The date and time that the order was created
         :param int max_days_open: The max calendar days that an order can stay open without being cancelled.
             This parameter is not relevant to Day orders since they will be closed at the end of the day regardless.
-            default: None if the order_type is Day
-            default: 90 if the order_type is not Day
+            (default: None if the order_type is Day)
+            (default: 90 if the order_type is not Day)
         :raises NotAnAssetError: If the asset passed in is not an asset
         :raises InvalidActionError: If the action passed in is not a valid action
         :raises NotAPortfolioError: If the portfolio passed in is not a portfolio
@@ -78,19 +78,25 @@ class Order(Base):
         See :py:func:`asymmetric_round_price_to_penny` for more information on how
             `stop_price` and `limit_price` will get rounded.
         """
-        from pytech import Portfolio
+
+        from pytech.blotter import Blotter
 
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
         if issubclass(asset.__class__, Asset):
             self.asset = asset
+            self.owned_asset = None
+        elif isinstance(asset, OwnedAsset):
+            # owned asset has a relationship with asset
+            self.asset = asset.asset
+            self.owned_asset = asset
         else:
             raise NotAnAssetError(asset=type(asset))
 
-        if isinstance(portfolio, Portfolio):
-            self.portfolio = portfolio
+        if isinstance(blotter, Blotter):
+            self.blotter = blotter
         else:
-            raise NotAPortfolioError(portfolio=type(portfolio))
+            raise NotABlotterError(blotter=type(blotter))
 
         # TODO: validate that all of these inputs make sense together. e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)

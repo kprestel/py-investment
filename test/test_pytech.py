@@ -51,7 +51,7 @@ def df_to_sql_mock(monkeypatch):
         df['asset_id'] = asset_id
         df.to_sql(table_name, con=engine, if_exists='replace')
 
-    monkeypatch.setattr('pytech.db_utils.df_to_sql', df_to_sql)
+    monkeypatch.setattr('pytech.db_utils.ohlcv_to_sql', df_to_sql)
 
 
 @pytest.yield_fixture(autouse=True)
@@ -233,7 +233,7 @@ class TestPortfolio(object):
 
     def test_make_trade(self):
         portfolio = Portfolio()
-        portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
+        portfolio.blotter.make_trade(ticker='AAPL', qty=100, action='buy')
         for k, owned_asset in portfolio.owned_assets.items():
             if isinstance(owned_asset.asset, Stock):
                 for key, fundamental in owned_asset.asset.fundamentals.items():
@@ -243,8 +243,8 @@ class TestPortfolio(object):
 
     def test_update_trade(self):
         portfolio = Portfolio()
-        portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
-        portfolio.make_trade(ticker='AAPL', qty=100, action='buy')
+        portfolio.blotter.make_trade(ticker='AAPL', qty=100, action='buy')
+        portfolio.blotter.make_trade(ticker='AAPL', qty=100, action='buy')
         aapl = portfolio.owned_assets.get('AAPL')
         portfolio.return_on_owned_assets()
         df_1 = aapl.asset.simple_moving_average()
@@ -254,7 +254,7 @@ class TestPortfolio(object):
         test_df = df_1['Adj Close'] == df_2['Adj Close']
         assert test_df.all() == True
         assert aapl.shares_owned == 200
-        portfolio.make_trade(ticker='AAPL', qty=100, action='sell')
+        portfolio.blotter.make_trade(ticker='AAPL', qty=100, action='sell')
         assert aapl.shares_owned == 100
 
     def test_make_trade_with_invalid_action(self):
@@ -269,8 +269,6 @@ class TestOwnedAsset(object):
         portfolio = Portfolio()
         with pytest.raises(NotAnAssetError):
             owned_asset = OwnedAsset(asset='not an asset', portfolio=portfolio, shares_owned=12, position='LONG')
-
-
 
 
 @pytest.mark.skip(reason='I will fix it later')

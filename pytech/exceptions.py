@@ -91,3 +91,9 @@ class UntriggeredTradeError(PyInvestmentError):
     """Raised when a :class:``pytech.order.Trade`` is made from an order that has not been triggered"""
 
     msg = 'The order being traded has not been triggered yet. order_id: {id}'
+
+
+class NotABlotterError(PyInvestmentError):
+    """Raised when a :py:class:`pytech.blotter.Blotter` is expected but a different type is provided"""
+
+    msg = 'blotter must be an instance of Blotter. {blotter} was provided.'
