@@ -3,7 +3,7 @@
 import io
 import os
 
-from crawler import utils
+from pytech.crawler import utils
 from test.base import SAMPLE_DATA_DIR, TestCaseBase
 
 

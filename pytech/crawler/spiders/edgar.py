@@ -1,14 +1,13 @@
-from builtins import object
 import logging
-from dateutil import parser
+from builtins import object
+from datetime import date, timedelta
 
-from datetime import datetime, date
-from datetime import timedelta
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
-from crawler.loaders import ReportItemLoader
 from pytech import utils
+from pytech.crawler.loaders import ReportItemLoader
+
 logger = logging.getLogger(__name__)
 
 

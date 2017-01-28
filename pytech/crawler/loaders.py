@@ -1,18 +1,15 @@
-from builtins import str
-from builtins import object
-import re
-
-from datetime import datetime, timedelta
-# from scrapy import log
+import functools
 import logging
+import re
+from builtins import object, str
+from datetime import datetime, timedelta
+
 from scrapy.loader import ItemLoader
 from scrapy.loader.processors import Compose, MapCompose, TakeFirst
 from scrapy.utils.misc import arg_to_iter
 from scrapy.utils.python import flatten
 
-from crawler.items import ReportItem
-import functools
-
+from pytech.crawler.items import ReportItem
 
 DATE_FORMAT = '%Y-%m-%d'
 

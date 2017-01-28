@@ -24,24 +24,6 @@ logger = logging.getLogger(__name__)
 class Order(Base):
     """Hold open orders"""
 
-    id = Column(Integer, primary_key=True)
-    asset_id = Column(Integer)
-    asset_type = Column(String)
-    asset = generic_relationship(asset_id, asset_type)
-    blotter_id = Column(Integer, ForeignKey('blotter.id'), primary_key=True)
-    status = Column(String)
-    created = Column(DateTime)
-    close_date = Column(DateTime)
-    commission = Column(Numeric)
-    stop_price = Column(Numeric)
-    limit_price = Column(Numeric)
-    stop_reached = Column(Boolean)
-    limit_reached = Column(Boolean)
-    qty = Column(Integer)
-    filled = Column(Integer)
-    action = Column(String)
-    reason = Column(String)
-    order_type = Column(String)
     LOGGER_NAME = 'order'
 
     def __init__(self, asset, blotter, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
@@ -329,22 +311,8 @@ class Trade(Base):
 
     Trades must be created as a result of an :class:``Order`` executing.
     """
-    id = Column(Integer, primary_key=True)
-    trade_date = Column(DateTime)
-    action = Column(String)
-    strategy = Column(String)
-    qty = Column(Integer)
-    price_per_share = Column(Numeric)
-    corresponding_trade_id = Column(Integer, ForeignKey('trade.id'))
-    net_trade_value = Column(Numeric)
-    ticker = Column(String)
-    order = relationship('Order', backref='trade')
-    order_id = Column(Integer, ForeignKey('order.id'))
-    commission = Column(Integer)
 
-    # owned_stock_id = Column(Integer, ForeignKey('owned_stock.id'))
-    # owned_stock = relationship('OwnedStock')
-    # corresponding_trade = relationship('Trade', remote_side=[id])
+    LOGGER_NAME = 'trade'
 
     def __init__(self, qty, price_per_share, action, strategy, order, commission=0.0, trade_date=None, ticker=None):
         """
@@ -385,6 +353,7 @@ class Trade(Base):
         self.order = order
         self.order_id = order.id
         self.commission = commission
+        self.logger = logging.getLogger(self.LOGGER_NAME)
 
     @classmethod
     def _get_corresponding_trade_id(cls, ticker):

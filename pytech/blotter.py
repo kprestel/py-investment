@@ -38,7 +38,7 @@ class Blotter(Base):
         # dict of all orders. key is the ticker of the asset, value is the asset
         self.orders = {}
         self.current_dt = None
-        # TODO: reference portfolio
+        # TODO: reference portfolio in the logger name
         self.logger = logging.getLogger('blotter')
 
 

@@ -1,34 +1,27 @@
 import logging
 import os
-import re
+from abc import ABCMeta
 from collections import namedtuple
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 from multiprocessing import Process
 
 import numpy as np
 import pandas as pd
 import pandas_datareader.data as web
-from dateutil import parser
 from scrapy.crawler import CrawlerRunner
 from scrapy.utils.log import configure_logging
 from scrapy.utils.project import get_project_settings
-from sqlalchemy import Column, Numeric, String, DateTime, Integer, ForeignKey, Boolean
-from sqlalchemy import orm
-from sqlalchemy import text
+from sqlalchemy import Column, DateTime, ForeignKey, orm
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.declarative import AbstractConcreteBase
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm.collections import attribute_mapped_collection
-from sqlalchemy_utils import generic_relationship
 from twisted.internet import reactor
 
 import pytech.db_utils as db
 import pytech.utils as utils
-from crawler.spiders.edgar import EdgarSpider
 from pytech.base import Base
-from pytech.exceptions import InvalidPositionError, AssetNotInUniverseError, PyInvestmentError, NotAnAssetError
+from pytech.crawler.spiders.edgar import EdgarSpider
 from pytech.enums import AssetPosition
+from pytech.exceptions import AssetNotInUniverseError, NotAnAssetError
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,7 +53,7 @@ class HasStock(object):
         return Column('stock_id', ForeignKey('stock.id'))
 
 
-class Asset(Base, AbstractConcreteBase):
+class Asset(metaclass=ABCMeta):
     """
     This is the base class that all Asset classes should inherit from.
 
@@ -77,29 +70,11 @@ class Asset(Base, AbstractConcreteBase):
     :class:``~pytech.portfolio.Portfolio`` tries to trade it an exception will occur.
     """
 
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String, unique=True)
+    ticker = None
 
     def __init__(self, ticker):
         self.ticker = ticker
         self.ohlcv = None
-
-    @declared_attr
-    def __tablename__(cls):
-        name = cls.__name__
-        return (
-            name[0].lower() +
-            re.sub(r'([A-Z])',
-                   lambda m: '_' + m.group(0).lower(), name[1:])
-        )
-
-    @declared_attr
-    def __mapper_args__(cls):
-        name = cls.__name__
-        return {
-            'polymorphic_identity': name.lower(),
-            'concrete': True
-        }
 
     @classmethod
     def get_asset_from_universe(cls, ticker):
@@ -161,19 +136,6 @@ class Stock(Asset):
     A ``Stock`` object must exist in the database in order for it to be traded.  Each ``Stock`` object is considered to
     be in the *universe* of owned_assets the portfolio owner is willing to own/trade
     """
-
-    start_date = Column(DateTime)
-    end_date = Column(DateTime)
-    latest_price = Column(Numeric)
-    latest_price_time = Column(DateTime)
-    get_ohlcv = Column(Boolean)
-    load_fundamentals = Column(Boolean)
-    beta = Column(Numeric)
-    start_price = Column(Numeric)
-    end_price = Column(Numeric)
-    fundamentals = relationship('Fundamental',
-                                collection_class=attribute_mapped_collection('access_key'),
-                                lazy='joined')
 
     def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
 
@@ -260,7 +222,7 @@ class Stock(Asset):
 
         try:
             temp_ohlcv = web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
-            self.ohlcv = temp_ohlcv.rename(columns={'Date': 'trade_date'})
+            self.ohlcv = temp_ohlcv.rename(columns={'Date': 'asof_date'})
         except:
             logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
             return None
@@ -1108,22 +1070,6 @@ class OwnedAsset(Base):
     Contains data that only matters for a :class:`Asset` that is in a user's :class:`~pytech.portfolio.Portfolio`
     """
 
-    asset_id = Column(Integer)
-    #: The type of asset it is. For example if for a Stock asset the **asset_type** would be 'stock'
-    asset_type = Column(String)
-    #: The relation to the :class:``Asset`` instance
-    asset = generic_relationship(asset_id, asset_type)
-    portfolio_id = Column(Integer, ForeignKey('portfolio.id'), primary_key=True)
-    purchase_date = Column(DateTime)
-    average_share_price_paid = Column(Numeric)
-    shares_owned = Column(Integer)
-    total_position_value = Column(Numeric)
-    #: The total amount of capital invested in an asset.
-    #: This will be negative for a long position and positive for a short position
-    total_position_cost = Column(Numeric)
-    #: Long or Short
-    position = Column(String)
-
     def __init__(self, asset, portfolio, shares_owned, position, average_share_price=None, purchase_date=None):
 
         if issubclass(asset.__class__, Asset):
@@ -1289,54 +1235,6 @@ class Fundamental(Base, HasStock):
     Would it be a good idea to break this class out into period measures, like sales, expenses, etc and then instant
     measures like accounts pay, balance sheet stuff?
     """
-
-    # key to the corresponding Stock's dictionary must be 'period_focus_year'
-    id = Column(Integer, primary_key=True)
-    access_key = Column(String, unique=True)
-    amended = Column(Boolean)
-    assets = Column(Numeric)
-    current_assets = Column(Numeric)
-    current_liabilities = Column(Numeric)
-    cash = Column(Numeric)
-    dividend = Column(Numeric)
-    end_date = Column(DateTime)
-    eps = Column(Numeric)
-    eps_diluted = Column(Numeric)
-    equity = Column(Numeric)
-    net_income = Column(Numeric)
-    operating_income = Column(Numeric)
-    revenues = Column(Numeric)
-    investment_revenues = Column(Numeric)
-    fin_cash_flow = Column(Numeric)
-    inv_cash_flow = Column(Numeric)
-    ops_cash_flow = Column(Numeric)
-    year = Column(String)
-    period_focus = Column(String)
-    property_plant_equipment = Column(Numeric)
-    gross_profit = Column(Numeric)
-    tax_expense = Column(Numeric)
-    net_taxes_paid = Column(Numeric)
-    acts_pay_current = Column(Numeric)
-    acts_receive_current = Column(Numeric)
-    acts_receive_noncurrent = Column(Numeric)
-    acts_receive = Column(Numeric)
-    accrued_liabilities_current = Column(Numeric)
-    inventory_net = Column(Numeric)
-    interest_expense = Column(Numeric)
-    total_liabilities = Column(Numeric)
-    total_liabilities_equity = Column(Numeric)
-    shares_outstanding = Column(Numeric)
-    shares_outstanding_diluted = Column(Numeric)
-    depreciation_amortization = Column(Numeric)
-    cogs = Column(Numeric)
-    comprehensive_income_net_of_tax = Column(Numeric)
-    research_and_dev_expense = Column(Numeric)
-    common_stock_outstanding = Column(Numeric)
-    warranty_accrual = Column(Numeric)
-    warranty_accrual_payments = Column(Numeric)
-    ebit = Column(Numeric)
-    ebitda = Column(Numeric)
-    ticker = Column(String)
 
     def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
                  equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,

@@ -1,13 +1,13 @@
 # from future import standard_library
 # standard_library.install_aliases()
-import pytest
 import os
-import requests
 import urllib.parse
 
+import pytest
+import requests
 from scrapy.http.response.xml import XmlResponse
 
-from crawler.loaders import ReportItemLoader
+from pytech.crawler.loaders import ReportItemLoader
 from test.base import SAMPLE_DATA_DIR, TestCaseBase
 
 
