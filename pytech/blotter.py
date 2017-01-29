@@ -1,19 +1,16 @@
+import logging
 from datetime import datetime
 
-import logging
-from sqlalchemy import Column
-from sqlalchemy import ForeignKey
-from sqlalchemy import Integer
+from sqlalchemy import Column, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
-from pytech import Base, utils
+import pytech.db.db_utils as db
+from pytech import Base
 from pytech.asset import Asset, OwnedAsset
-from pytech.enums import AssetPosition
-from pytech.enums import TradeAction
+from pytech.enums import AssetPosition, TradeAction
 from pytech.exceptions import NotAPortfolioError
 from pytech.order import Order, Trade
-import pytech.db_utils as db
 
 
 class Blotter(Base):

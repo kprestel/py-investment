@@ -1,15 +1,11 @@
 import json
-from dateutil import parser
-from dateutil.relativedelta import relativedelta
-from datetime import datetime
+import logging
 import os
 
-from scrapy import Selector
 from scrapy.exceptions import DropItem
-import logging
-# from pytech import Session
-import pytech.db_utils as db
-from pytech.asset import Stock, Fundamental
+
+import pytech.db.db_utils as db
+from pytech.asset import Fundamental
 
 logger = logging.getLogger(__name__)
 

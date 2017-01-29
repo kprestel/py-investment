@@ -18,16 +18,16 @@ PYTECH_DB_TABLE_NAMES = frozenset({
 
 asset = Table('asset', metadata,
               Column('id', Integer, primary_key=True),
-              Column('ticker', String, unique=True),
-              Column('latest_price', Numeric),
-              Column('latest_price_time', DateTime),
+              Column('ticker', String, unique=True, nullable=False, index=True, primary_key=True),
+              Column('start_date', Integer, nullable=False),
+              Column('end_date', Integer, nullable=False),
+              Column('asset_type', String),
               Column('beta', Numeric)
               )
 
 fundamental = Table('fundamental', metadata,
                     Column('id', Integer, primary_key=True),
-                    Column('access_key', String, unique=True),
-                    Column('asset_id', Integer, ForeignKey=True),
+                    Column('ticker', Integer, ForeignKey=('asset.c.ticker')),
                     Column('amended', Boolean),
                     Column('assets', Numeric),
                     Column('current_assets', Numeric),
@@ -82,16 +82,16 @@ portfolio = Table('portfolio', metadata,
 
 blotter = Table('blotter', metadata,
                 Column('id', Integer, primary_key=True),
-                Column('portfolio_id', Integer, ForeignKey('portfolio.id'))
+                Column('portfolio_id', Integer, ForeignKey=('portfolio.c.id'))
                 )
 
 order = Table('order', metadata,
               Column('id ', Integer, primary_key=True),
-              Column('blotter_id', Integer, ForeignKey('blotter.id'), primary_key=True),
-              Column('asset_id', Integer, ForeignKey=('asset.id'), primary_key=True),
+              Column('blotter_id', Integer, ForeignKey=('blotter.c.id'), primary_key=True),
+              Column('asset_id', Integer, ForeignKey=('asset.c.id'), primary_key=True),
               Column('asset_type', String),
               Column('status', String),
-              Column('created', DateTime),
+              Column('created', Integer),
               Column('close_date', DateTime),
               Column('commission', Numeric),
               Column('stop_price', Numeric),
@@ -107,34 +107,35 @@ order = Table('order', metadata,
 
 trade = Table('trade', metadata,
               Column('id', Integer, primary_key=True),
-              Column('trade_date', DateTime),
+              Column('trade_date', Integer),
               Column('action', String),
               Column('strategy', String),
               Column('qty', Integer),
-              Column('corresponding_trade_id', Integer, ForeignKey('trade.id')),
+              Column('corresponding_trade_id', Integer, ForeignKey=('trade.c.id')),
               Column('net_trade_value', Numeric),
               Column('ticker', String),
-              Column('order_id ', Integer, ForeignKey('order.id')),
+              Column('order_id ', Integer, ForeignKey=('order.c.id')),
               Column('commission', Integer)
               )
 
 owned_asset = Table('owned_asset', metadata,
                     Column('id', Integer, primary_key=True),
-                    Column('asset_id', Integer, ForeignKey=('asset.id'), primary_key=True),
+                    Column('asset_id', Integer, ForeignKey=('asset.c.id'), primary_key=True),
                     Column('asset_type', String),
-                    Column('portfolio_id', Integer, ForeignKey('portfolio.id'), primary_key=True),
-                    Column('purchase_date ', DateTime),
+                    Column('portfolio_id', Integer, ForeignKey=('portfolio.c.id'), primary_key=True),
+                    Column('purchase_date ', Integer),
                     Column('average_share_price_paid', Numeric),
                     Column('shares_owned', Integer),
                     Column('total_position_value', Numeric)
                     )
 
 universe_ohlcv = Table('universe_ohlcv', metadata,
-                       Column('asset_id', Integer, primary_key=True, ForeignKey=('asset.id')),
-                       Column('asof_date', DateTime, primary_key=True),
+                       Column('ticker', Integer, primary_key=True, ForeignKey=('asset.c.ticker')),
+                       Column('asof_date', Integer, primary_key=True),
                        Column('open', Numeric),
                        Column('high', Numeric),
                        Column('low', Numeric),
                        Column('close', Numeric),
+                       Column('adj_close', Numeric),
                        Column('volume', Numeric)
                        )

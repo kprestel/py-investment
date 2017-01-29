@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+import numpy as np
 from functools import wraps
 from pytech import Session, engine
 import pandas as pd
@@ -10,9 +11,30 @@ def ohlcv_to_sql(asset):
     :param Asset asset: An instance of a `:py:class:pytech.asset.Asset`
     :return: None, this method only writes to the DB.
     """
+
     df = pd.DataFrame(asset.ohlcv)
+    df['asof_date'] = _dt_to_epoch(df['asof_date'])
     df['ticker'] = asset.ticker
-    df.to_sql('ohlcv', con=engine, if_exists='append')
+    df.to_sql('universe_ohlcv', con=engine, if_exists='append', index=False)
+
+def _dt_to_epoch(dt_series):
+    """
+    Convert a ``pandas.TimeSeries`` to epoch time stamps.
+
+    This method is inspired by the zipline library.
+
+    :param TimeSeries dt_series: The series of dates to convert.
+    :return: The dt_series converted to epoch timestamps in nanoseconds.
+    """
+
+    index = pd.to_datetime(dt_series.values)
+
+    if index.tz_info is None:
+        index = index.tz_localize('UTC')
+    else:
+        index - index.tz_convert('UTC')
+    return index.view(np.int64)
+
 
 def ohlcv_from_sql(asset=None, date_to_load=None):
     """
@@ -21,7 +43,8 @@ def ohlcv_from_sql(asset=None, date_to_load=None):
     :param asset: The asset to retrieve the OHLCV of. If left None then all of the OHLCVs in the DB will be loaded.
     (default: None)
     :type asset: :py:class:`pytech.asset.Asset` or None
-    :param datetime date_to_load: Only retrieve the OHLCV data for a particular date. Used for things such as backtesting.
+    :param datetime date_to_load: Only retrieve the OHLCV data for a particular date.
+        Used for things such as backtesting.
     :return: The OHLCV `pandas.DataFrame`
     :rtype: `pandas.DataFrame`
 

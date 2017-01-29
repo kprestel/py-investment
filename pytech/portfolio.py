@@ -3,22 +3,15 @@ import logging
 from datetime import datetime, timedelta
 
 import pandas_datareader.data as web
-from sqlalchemy import Column, DateTime, Float, Integer, String, orm
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm.collections import attribute_mapped_collection
 
-import pytech.db_utils as db
+import pytech.db.db_utils as db
 import pytech.utils as utils
-from pytech.order import Trade, Order
-from pytech.base import Base
-from pytech.enums import AssetPosition, TradeAction
-from pytech.asset import Asset, OwnedAsset
 from pytech.blotter import Blotter
 
 logger = logging.getLogger(__name__)
 
 
-class Portfolio(Base):
+class Portfolio(object):
     """
     Holds stocks and keeps tracks of the owner's cash as well and their :class:`OwnedAssets` and allows them to perform
     analysis on just the :class:`Asset` that they currently own.
@@ -32,24 +25,7 @@ class Portfolio(Base):
     a :class:``Asset`` does have to be in the database to be traded
     """
 
-    id = Column(Integer, primary_key=True)
-    cash = Column(Float)
-    benchmark_ticker = Column(String)
-    start_date = Column(DateTime)
-    end_date = Column(DateTime)
-    trading_cal = Column(String)
-    data_frequency = Column(String)
-    owned_assets = relationship('OwnedAsset', backref='portfolio',
-                                collection_class=attribute_mapped_collection('asset.ticker'),
-                                lazy='joined', cascade='save-update, all, delete-orphan')
-    blotter = relationship('Blotter', uselist=False, back_populates='portfolio')
-    # orders = relationship('Order', backref='portfolio',
-    #                       collection_class=attribute_mapped_collection('asset.ticker'),
-    #                       lazy='joined', cascade='save-update, all, delete-orphan')
-
     LOGGER_NAME = 'portfolio'
-
-    # assets = association_proxy('owned_assets', 'asset')
 
     def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000,
                  trading_cal='NYSE', data_frequency='daily'):
@@ -87,12 +63,6 @@ class Portfolio(Base):
         self.data_frequency = data_frequency
         self.logger = logging.getLogger(self.LOGGER_NAME)
         self.blotter = Blotter(portfolio=self)
-
-    @orm.reconstructor
-    def init_on_load(self):
-        """Recreate the benchmark series on load from DB"""
-
-        self.benchmark = web.DataReader(self.benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
     def get_owned_asset(self, ticker):
         """

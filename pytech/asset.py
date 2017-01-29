@@ -7,50 +7,22 @@ from multiprocessing import Process
 
 import numpy as np
 import pandas as pd
-import pandas_datareader.data as web
+from pandas_datareader import data as web
 from scrapy.crawler import CrawlerRunner
 from scrapy.utils.log import configure_logging
 from scrapy.utils.project import get_project_settings
-from sqlalchemy import Column, DateTime, ForeignKey, orm
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.declarative import declared_attr
 from twisted.internet import reactor
 
-import pytech.db_utils as db
-import pytech.utils as utils
+import pytech.db.db_utils as db
+from pytech import utils as utils
 from pytech.base import Base
 from pytech.crawler.spiders.edgar import EdgarSpider
 from pytech.enums import AssetPosition
-from pytech.exceptions import AssetNotInUniverseError, NotAnAssetError
+from pytech.exceptions import NotAnAssetError
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class PortfolioAsset(object):
-    """
-    Mixin object to create a one to many relationship with Portfolio
-
-    Any class that inherits from this class may be added to a Portfolio's asset_list which will place a foreign key
-    in that asset class and create a relationship between it and the Portfolio that owns it
-    """
-
-    @declared_attr
-    def portfolio_id(cls):
-        return Column('portfolio_id', ForeignKey('portfolio.id'))
-
-
-class HasStock(object):
-    """
-    Mixin object to create a relation to a asset object
-
-    Any class that inherits from this class will be given a foreign key column that corresponds to the asset object
-    passed to the child class's constructor
-    """
-
-    @declared_attr
-    def stock_id(cls):
-        return Column('stock_id', ForeignKey('stock.id'))
 
 
 class Asset(metaclass=ABCMeta):
@@ -70,39 +42,81 @@ class Asset(metaclass=ABCMeta):
     :class:``~pytech.portfolio.Portfolio`` tries to trade it an exception will occur.
     """
 
-    ticker = None
-
-    def __init__(self, ticker):
+    def __init__(self, ticker, start_date, end_date, ohlcv=None):
         self.ticker = ticker
-        self.ohlcv = None
+        self.asset_type = self.__class__.__name__
+        # will get assigned when written to the db.
+        self.id = None
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-    @classmethod
-    def get_asset_from_universe(cls, ticker):
+        self._start_date = start_date
+        self._end_date = end_date
+
+
+        if self.start_date >= self.end_date:
+            raise ValueError(
+                    'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
+                                                                                                 str(end_date)))
+
+        if ohlcv is None:
+            self._ohlcv = self.get_ohlcv_series()
+        else:
+            self._ohlcv = ohlcv
+
+    @property
+    def ohlcv(self):
+        return self._ohlcv
+
+    @ohlcv.setter
+    def ohlcv(self, ohlcv):
+        if not isinstance(ohlcv, pd.DataFrame) or not isinstance(ohlcv, pd.TimeSeries):
+            raise TypeError('ohlcv must be a pandas DataFrame or TimeSeries. {} was provided'.format(type(ohlcv)))
+
+        self._ohlcv = ohlcv
+        db.ohlcv_to_sql(self)
+
+    @property
+    def start_date(self):
+        return self._start_date
+
+    @start_date.setter
+    def start_date(self, start_date):
         """
-        Query the asset universe for the requested ticker and return the object
+        Setter for start_date. Converts start_date to a tz aware ``TimeStamp``
 
-        :param ticker: the ticker of the ``Asset`` being traded
-        :type ticker: str
-        :return: The :class:``Asset`` object with the ticker passed in
-        :rtype: Asset
-        :raises AssetNotInUniverseError: if an :class:``Asset`` with the requested ticker cannot be found
+        :param datetime start_date:
         """
 
-        with db.transactional_session() as session:
-            asset = session.query(cls).filter(cls.ticker == ticker).first()
-            if asset is not None:
-                return asset
-            else:
-                raise AssetNotInUniverseError(ticker=ticker)
+        if start_date is None:
+            start_date = datetime.now() - timedelta(days=365)
 
-    def get_price_quote(self, d=None, column='Adj Close'):
+        self._start_date = utils.parse_date(start_date)
+
+    @property
+    def end_date(self):
+        return self._end_date
+
+    @end_date.setter
+    def end_date(self, end_date):
+        """
+        Setter for end_date. Converts end_date to a tz aware ``TimeStamp``
+
+        :param datetime end_date:
+        """
+
+        if end_date is None:
+            end_date = datetime.utcnow()
+
+        self._end_date = utils.parse_date(end_date)
+
+    def get_price_quote(self, d=None, column='adj_close'):
         """
         Get the price of an Asset.
 
         :param date or datetime d: The datetime of when to retrieve the price quote from.
             (default: ``date.today()``)
         :param str column: The header of the column to use to get the price quote from.
-            (default: ``Adj Close``
+            (default: ``adj_close``
         :return: namedtuple with price and the the datetime
         :rtype: namedtuple
         """
@@ -128,80 +142,18 @@ class Asset(metaclass=ABCMeta):
 
         return self.ohlcv.ix[dt]['Volume'][0]
 
-
-class Stock(Asset):
-    """
-    Main class that is used to model stocks and may contain technical and fundamental data about the asset.
-
-    A ``Stock`` object must exist in the database in order for it to be traded.  Each ``Stock`` object is considered to
-    be in the *universe* of owned_assets the portfolio owner is willing to own/trade
-    """
-
-    def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, get_ohlcv=True):
-
-        super().__init__(ticker)
-
-        if start_date is None:
-            self.start_date = datetime.now() - timedelta(days=365)
-        else:
-            self.start_date = utils.parse_date(start_date)
-
-        if end_date is None:
-            self.end_date = datetime.now()
-        else:
-            self.end_date = utils.parse_date(end_date)
-
-        if self.start_date >= self.end_date:
-            raise ValueError(
-                    'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
-                                                                                                 str(end_date)))
-        self.get_ohlcv = get_ohlcv
-        if get_ohlcv:
-            self.get_ohlcv_series()
-            self.beta = self.calculate_beta()
-            self.start_price = self.ohlcv[['Adj Close']].head(1).iloc[0]['Adj Close']
-            self.end_price = self.ohlcv[['Adj Close']].tail(1).iloc[0]['Adj Close']
-        else:
-            self.beta = None
-            self.start_price = None
-            self.end_price = None
-
-        self.fundamentals = {}
-        self.load_fundamentals = get_fundamentals
-        if get_fundamentals:
-            self.get_fundamentals()
-        quote = self.get_price_quote()
-        self.latest_price = quote.price
-        self.latest_price_time = quote.time
-
-    @orm.reconstructor
-    def init_on_load(self):
-        """If the user wanted the ohlc_series then recreate it when this object is loaded again"""
-        self.get_ohlcv_series()
-        # if self.get_ohlcv:
-        #     self.get_ohlcv_series()
-        # else:
-        #     self.ohlcv_to_sql = None
-        quote = self.get_price_quote()
-        self.latest_price = quote.price
-        self.latest_price_time = quote.time
-
     def get_ohlcv_series(self, data_source='yahoo', start_date=None, end_date=None):
         """
         Load the ohlcv_to_sql timeseries.
 
-        :param data_source:
-            set where to get the data from. see pandas DataReader docs for more valid options.
+        :param str data_source: set where to get the data from. see pandas DataReader docs for more valid options.
             (default: yahoo)
-        :type data_source: str
-        :param start_date:
-            when to load the timeseries as of
-        :type start_date: DateTime
-        :param end_date:
-            when to end the timeseries
-        :type end_date: DateTime
+        :param datetime start_date: When to load the timeseries as of. Optional.
+            (default: None) If left at default the :class:`Asset` start_date will be used.
+        :param datetime end_date: When to end the timeseries. Optional.
+            (default: None) If left at default the :class:`Asset` end_date will be used.
 
-        This method will get called on the initial creation of the :class:`Stock` object with whatever start and end
+        This method will get called on the initial creation of the :class:`Asset` object with whatever start and end
         dates that the object is created with.
 
         To change the date range that is contained in the timeseries then call this method explicitly with the desired
@@ -222,10 +174,78 @@ class Stock(Asset):
 
         try:
             temp_ohlcv = web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
-            self.ohlcv = temp_ohlcv.rename(columns={'Date': 'asof_date'})
+            temp_ohlcv.reset_index(inplace=True, drop=False)
+            self.ohlcv = temp_ohlcv.rename(columns={
+                'Date': 'asof_date',
+                'Open': 'open',
+                'High': 'high',
+                'Low': 'low',
+                'Close': 'close',
+                'Adj Close': 'adj_close',
+                'Volume': 'volume'
+                })
         except:
             logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
             return None
+
+    @classmethod
+    def get_subclass_dict(cls, subclass_dict=None):
+        """
+        Get a dictionary of subclasses for :class:`Asset` where the key is the string name of the class and the value
+        is the actual class reference.
+
+        :param dict subclass_dict: This is used for recursion to maintain the subclass_dict through each call.
+        :return: A dictionary where the key is the string name of the subclass and the value is the reference to the class
+        :rtype: dict
+        """
+
+        if subclass_dict is None:
+            subclass_dict = {}
+        else:
+            subclass_dict = subclass_dict
+
+        for subclass in cls.__subclasses__():
+            # prevent duplicate keys
+            if subclass.__name__ not in subclass_dict:
+                subclass_dict[subclass.__name__] = subclass
+                subclass.get_subclass_dict(subclass_dict)
+        return subclass_dict
+
+    @classmethod
+    def from_dict(cls, asset_dict):
+        d = {k: v for k, v in asset_dict.items() if k in cls.__dict__}
+        return cls(**d)
+
+
+class Stock(Asset):
+    """
+    Main class that is used to model stocks and may contain technical and fundamental data about the asset.
+
+    A ``Stock`` object must exist in the database in order for it to be traded.  Each ``Stock`` object is considered to
+    be in the *universe* of owned_assets the portfolio owner is willing to own/trade
+    """
+
+    def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, beta=None):
+
+        super().__init__(ticker, start_date=start_date, end_date=end_date)
+
+        if beta is None:
+            self.beta = self.calculate_beta()
+        else:
+            self.beta = beta
+
+        self.start_price = self.ohlcv[['adj_close']].head(1).iloc[0]['adj_close']
+        self.end_price = self.ohlcv[['adj_close']].tail(1).iloc[0]['adj_close']
+
+        self.fundamentals = {}
+        self.load_fundamentals = get_fundamentals
+
+        if get_fundamentals:
+            self.get_fundamentals()
+
+        quote = self.get_price_quote()
+        self.latest_price = quote.price
+        self.latest_price_time = quote.time
 
     def get_fundamentals(self):
         """
@@ -254,7 +274,7 @@ class Stock(Asset):
 
     # TECHNICAL INDICATORS/ANALYSIS
 
-    def simple_moving_average(self, period=50, column='Adj Close'):
+    def simple_moving_average(self, period=50, column='adj_close'):
         table_name = 'sma_test'
         # stmt = text('SELECT * FROM sma_test WHERE asset_id = :asset_id')
         # stmt.bindparams(asset_id=self.id)
@@ -265,7 +285,7 @@ class Stock(Asset):
             # TODO: parse dates
             df = pd.read_sql(sql, con=conn, params={
                 'asset_id': self.id
-                })
+            })
         except OperationalError:
             logger.exception('error in query')
             sma_ts = pd.Series(
@@ -280,7 +300,7 @@ class Stock(Asset):
             print(df)
             return df
 
-    def simple_moving_median(self, period=50, column='Adj Close'):
+    def simple_moving_median(self, period=50, column='adj_close'):
         """
         :param ohlc: dict
         :param period: int, the number of days to use
@@ -292,7 +312,7 @@ class Stock(Asset):
         return pd.Series(self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).median(),
                          name='{} day SMM Ticker: {}'.format(period, self.ticker))
 
-    def exponential_weighted_moving_average(self, period=50, column='Adj Close'):
+    def exponential_weighted_moving_average(self, period=50, column='adj_close'):
         """
         :param ohlc: dict
         :param period: int, the number of days to use
@@ -304,7 +324,7 @@ class Stock(Asset):
         return pd.Series(self.ohlcv[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean(),
                          name='{} day EWMA Ticker: {}'.format(period, self.ticker))
 
-    def double_ewma(self, period=50, column='Adj Close'):
+    def double_ewma(self, period=50, column='adj_close'):
         """
 
         :param self: Stock
@@ -319,7 +339,7 @@ class Stock(Asset):
         dema = 2 * ewma - ewma_mean
         yield pd.Series(dema, name='{} day DEMA Ticker: {}'.format(period, self.ticker))
 
-    def triple_ewma(self, period=50, column='Adj Close'):
+    def triple_ewma(self, period=50, column='adj_close'):
         """
         :param self: Stock
         :param period: int, days
@@ -334,7 +354,7 @@ class Stock(Asset):
         tema = triple_ema - 3 * ewma.ewm(ignore_na=False, min_periods=period - 1, span=period).mean() + ema_ema_ema
         return pd.Series(tema, name='{} day TEMA Ticker: {}'.format(period, self.ticker))
 
-    def triangle_moving_average(self, period=50, column='Adj Close'):
+    def triangle_moving_average(self, period=50, column='adj_close'):
         """
         :param self: dict
         :param period: int, days
@@ -349,7 +369,7 @@ class Stock(Asset):
             .rolling(center=False, window=period, min_periods=period - 1).mean()
         return pd.Series(sma, name='{} day TRIMA Ticker: {}'.format(period, self.ticker))
 
-    def triple_ema_oscillator(self, period=15, column='Adj Close'):
+    def triple_ema_oscillator(self, period=15, column='adj_close'):
         """
         :param universe_dict: dict
         :param period: int, days
@@ -368,7 +388,7 @@ class Stock(Asset):
         trix = emwa_three.pct_change(periods=1)
         return pd.Series(trix, name='{} days TRIX Ticker: {}'.format(period, self.ticker))
 
-    def efficiency_ratio(self, period=10, column='Adj Close'):
+    def efficiency_ratio(self, period=10, column='adj_close'):
         """
         :param universe_dict: dict
         :param period: int, days
@@ -383,7 +403,7 @@ class Stock(Asset):
         vol = self.ohlcv[column].diff().abs().rolling(window=period).sum()
         return pd.Series(change / vol, name='{} days Efficiency Indicator Ticker: {}'.format(period, self.ticker))
 
-    def _efficiency_ratio_computation(self, period=10, column='Adj Close'):
+    def _efficiency_ratio_computation(self, period=10, column='adj_close'):
         """
         :param ohlc: Timeseries
         :param period: int, days
@@ -399,7 +419,7 @@ class Stock(Asset):
         vol = self.ohlcv[column].diff().abs().rolling(window=period).sum()
         return pd.Series(change / vol)
 
-    def kama(self, efficiency_ratio_periods=10, ema_fast=2, ema_slow=30, period=20, column='Adj Close'):
+    def kama(self, efficiency_ratio_periods=10, ema_fast=2, ema_slow=30, period=20, column='adj_close'):
         er = self._efficiency_ratio_computation(period=efficiency_ratio_periods, column=column)
         fast_alpha = 2 / (ema_fast + 1)
         slow_alpha = 2 / (ema_slow + 1)
@@ -418,7 +438,7 @@ class Stock(Asset):
         sma['KAMA'] = pd.Series(kama, index=sma.index, name='{} days KAMA Ticker {}'.format(period, self.ticker))
         yield sma['KAMA']
 
-    def zero_lag_ema(self, period=30, column='Adj Close'):
+    def zero_lag_ema(self, period=30, column='adj_close'):
         """
         :param universe_dict: dict
         :param period: int, days
@@ -432,7 +452,7 @@ class Stock(Asset):
         return pd.Series((self.ohlcv[column] + (self.ohlcv[column].diff(lag))),
                          name='{} days Zero Lag EMA Ticker: {}'.format(period, self.ticker))
 
-    def weighted_moving_average(self, period=30, column='Adj Close'):
+    def weighted_moving_average(self, period=30, column='adj_close'):
         """
         :param universe_dict: dict
         :param period: int, days
@@ -448,7 +468,7 @@ class Stock(Asset):
                          name='{} days WMA Ticker: {}'.format(period, self.ticker))
         # yield pd.Series(ts['WMA'], name='{} days WMA Ticker: {}'.format(period, ticker))
 
-    def hull_moving_average(self, period=30, column='Adj Close'):
+    def hull_moving_average(self, period=30, column='adj_close'):
         """
 
         :param universe_dict: dict
@@ -473,10 +493,10 @@ class Stock(Asset):
         wma_delta['_WMA'] = pd.Series(wma, index=self.ohlcv.index)
         yield pd.Series(wma_delta['_WMA'], name='{} day HMA Ticker: {}'.format(period, self.ticker))
 
-    def volume_weighted_moving_average(universe_dict, period=30, column='Adj Close'):
+    def volume_weighted_moving_average(universe_dict, period=30, column='adj_close'):
         pass
 
-    def smoothed_moving_average(self, period=30, column='Adj Close'):
+    def smoothed_moving_average(self, period=30, column='adj_close'):
         """
         :param universe_dict: dict
         :param period: int, days
@@ -488,7 +508,7 @@ class Stock(Asset):
         return pd.Series(self.ohlcv[column].ewm(alpha=1 / float(period)).mean(),
                          name='{} days SMMA Ticker: {}'.format(period, self.ticker))
 
-    def macd_signal(self, period_fast=12, period_slow=26, signal=9, column='Adj Close'):
+    def macd_signal(self, period_fast=12, period_slow=26, signal=9, column='adj_close'):
         """
         Moving average convergence divergence
 
@@ -521,7 +541,7 @@ class Stock(Asset):
         macd_signal_series = pd.Series(macd_series.ewm(ignore_na=False, span=signal).mean(), name='MACD_Signal')
         return pd.concat([macd_signal_series, macd_series], axis=1)
 
-    def market_momentum(self, period=10, column='Adj Close'):
+    def market_momentum(self, period=10, column='adj_close'):
         """
         Continually take price differences for a fixed interval
 
@@ -535,7 +555,7 @@ class Stock(Asset):
 
         return pd.Series(self.ohlcv[column].diff(period), name='{} day MOM Ticker: {}'.format(period, self.ticker))
 
-    def rate_of_change(self, period=1, column='Adj Close'):
+    def rate_of_change(self, period=1, column='adj_close'):
         """
         :param universe_dict: dict
         :param period: int
@@ -547,7 +567,7 @@ class Stock(Asset):
         return pd.Series((self.ohlcv[column].diff(period) / self.ohlcv[column][-period]) * 100,
                          name='{} day Rate of Change Ticker: {}'.format(period, self.ticker))
 
-    def relative_strength_indicator(self, period=14, column='Adj Close'):
+    def relative_strength_indicator(self, period=14, column='adj_close'):
         """
         :param universe_dict: dict
         :param period: int
@@ -559,7 +579,7 @@ class Stock(Asset):
         return pd.Series(self._rsi_computation(period=period, column=column),
                          name='{} day RSI Ticker: {}'.format(period, self.ticker))
 
-    def inverse_fisher_transform(self, rsi_period=5, wma_period=9, column='Adj Close'):
+    def inverse_fisher_transform(self, rsi_period=5, wma_period=9, column='adj_close'):
         """
         Modified Inverse Fisher Transform applied on RSI
 
@@ -623,7 +643,7 @@ class Stock(Asset):
         return pd.Series(tr.rolling(center=False, window=period, min_periods=period - 1).mean(),
                          name='{} day ATR Ticker: {}'.format(period, self.ticker)).tail(period)
 
-    def bollinger_bands(self, period=30, moving_average=None, column='Adj Close'):
+    def bollinger_bands(self, period=30, moving_average=None, column='adj_close'):
         std_dev = self.ohlcv[column].std()
         if isinstance(moving_average, pd.Series):
             middle_band = pd.Series(self._sma_computation(period=period, column=column),
@@ -670,8 +690,8 @@ class Stock(Asset):
             market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         except:
             raise Exception('Unknown error occurred trying to get a OHLCV for ticker: {}'.format(market_ticker))
-        market_pct_change = pd.Series(market_df['Adj Close'].pct_change(periods=1))
-        stock_pct_change = pd.Series(self.ohlcv['Adj Close'].pct_change(periods=1))
+        market_pct_change = pd.Series(market_df['adj_close'].pct_change(periods=1))
+        stock_pct_change = pd.Series(self.ohlcv['adj_close'].pct_change(periods=1))
         return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
 
     def calculate_beta(self, market_ticker='^GSPC'):
@@ -756,7 +776,7 @@ class Stock(Asset):
                             name='negative_dmi')
         return pd.concat([diplus, diminus])
 
-    def sma_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
+    def sma_crossover_signals(self, slow=200, fast=50, column='adj_close'):
         """
         :param slow: int, how many days for the short term moving average
         :param fast:  int, how many days for the long term moving average
@@ -771,7 +791,7 @@ class Stock(Asset):
         # also need to make sure this method works right...
         self.ohlcv['Action'] = np.where(crossover_ts > 0, 1, 0)
 
-    def simple_median_crossover_signals(self, slow=200, fast=50, column='Adj Close'):
+    def simple_median_crossover_signals(self, slow=200, fast=50, column='adj_close'):
         slow_ts = self.simple_moving_median(period=slow, column=column)
         fast_ts = self.simple_moving_median(period=fast, column=column)
         crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.ohlcv.index)
@@ -838,7 +858,7 @@ class Stock(Asset):
         tr['TA'] = true_range_list
         return pd.Series(tr['TA'])
 
-    def _sma_computation(self, period=50, column='Adj Close'):
+    def _sma_computation(self, period=50, column='adj_close'):
         return pd.Series(self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean())
 
     def _average_true_range_computation(self, period):
@@ -925,7 +945,7 @@ class Stock(Asset):
             ma.append(price * (i / float(denominator)))
         return sum(ma)
 
-    def _ewma_computation(self, period=50, column='Adj Close'):
+    def _ewma_computation(self, period=50, column='adj_close'):
         """
         this method is used for computations in other exponential moving averages
 
@@ -1000,11 +1020,6 @@ class Stock(Asset):
                                 get_fundamentals=get_fundamentals))
 
     @classmethod
-    def from_dict(cls, stock_dict):
-        d = {k: v for k, v in stock_dict.items() if k in cls.__dict__}
-        return cls(**d)
-
-    @classmethod
     def create_stocks_dict_from_list_and_write_to_db(cls, ticker_list, start, end, session=None, get_fundamentals=False,
                                                      get_ohlc=False, close_session=True):
         """
@@ -1065,7 +1080,7 @@ class Stock(Asset):
         return stock_dict
 
 
-class OwnedAsset(Base):
+class OwnedAsset(object):
     """
     Contains data that only matters for a :class:`Asset` that is in a user's :class:`~pytech.portfolio.Portfolio`
     """
@@ -1213,8 +1228,8 @@ class OwnedAsset(Base):
             market_df = self.portfolio.benchmark
         else:
             market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
-        market_pct_change = pd.Series(market_df['Adj Close'].pct_change(periods=1))
-        stock_pct_change = pd.Series(self.ohlcv['Adj Close'].pct_change(periods=1))
+        market_pct_change = pd.Series(market_df['adj_close'].pct_change(periods=1))
+        stock_pct_change = pd.Series(self.ohlcv['adj_close'].pct_change(periods=1))
         return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
 
     def _get_portfolio_benchmark(self):
@@ -1226,7 +1241,7 @@ class OwnedAsset(Base):
         return self.portfolio.benchmark
 
 
-class Fundamental(Base, HasStock):
+class Fundamental(object):
     """
     The purpose of the this class to hold one period's worth of fundamental data for a given asset
 
