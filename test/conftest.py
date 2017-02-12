@@ -1,8 +1,6 @@
-from contextlib import contextmanager
-
 import pytest
-from pytech.asset import Stock, Fundamental
 
+from pytech.fin.asset import Fundamental, Stock
 
 
 @pytest.fixture()

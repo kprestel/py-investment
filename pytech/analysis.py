@@ -1,15 +1,11 @@
-import pandas as pd
-import pandas_datareader.data as web
 import datetime
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import numpy as np
-from matplotlib.dates import DateFormatter, WeekdayLocator, DayLocator, MONDAY, date2num
-from matplotlib.finance import candlestick_ohlc
-from pytech.portfolio import Portfolio
 import sys
 
 import finsymbols
+import pandas as pd
+import pandas_datareader.data as web
+
+from pytech.fin.portfolio import Portfolio
 
 sys.path.append('/home/kp/CodeFiles/StockPicker/')
 

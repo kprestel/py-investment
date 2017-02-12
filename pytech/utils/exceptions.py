@@ -97,3 +97,7 @@ class NotABlotterError(PyInvestmentError):
     """Raised when a :py:class:`pytech.blotter.Blotter` is expected but a different type is provided"""
 
     msg = 'blotter must be an instance of Blotter. {blotter} was provided.'
+
+class NotAFinderError(PyInvestmentError):
+
+    msg = 'finder must be an instance of Finder. {finder} was provided.'

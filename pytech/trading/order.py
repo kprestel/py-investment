@@ -9,9 +9,9 @@ from pandas.tseries.offsets import DateOffset
 
 import pytech.db.db_utils as db
 from pytech import Base, utils
-from pytech.asset import Asset, OwnedAsset
-from pytech.enums import OrderStatus, OrderSubType, OrderType, TradeAction
-from pytech.exceptions import NotABlotterError, NotAnAssetError, UntriggeredTradeError
+from pytech.fin.asset import Asset, OwnedAsset
+from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
+from pytech.utils.exceptions import NotABlotterError, NotAnAssetError, UntriggeredTradeError
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class Order(Base):
             `stop_price` and `limit_price` will get rounded.
         """
 
-        from pytech.blotter import Blotter
+        from pytech.trading.blotter import Blotter
 
         self.logger = logging.getLogger(self.LOGGER_NAME)
 

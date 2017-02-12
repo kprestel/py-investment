@@ -18,8 +18,8 @@ import pytech.db.db_utils as db
 from pytech import utils as utils
 from pytech.base import Base
 from pytech.crawler.spiders.edgar import EdgarSpider
-from pytech.enums import AssetPosition
-from pytech.exceptions import NotAnAssetError
+from pytech.utils.enums import AssetPosition
+from pytech.utils.exceptions import NotAnAssetError
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -175,18 +175,21 @@ class Asset(metaclass=ABCMeta):
         try:
             temp_ohlcv = web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
             temp_ohlcv.reset_index(inplace=True, drop=False)
-            self.ohlcv = temp_ohlcv.rename(columns={
-                'Date': 'asof_date',
-                'Open': 'open',
-                'High': 'high',
-                'Low': 'low',
-                'Close': 'close',
-                'Adj Close': 'adj_close',
-                'Volume': 'volume'
-                })
+
         except:
             logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
             return None
+
+        # rename the columns to what the DB expects
+        self.ohlcv = temp_ohlcv.rename(columns={
+            'Date': 'asof_date',
+            'Open': 'open',
+            'High': 'high',
+            'Low': 'low',
+            'Close': 'close',
+            'Adj Close': 'adj_close',
+            'Volume': 'volume'
+        })
 
     @classmethod
     def get_subclass_dict(cls, subclass_dict=None):
@@ -657,23 +660,6 @@ class Stock(Asset):
         percent_b = pd.Series((self.ohlcv[column] - lower_bband) / (upper_bband - lower_bband), name='%b')
         b_bandwidth = pd.Series((upper_bband - lower_bband) / middle_band, name='b_bandwidth')
         return pd.concat([upper_bband, middle_band, lower_bband, b_bandwidth, percent_b], axis=1)
-
-    def _get_portfolio_benchmark(self):
-        """
-        Helper method to get the :class: Portfolio's benchmark ticker symbol
-        :return: TimeSeries
-        """
-        from pytech.portfolio import Portfolio
-
-        with db.query_session() as session:
-            benchmark_ticker = \
-                session.query(Portfolio.benchmark_ticker) \
-                    .filter(Portfolio.id == self.portfolio_id) \
-                    .first()
-        if not benchmark_ticker:
-            return web.DataReader('^GSPC', 'yahoo', start=self.start_date, end=self.end_date)
-        else:
-            return web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
 
     def _get_pct_change(self, market_ticker='^GSPC'):
         """

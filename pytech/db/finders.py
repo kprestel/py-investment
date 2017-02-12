@@ -1,18 +1,13 @@
+import logging
 from abc import ABCMeta, abstractmethod
 
-import logging
 import pandas as pd
+from sqlalchemy import MetaData, create_engine, not_, select
 
-from sqlalchemy import MetaData
-from sqlalchemy import and_
-from sqlalchemy import create_engine
-from sqlalchemy import not_
-from sqlalchemy import select
-
-from pytech.asset import Asset
-from pytech.db.pytech_db_schema import ( metadata, PYTECH_DB_TABLE_NAMES, asset as asset_table,
-                                         universe_ohlcv as ohlcv_table)
-from pytech.exceptions import AssetNotInUniverseError
+from pytech.db.pytech_db_schema import (PYTECH_DB_TABLE_NAMES, asset as asset_table,
+                                        universe_ohlcv as ohlcv_table)
+from pytech.fin.asset import Asset
+from pytech.utils.exceptions import AssetNotInUniverseError
 
 
 class Finder(metaclass=ABCMeta):
@@ -120,7 +115,7 @@ class AssetFinder(Finder):
         asset = self._asset_cache.get(key)
 
         if asset is not None:
-            self.logger.info('Found asset with ticker: {} in cache.'.format(key))
+            self.logger.debug('Found asset with ticker: {} in cache.'.format(key))
             return asset
 
         sql = select([self.asset]).where(asset_table.c.ticker == key)

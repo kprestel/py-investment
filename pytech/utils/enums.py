@@ -1,6 +1,7 @@
 from enum import Enum
-from pytech.exceptions import PyInvestmentError, InvalidActionError, InvalidPositionError, InvalidOrderStatusError, \
-    InvalidOrderTypeError, InvalidOrderSubTypeError
+
+from pytech.utils.exceptions import InvalidActionError, InvalidOrderStatusError, InvalidOrderSubTypeError, \
+    InvalidOrderTypeError, InvalidPositionError
 
 
 class AutoNumber(Enum):

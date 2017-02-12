@@ -1,12 +1,8 @@
 # from pytech import Session
 import logging
-from datetime import datetime, timedelta
-
-import pandas_datareader.data as web
+from datetime import datetime
 
 import pytech.db.db_utils as db
-import pytech.utils as utils
-from pytech.blotter import Blotter
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +23,7 @@ class Portfolio(object):
 
     LOGGER_NAME = 'portfolio'
 
-    def __init__(self, start_date=None, end_date=None, benchmark_ticker='^GSPC', starting_cash=1000000,
-                 trading_cal='NYSE', data_frequency='daily'):
+    def __init__(self, starting_cash=1000000):
         """
         :param datetime start_date: a date, the start date to start the simulation as of.
             (default: end_date - 365 days)
@@ -43,26 +38,10 @@ class Portfolio(object):
         :param data_frequency: The frequency of how often data should be updated.
         """
 
-        if start_date is None:
-            self.start_date = datetime.now() - timedelta(days=365)
-        else:
-            self.start_date = utils.parse_date(start_date)
-
-        if end_date is None:
-            # default to today
-            self.end_date = datetime.now()
-        else:
-            self.end_date = utils.parse_date(end_date)
-
-        self.trading_cal = trading_cal
         self.owned_assets = {}
         self.orders = {}
-        self.benchmark_ticker = benchmark_ticker
-        self.benchmark = web.DataReader(benchmark_ticker, 'yahoo', start=self.start_date, end=self.end_date)
         self.cash = float(starting_cash)
-        self.data_frequency = data_frequency
         self.logger = logging.getLogger(self.LOGGER_NAME)
-        self.blotter = Blotter(portfolio=self)
 
     def get_owned_asset(self, ticker):
         """

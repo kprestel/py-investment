@@ -1,43 +1,42 @@
 import logging
 from datetime import datetime
 
-from sqlalchemy import Column, ForeignKey, Integer
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm.collections import attribute_mapped_collection
-
 import pytech.db.db_utils as db
 from pytech import Base
-from pytech.asset import Asset, OwnedAsset
-from pytech.enums import AssetPosition, TradeAction
-from pytech.exceptions import NotAPortfolioError
-from pytech.order import Order, Trade
+from pytech.db.finders import AssetFinder
+from pytech.fin.asset import OwnedAsset
+from pytech.trading.order import Order, Trade
+from pytech.utils.enums import AssetPosition, TradeAction
+from pytech.utils.exceptions import NotAFinderError
 
 
 class Blotter(Base):
     """Holds and interacts with all orders."""
 
-    id = Column(Integer, primary_key=True)
-    portfolio = relationship('Portfolio', back_populates='blotter')
-    portfolio_id = Column(Integer, ForeignKey('portfolio.id'))
-    orders = relationship('Order', backref='blotter',
-                          collection_class=attribute_mapped_collection('asset.ticker'),
-                          lazy='joined', cascade='save-update, all, delete-orphan')
+    LOGGER_NAME = 'blotter'
 
-    def __init__(self, portfolio):
+    def __init__(self, finder=None):
 
         # feels hacky but idk how else to avoid circular dependency
-        from pytech.portfolio import Portfolio
+        # from pytech.portfolio import Portfolio
+        #
+        # if not isinstance(portfolio, Portfolio):
+        #     raise NotAPortfolioError(type(portfolio))
+        # else:
+        #     self.portfolio = portfolio
 
-        if not isinstance(portfolio, Portfolio):
-            raise NotAPortfolioError(type(portfolio))
+        if not isinstance(finder, AssetFinder) and finder is not None:
+            raise NotAFinderError(finder=finder)
+        elif finder is not None:
+            self.finder = AssetFinder()
+        else:
+            self.finder = finder
 
-        self.portfolio = portfolio
         # dict of all orders. key is the ticker of the asset, value is the asset
         self.orders = {}
         self.current_dt = None
         # TODO: reference portfolio in the logger name
-        self.logger = logging.getLogger('blotter')
-
+        self.logger = logging.getLogger(self.LOGGER_NAME)
 
     def place_order(self, ticker, action, order_type, stop_price=None, limit_price=None, qty=0,
                    date_placed=None, order_subtype=None):
@@ -60,7 +59,8 @@ class Blotter(Base):
         asset = self.portfolio.get_owned_asset(ticker)
 
         if asset is None:
-            asset = Asset.get_asset_from_universe(ticker=ticker)
+            self.logger.info('Placing a new order for an unowned asset with ticker: {}'.format(ticker))
+            asset = self.finder.find_instance(key=ticker)
 
         if date_placed is None:
             date_placed = self.current_dt

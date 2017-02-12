@@ -5,7 +5,7 @@ import os
 from scrapy.exceptions import DropItem
 
 import pytech.db.db_utils as db
-from pytech.asset import Fundamental
+from pytech.fin.asset import Fundamental
 
 logger = logging.getLogger(__name__)
 

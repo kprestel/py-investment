@@ -1,22 +1,18 @@
 from contextlib import contextmanager
+from datetime import datetime
 from distutils import dirname
 from os.path import join
 
-import pytest
 import pandas as pd
-from datetime import datetime
-from pytech.exceptions import InvalidActionError, NotAnAssetError
-
+import pytest
+from pytech.portfolio import Portfolio
 from sqlalchemy import create_engine
-from sqlalchemy import event
-# from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from pytech.base import Base
-from pytech.portfolio import Portfolio
-from pytech.asset import Stock, Fundamental, Asset, OwnedAsset
 
-import logging
+from pytech.base import Base
+from pytech.fin.asset import Asset, Fundamental, OwnedAsset, Stock
+from pytech.utils.exceptions import InvalidActionError, NotAnAssetError
 
 PROJECT_DIR = dirname(__file__)
 DATABASE_LOCATION = join(PROJECT_DIR, 'pytech_test.sqlite')
