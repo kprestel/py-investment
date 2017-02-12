@@ -8,7 +8,7 @@ import pandas_market_calendars as mcal
 from pandas.tseries.offsets import DateOffset
 
 import pytech.db.db_utils as db
-from pytech import Base, utils
+import pytech.utils.dt_utils as dt_utils
 from pytech.fin.asset import Asset, OwnedAsset
 from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
 from pytech.utils.exceptions import NotABlotterError, NotAnAssetError, UntriggeredTradeError
@@ -16,7 +16,7 @@ from pytech.utils.exceptions import NotABlotterError, NotAnAssetError, Untrigger
 logger = logging.getLogger(__name__)
 
 
-class Order(Base):
+class Order(object):
     """Hold open orders"""
 
     LOGGER_NAME = 'order'
@@ -56,8 +56,6 @@ class Order(Base):
             `stop_price` and `limit_price` will get rounded.
         """
 
-        from pytech.trading.blotter import Blotter
-
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
         if issubclass(asset.__class__, Asset):
@@ -69,11 +67,6 @@ class Order(Base):
             self.owned_asset = asset
         else:
             raise NotAnAssetError(asset=type(asset))
-
-        if isinstance(blotter, Blotter):
-            self.blotter = blotter
-        else:
-            raise NotABlotterError(blotter=type(blotter))
 
         # TODO: validate that all of these inputs make sense together. e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)
@@ -97,7 +90,7 @@ class Order(Base):
         self.filled = filled
         self._status = OrderStatus.OPEN
         self.reason = None
-        self.created = utils.parse_date(created)
+        self.created = dt_utils.parse_date(created)
         # the last time the order changed
         self.last_updated = self.created
         self.close_date = None
@@ -300,7 +293,7 @@ class Order(Base):
 
 
 
-class Trade(Base):
+class Trade(object):
     """
     This class is used to make trades and keep trade of past trades.
 
@@ -335,7 +328,7 @@ class Trade(Base):
         """
 
         if trade_date:
-            self.trade_date = utils.parse_date(trade_date)
+            self.trade_date = dt_utils.parse_date(trade_date)
         else:
             self.trade_date = datetime.now()
 

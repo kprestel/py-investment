@@ -39,9 +39,22 @@ class Portfolio(object):
         """
 
         self.owned_assets = {}
-        self.orders = {}
         self.cash = float(starting_cash)
         self.logger = logging.getLogger(self.LOGGER_NAME)
+
+    def __getitem__(self, key):
+        """Allow quick dictionary like access to the owned_assets dict"""
+
+        return self.owned_assets[key]
+
+    def __setitem__(self, key, value):
+        """Allow quick adding of :class:``OwnedAsset``s to the dict."""
+
+        self.owned_assets[key] = value
+
+    def __iter__(self):
+
+        return self.owned_assets.items()
 
     def get_owned_asset(self, ticker):
         """

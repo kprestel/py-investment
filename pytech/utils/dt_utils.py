@@ -1,5 +1,5 @@
 from dateutil import parser, tz
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import pandas as pd
 
 def parse_date(date_to_parse):
@@ -25,6 +25,14 @@ def parse_date(date_to_parse):
     else:
         raise TypeError('date_to_parse must be a pandas Timestamp, datetime, or a date string. '
                         '{} was provided'.format(type(date_to_parse)))
+
+def get_default_date(is_start_date):
+
+    if is_start_date:
+        temp_date = datetime.now() - timedelta(days=365)
+        return parse_date(temp_date)
+    else:
+        return parse_date(datetime.now())
 
 def old_parse_date(date_to_parse):
     """

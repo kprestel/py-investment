@@ -15,28 +15,34 @@ class Blotter(Base):
 
     LOGGER_NAME = 'blotter'
 
-    def __init__(self, finder=None):
+    def __init__(self, asset_finder, portfolio):
 
-        # feels hacky but idk how else to avoid circular dependency
-        # from pytech.portfolio import Portfolio
-        #
-        # if not isinstance(portfolio, Portfolio):
-        #     raise NotAPortfolioError(type(portfolio))
-        # else:
-        #     self.portfolio = portfolio
-
-        if not isinstance(finder, AssetFinder) and finder is not None:
-            raise NotAFinderError(finder=finder)
-        elif finder is not None:
-            self.finder = AssetFinder()
-        else:
-            self.finder = finder
-
+        self.asset_finder = asset_finder
+        self.portfolio = portfolio
         # dict of all orders. key is the ticker of the asset, value is the asset
         self.orders = {}
         self.current_dt = None
         # TODO: reference portfolio in the logger name
         self.logger = logging.getLogger(self.LOGGER_NAME)
+
+    def __getitem__(self, key):
+        """Get an order from the orders dict."""
+
+        return self.orders[key]
+
+    def __setitem__(self, key, value):
+        """Add an order to the orders dict."""
+
+        self.orders[key] = value
+
+    def __delitem__(self, key):
+        """Delete an order from the orders dict."""
+
+        del self.orders[key]
+
+    def __iter__(self):
+        """Iterate over the items dictionary directly"""
+        return self.orders.items()
 
     def place_order(self, ticker, action, order_type, stop_price=None, limit_price=None, qty=0,
                    date_placed=None, order_subtype=None):
@@ -60,7 +66,7 @@ class Blotter(Base):
 
         if asset is None:
             self.logger.info('Placing a new order for an unowned asset with ticker: {}'.format(ticker))
-            asset = self.finder.find_instance(key=ticker)
+            asset = self.asset_finder.find_instance(key=ticker)
 
         if date_placed is None:
             date_placed = self.current_dt
@@ -77,9 +83,7 @@ class Blotter(Base):
                 created=date_placed
         )
 
-        with db.transactional_session() as session:
-            self.orders[ticker] = order
-            session.add(self)
+        self[ticker] = order
 
     def check_order_triggers(self, dt=None, current_price=None):
         """

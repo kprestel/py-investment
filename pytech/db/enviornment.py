@@ -7,18 +7,19 @@ from sqlalchemy import create_engine
 from pytech.db.connector import DBConnector
 from pytech.db.finders import AssetFinder
 
-import pytech.utils as utils
+import pytech.utils.dt_utils as dt_utils
 
 
-class Enviorment(object):
+class Environment(object):
     """Set up the local trading environment settings"""
 
-    def __init__(self, benchmark_sm='^GPSC', trading_tz='US/Eastern', trade_cal='NYSE', db_path=None):
+    def __init__(self, benchmark_sym='^GPSC', trading_tz='US/Eastern', trade_cal='NYSE', db_path=None):
 
-        self.benchmark_sm = benchmark_sm
+        self.benchmark_sym = benchmark_sym
         self.trading_tz = trading_tz
         self.trade_cal = mcal.get_calendar(trade_cal)
-        self.db_conn = DBConnector(db_path).init_db()
+        self.db_conn = DBConnector(db_path)
+        self.db_conn.init_db()
         self.asset_finder = AssetFinder(self.db_conn.engine)
 
 
@@ -33,12 +34,12 @@ class SimParams(object):
         if start_date is None:
             self.start_date = datetime.now() - timedelta(days=365)
         else:
-            self.start_date = utils.parse_date(start_date)
+            self.start_date = dt_utils.parse_date(start_date)
 
         if end_date is None:
             # default to today
             self.end_date = datetime.now()
         else:
-            self.end_date = utils.parse_date(end_date)
+            self.end_date = dt_utils.parse_date(end_date)
 
         self.data_frequency = data_frequency
