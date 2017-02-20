@@ -15,11 +15,10 @@ from sqlalchemy.exc import OperationalError
 from twisted.internet import reactor
 
 import pytech.db.db_utils as db
-from pytech import utils as utils
+import pytech.utils.dt_utils as dt_utils
+import pytech.utils.pandas_utils as pd_utils
 from pytech.base import Base
 from pytech.crawler.spiders.edgar import EdgarSpider
-from pytech.utils.enums import AssetPosition
-from pytech.utils.exceptions import NotAnAssetError
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -90,7 +89,7 @@ class Asset(metaclass=ABCMeta):
         if start_date is None:
             start_date = datetime.now() - timedelta(days=365)
 
-        self._start_date = utils.parse_date(start_date)
+        self._start_date = dt_utils.parse_date(start_date)
 
     @property
     def end_date(self):
@@ -107,7 +106,7 @@ class Asset(metaclass=ABCMeta):
         if end_date is None:
             end_date = datetime.utcnow()
 
-        self._end_date = utils.parse_date(end_date)
+        self._end_date = dt_utils.parse_date(end_date)
 
     def get_price_quote(self, d=None, column='adj_close'):
         """
@@ -124,7 +123,7 @@ class Asset(metaclass=ABCMeta):
         if d is None:
             df = web.get_quote_yahoo(self.ticker)
             d = date.today()
-            time = utils.parse_date(df['time'][0]).time()
+            time = dt_utils.parse_date(df['time'][0]).time()
             dt = datetime.combine(d, time=time)
             return quote(price=df['last'], time=dt)
         else:
@@ -163,12 +162,12 @@ class Asset(metaclass=ABCMeta):
         # TODO: concatenate the new series to any existing series
 
         if start_date is not None:
-            start_date = utils.parse_date(start_date)
+            start_date = dt_utils.parse_date(start_date)
         else:
             start_date = self.start_date
 
         if end_date is not None:
-            end_date = utils.parse_date(end_date)
+            end_date = dt_utils.parse_date(end_date)
         else:
             end_date = self.end_date
 
@@ -181,15 +180,7 @@ class Asset(metaclass=ABCMeta):
             return None
 
         # rename the columns to what the DB expects
-        self.ohlcv = temp_ohlcv.rename(columns={
-            'Date': 'asof_date',
-            'Open': 'open',
-            'High': 'high',
-            'Low': 'low',
-            'Close': 'close',
-            'Adj Close': 'adj_close',
-            'Volume': 'volume'
-        })
+        self.ohlcv = pd_utils.rename_yahoo_ohlcv_cols(temp_ohlcv)
 
     @classmethod
     def get_subclass_dict(cls, subclass_dict=None):
@@ -1066,167 +1057,6 @@ class Stock(Asset):
         return stock_dict
 
 
-class OwnedAsset(object):
-    """
-    Contains data that only matters for a :class:`Asset` that is in a user's :class:`~pytech.portfolio.Portfolio`
-    """
-
-    def __init__(self, asset, portfolio, shares_owned, position, average_share_price=None, purchase_date=None):
-
-        if issubclass(asset.__class__, Asset):
-            self.asset = asset
-        else:
-            raise NotAnAssetError(asset=type(asset))
-
-        self.portfolio = portfolio
-        self.position = AssetPosition.check_if_valid(position)
-
-        if purchase_date is None:
-            self.purchase_date = datetime.now()
-        else:
-            self.purchase_date = utils.parse_date(purchase_date)
-
-        if average_share_price:
-            self.average_share_price_paid = average_share_price
-            self.latest_price = average_share_price
-            self.latest_price_time = self.purchase_date.time()
-        else:
-            quote = asset.get_price_quote()
-            self.average_share_price_paid = quote.price
-            self.latest_price = quote.price
-            self.latest_price_time = quote.time
-
-        self._shares_owned = shares_owned
-        self._set_position_cost_and_value(qty=shares_owned, price=self.average_share_price_paid)
-
-    @property
-    def shares_owned(self):
-        return self._shares_owned
-
-    @shares_owned.setter
-    def shares_owned(self, shares_owned):
-        self._shares_owned = int(shares_owned)
-
-    def make_trade(self, qty, price_per_share=None):
-        """
-        Update the position of the :class:`Stock`
-
-        :param qty: int, positive if buying more shares and negative if selling shares
-        :param price_per_share: float, the average price per share in the trade
-        :return: self
-        """
-
-        self.shares_owned += qty
-
-        if price_per_share:
-            self._set_position_cost_and_value(qty=qty, price=price_per_share)
-        else:
-            quote = self.asset.get_price_quote()
-            self.latest_price = quote.price
-            self.latest_price_time = quote.time
-            self._set_position_cost_and_value(qty=qty, price=quote.price)
-
-        try:
-            self.average_share_price_paid = self.total_position_value / float(self.shares_owned)
-        except ZeroDivisionError:
-            return None
-        else:
-            return self
-
-    def _set_position_cost_and_value(self, qty, price):
-        """
-        Calculate a position's cost and value
-
-        :param qty: number of shares
-        :type qty: int
-        :param price: price per share
-        :type price: long
-        """
-        if self.position is AssetPosition.SHORT:
-            # short positions should have a negative number of shares owned but a positive total cost
-            self.total_position_cost = (price * qty) * -1
-            # but a negative total value
-            self.total_position_value = price * qty
-        else:
-            self.total_position_cost = price * qty
-            self.total_position_value = (price * qty) * -1
-
-    def update_total_position_value(self):
-        """Retrieve the latest market quote and update the ``OwnedStock`` attributes to reflect the change"""
-
-        quote = self.asset.get_price_quote()
-        self.latest_price = quote.price
-        self.latest_price_time = quote.time
-        if self.position is AssetPosition.SHORT:
-            self.total_position_value = (self.latest_price * self.shares_owned) * -1
-        else:
-            self.total_position_value = self.latest_price * self.shares_owned
-
-    def return_on_investment(self):
-        """Get the current return on investment for a given :class:``OwnedAsset``"""
-
-        self.update_total_position_value()
-        return (self.total_position_value + self.total_position_cost) / (self.total_position_cost * -1)
-
-    def market_correlation(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
-        """
-        Compute the correlation between a :class: Stock's return and the market return.
-        :param use_portfolio_benchmark:
-            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
-        :param market_ticker:
-            Any valid ticker symbol to use as the market.
-        :return:
-
-        Best used to gauge the accuracy of the beta.
-        """
-
-        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
-        return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
-
-    def calculate_beta(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
-        """
-        Compute the beta for the :class: Stock
-
-        :param use_portfolio_benchmark: boolean
-            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
-        :param market_ticker:
-            Any valid ticker symbol to use as the market.
-        :return: float
-            The beta for the given Stock
-        """
-        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
-        covar = pct_change.stock_pct_change.cov(pct_change.market_pct_change)
-        variance = pct_change.market_pct_change.var()
-        return covar / variance
-
-    def _get_pct_change(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
-        """
-        Get the percentage change over the :class: Stock's start and end dates for both the asset as well as the market
-
-        :param use_portfolio_benchmark: boolean
-            When true the market ticker will be ignored and the ticker set for the whole :class: Portfolio will be used
-        :param market_ticker: str
-            Any valid ticker symbol to use as the market.
-        :return: TimeSeries
-        """
-        pct_change = namedtuple('Pct_Change', 'market_pct_change stock_pct_change')
-        if use_portfolio_benchmark:
-            market_df = self.portfolio.benchmark
-        else:
-            market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
-        market_pct_change = pd.Series(market_df['adj_close'].pct_change(periods=1))
-        stock_pct_change = pd.Series(self.ohlcv['adj_close'].pct_change(periods=1))
-        return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
-
-    def _get_portfolio_benchmark(self):
-        """
-        Helper method to get the :class: Portfolio's benchmark ticker symbol
-        :return: TimeSeries
-        """
-
-        return self.portfolio.benchmark
-
-
 class Fundamental(object):
     """
     The purpose of the this class to hold one period's worth of fundamental data for a given asset
@@ -1294,7 +1124,7 @@ class Fundamental(object):
         self.current_liabilities = current_liabilities
         self.cash = cash
         self.dividend = dividend
-        self.end_date = utils.parse_date(end_date)
+        self.end_date = dt_utils.parse_date(end_date)
         self.eps = eps
         self.eps_diluted = eps_diluted
         self.equity = equity

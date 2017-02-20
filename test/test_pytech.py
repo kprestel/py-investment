@@ -11,7 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from pytech.base import Base
-from pytech.fin.asset import Asset, Fundamental, OwnedAsset, Stock
+from pytech.fin.asset import Asset, Fundamental, Stock
+from pytech import OwnedAsset
 from pytech.utils.exceptions import InvalidActionError, NotAnAssetError
 
 PROJECT_DIR = dirname(__file__)
@@ -264,7 +265,7 @@ class TestOwnedAsset(object):
     def test_owned_asset_constructor_exceptions(self):
         portfolio = Portfolio()
         with pytest.raises(NotAnAssetError):
-            owned_asset = OwnedAsset(asset='not an asset', portfolio=portfolio, shares_owned=12, position='LONG')
+            owned_asset = OwnedAsset(ticker='not an asset', portfolio=portfolio, shares_owned=12, position='LONG')
 
 
 @pytest.mark.skip(reason='I will fix it later')

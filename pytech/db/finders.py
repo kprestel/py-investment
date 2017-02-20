@@ -3,7 +3,9 @@ from abc import ABCMeta, abstractmethod
 
 import pandas as pd
 from sqlalchemy import MetaData, create_engine, not_, select
+from sqlalchemy.engine import Engine
 
+from pytech.db.connector import DBConnector
 from pytech.db.pytech_db_schema import (PYTECH_DB_TABLE_NAMES, asset as asset_table,
                                         universe_ohlcv as ohlcv_table)
 from pytech.fin.asset import Asset
@@ -24,7 +26,7 @@ class Finder(metaclass=ABCMeta):
         * Subclasses **MUST** call the :class:`Finder` constructor
     """
 
-    def __init__(self, engine, **kwargs):
+    def __init__(self, engine=None, **kwargs):
         """
         **ALL** subclasses must call this constructor in the first line of their constructor.
 
@@ -35,10 +37,7 @@ class Finder(metaclass=ABCMeta):
         :type engine: :class:`SQLAlchemy.engine` or str
         """
 
-        if isinstance(engine, str):
-            self.engine = create_engine(str, **kwargs)
-        else:
-            self.engine = engine
+        self.engine = DBConnector(engine, **kwargs).engine
 
         metadata = MetaData(bind=self.engine)
         metadata.reflect(only=PYTECH_DB_TABLE_NAMES)
@@ -94,7 +93,7 @@ class AssetFinder(Finder):
     Provides an interface to the DB to find assets based on the :class:`pytech.asset.Asset`'s **ticker**.
     """
 
-    def __init__(self, engine, **kwargs):
+    def __init__(self, engine=None, **kwargs):
         super().__init__(engine, **kwargs)
         self.asset_class_dict = Asset.get_subclass_dict()
         self._asset_cache = {}
@@ -125,16 +124,6 @@ class AssetFinder(Finder):
 
         if row is None:
             raise AssetNotInUniverseError(ticker=key)
-
-        # try:
-        #     asset_dict['ticker'] = row[asset_table.c.ticker]
-        #     asset_dict['id'] = row[asset_table.c.id]
-        #     asset_dict['start_date'] = row[asset_table.c.start_date]
-        #     asset_dict['end_date'] = row[asset_table.c.end_date]
-        #     asset_dict['asset_type'] = row[asset_table.c.asset_type]
-        #     asset_dict['beta'] = row[asset_table.c.beta]
-        # finally:
-        #     row.close()
 
         asset_dict = self.row_to_dict(row)
         asset_dict['ohlcv'] = self.find_ohlcv(ticker=key)

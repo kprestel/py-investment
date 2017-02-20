@@ -90,7 +90,7 @@ class InvalidOrderSubTypeError(PyInvestmentError):
 class UntriggeredTradeError(PyInvestmentError):
     """Raised when a :class:``pytech.order.Trade`` is made from an order that has not been triggered"""
 
-    msg = 'The order being traded has not been triggered yet. order_id: {id}'
+    msg = 'The order being traded has not been triggered yet. order: {order}'
 
 
 class NotABlotterError(PyInvestmentError):

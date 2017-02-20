@@ -4,7 +4,9 @@ from datetime import datetime
 import pytech.db.db_utils as db
 from pytech import Base
 from pytech.db.finders import AssetFinder
-from pytech.fin.asset import OwnedAsset
+from pytech.fin.owned_asset import OwnedAsset
+from pytech.fin.asset import Asset
+from pytech.fin.portfolio import Portfolio
 from pytech.trading.order import Order, Trade
 from pytech.utils.enums import AssetPosition, TradeAction
 from pytech.utils.exceptions import NotAFinderError
@@ -15,12 +17,21 @@ class Blotter(Base):
 
     LOGGER_NAME = 'blotter'
 
-    def __init__(self, asset_finder, portfolio):
+    def __init__(self, asset_finder=None, portfolio=None):
 
-        self.asset_finder = asset_finder
-        self.portfolio = portfolio
-        # dict of all orders. key is the ticker of the asset, value is the asset
+        if asset_finder is not None:
+            self.asset_finder = asset_finder
+        else:
+            self.asset_finder = AssetFinder()
+
+        if portfolio is not None:
+            self.portfolio = portfolio
+        else:
+            self.portfolio = Portfolio()
+        # dict of all orders. key is the ticker of the asset, value is the asset.
         self.orders = {}
+        # keep a record of all past trades.
+        self.trades = []
         self.current_dt = None
         # TODO: reference portfolio in the logger name
         self.logger = logging.getLogger(self.LOGGER_NAME)
@@ -31,9 +42,20 @@ class Blotter(Base):
         return self.orders[key]
 
     def __setitem__(self, key, value):
-        """Add an order to the orders dict."""
+        """
+        Add an order to the orders dict.
+        If the key is an instance of :class:`~asset.Asset` then the ticker is used as the key, otherwise the key is the
+        ticker.
+        :param key: The key to dictionary, will always be the ticker of the ``Asset`` the order is for but an instance
+        of :class:`~asset.Asset` will also work as long as the ticker is set.
+        :type key: Asset or str
+        :param Order value: The order.
+        """
 
-        self.orders[key] = value
+        if issubclass(key.__class__, Asset):
+            self.orders[key.ticker] = value
+        else:
+            self.orders[key] = value
 
     def __delitem__(self, key):
         """Delete an order from the orders dict."""
@@ -42,14 +64,15 @@ class Blotter(Base):
 
     def __iter__(self):
         """Iterate over the items dictionary directly"""
-        return self.orders.items()
+        yield self.orders.items()
 
-    def place_order(self, ticker, action, order_type, stop_price=None, limit_price=None, qty=0,
-                   date_placed=None, order_subtype=None):
+    def place_order(self, asset, action, order_type, stop_price=None, limit_price=None, qty=0,
+                    date_placed=None, order_subtype=None):
         """
         Open a new order.
 
-        :param str ticker: the ticker of the :py:class:`~asset.Asset` to place an order for
+        :param asset: The asset of the :py:class:`~asset.Asset` to place an order for or the ticker of an asset.
+        :type asset: Asset or str
         :param TradeAction or str action: **BUY** or **SELL**
         :param OrderType order_type: the type of order
         :param float stop_price: If creating a stop order this is the stop price.
@@ -62,18 +85,17 @@ class Blotter(Base):
         :return: None
         """
 
-        asset = self.portfolio.get_owned_asset(ticker)
-
-        if asset is None:
-            self.logger.info('Placing a new order for an unowned asset with ticker: {}'.format(ticker))
-            asset = self.asset_finder.find_instance(key=ticker)
+        try:
+            asset = self.portfolio[asset]
+        except KeyError:
+            self.logger.info('Placing a new order for an unowned asset with ticker: {}'.format(asset))
+            asset = self.asset_finder.find_instance(asset)
 
         if date_placed is None:
             date_placed = self.current_dt
 
         order = Order(
                 asset=asset,
-                blotter=self,
                 action=action,
                 order_type=order_type,
                 order_subtype=order_subtype,
@@ -83,7 +105,7 @@ class Blotter(Base):
                 created=date_placed
         )
 
-        self[ticker] = order
+        self[asset] = order
 
     def check_order_triggers(self, dt=None, current_price=None):
         """
@@ -102,9 +124,9 @@ class Blotter(Base):
 
             if order.check_triggers(dt=dt, current_price=current_price):
                 # make_trade will return the order if it closed
-                closed_orders.append(self.make_trade(order=order, price_per_share=current_price, trade_date=dt))
+                self.make_trade(order, current_price, dt)
 
-        self.purge_closed_orders(closed_orders)
+        self.purge_closed_orders()
 
     def make_trade(self, order, price_per_share, trade_date):
         """
@@ -139,10 +161,9 @@ class Blotter(Base):
 
         order.filled += trade.qty
 
-        if order.open:
-            return None
-        else:
-            return order
+        self.trades.append(trade)
+
+        return trade
 
     def _open_new_position(self, price_per_share, trade_date, order):
         """
@@ -184,15 +205,14 @@ class Blotter(Base):
             position = AssetPosition.LONG
 
         owned_asset = OwnedAsset(
-                asset=asset,
+                ticker=asset,
                 shares_owned=order.get_available_volume(dt=trade_date),
                 average_share_price=price_per_share,
-                position=position,
-                portfolio=self.portfolio
+                position=position
         )
 
         self.portfolio.cash += owned_asset.total_position_cost
-        self.portfolio.owned_assets[owned_asset.asset.ticker] = owned_asset
+        self.portfolio[asset] = owned_asset
 
         trade = Trade.from_order(
                 order=order,
@@ -201,9 +221,6 @@ class Blotter(Base):
                 strategy='Open new {} position'.format(position)
         )
 
-        with db.transactional_session(auto_close=False) as session:
-            session.add(session.merge(self))
-            session.add(trade)
         return trade
 
 
@@ -222,13 +239,7 @@ class Blotter(Base):
         :param TradeAction action: **BUY** or **SELL**
         :param Order order:
         :raises InvalidActionError:
-
-        This method processes the trade and then writes the results to the database.
         """
-        # action = TradeAction.check_if_valid(action)
-
-        # if order.action is TradeAction.SELL:
-        #     qty *= -1
 
         owned_asset = owned_asset.make_trade(qty=order.get_available_volume(dt=trade_date),
                                              price_per_share=price_per_share)
@@ -255,13 +266,9 @@ class Blotter(Base):
                     strategy='Close an existing {} position'.format(owned_asset.position)
             )
 
-        with db.transactional_session() as session:
-            session.add(session.merge(self))
-            session.add(trade)
-
         return trade
 
-    def purge_closed_orders(self, closed_orders):
+    def purge_closed_orders(self):
         """
         Remove any order that is no longer open.
 
@@ -269,11 +276,4 @@ class Blotter(Base):
         :return:
         """
 
-        with db.transactional_session() as session:
-            for order in closed_orders:
-                if order is not None:
-                    del self.orders[order.asset.ticker]
-                    session.delete(order)
-            session.add(session.merge(self))
-
-
+        #TODO: this...

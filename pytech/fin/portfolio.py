@@ -3,6 +3,8 @@ import logging
 from datetime import datetime
 
 import pytech.db.db_utils as db
+from pytech import OwnedAsset
+from pytech.fin.asset import Asset
 
 logger = logging.getLogger(__name__)
 
@@ -45,29 +47,25 @@ class Portfolio(object):
     def __getitem__(self, key):
         """Allow quick dictionary like access to the owned_assets dict"""
 
-        return self.owned_assets[key]
+        if isinstance(key, OwnedAsset):
+            return self.owned_assets[key.ticker]
+        else:
+            return self.owned_assets[key]
 
     def __setitem__(self, key, value):
         """Allow quick adding of :class:``OwnedAsset``s to the dict."""
 
+        if isinstance(key, OwnedAsset):
+            self.owned_assets[key.ticker] = value
+        else:
+            self.owned_assets[key] = value
+
         self.owned_assets[key] = value
 
     def __iter__(self):
+        """Iterate over all the :class:`~.owned_asset.OwnedAsset`s in the portfolio."""
 
-        return self.owned_assets.items()
-
-    def get_owned_asset(self, ticker):
-        """
-        Return the :py:class:`pytech.asset.OwnedAsset` instance if it exists.
-
-        This method is also used to check if an asset is owned.
-
-        :param str ticker: The ticker of the asset to get.
-        :return: The ``OwnedAsset`` instance or None if it does not exist.
-        """
-
-        return self.owned_assets.get(ticker)
-
+        yield self.owned_assets.items()
 
     def get_total_value(self, include_cash=True):
         """

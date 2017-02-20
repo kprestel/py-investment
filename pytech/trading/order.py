@@ -9,9 +9,10 @@ from pandas.tseries.offsets import DateOffset
 
 import pytech.db.db_utils as db
 import pytech.utils.dt_utils as dt_utils
-from pytech.fin.asset import Asset, OwnedAsset
+from pytech.fin.asset import Asset
+from pytech import OwnedAsset
 from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
-from pytech.utils.exceptions import NotABlotterError, NotAnAssetError, UntriggeredTradeError
+from pytech.utils.exceptions import  UntriggeredTradeError
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,15 @@ class Order(object):
 
     LOGGER_NAME = 'order'
 
-    def __init__(self, asset, blotter, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
-                 filled=0, commission=0, created=datetime.now(), max_days_open=None):
+    def __init__(self, asset, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
+                 filled=0, commission=0, created=None, max_days_open=None):
         """
         Order constructor
 
-        :param Asset asset: The asset for which the order is associated with
+        :param asset: The asset for which the order is associated with.  This can either be an instance of an
+            :class:`pytech.fin.asset.Asset` or a string with of ticker of the asset. If an asset is passed in the ticker
+            will be taken from it.
+        :type asset: Asset or str
         :param Portfolio blotter: The :py:class:`pytech.blotter.Blotter` that the asset is associated with
         :param TradeAction action: Either BUY or SELL
         :param OrderType order_type: The type of order to create.
@@ -58,21 +62,13 @@ class Order(object):
 
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
-        if issubclass(asset.__class__, Asset):
-            self.asset = asset
-            self.owned_asset = None
-        elif isinstance(asset, OwnedAsset):
-            # owned asset has a relationship with asset
-            self.asset = asset.asset
-            self.owned_asset = asset
-        else:
-            raise NotAnAssetError(asset=type(asset))
-
         # TODO: validate that all of these inputs make sense together. e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)
         self.order_type = OrderType.check_if_valid(order_type)
 
         self.order_subtype = OrderSubType.check_if_valid(order_subtype) or OrderSubType.DAY
+
+        self._asset = asset
 
         if self.order_subtype is OrderSubType.DAY:
             self.max_days_open = 1
@@ -90,7 +86,12 @@ class Order(object):
         self.filled = filled
         self._status = OrderStatus.OPEN
         self.reason = None
-        self.created = dt_utils.parse_date(created)
+
+        if created is not None:
+            self.created = dt_utils.parse_date(created)
+        else:
+            self.created = pd.Timestamp(datetime.now())
+
         # the last time the order changed
         self.last_updated = self.created
         self.close_date = None
@@ -132,6 +133,22 @@ class Order(object):
         """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
         pref_round_down = self.action is TradeAction.BUY
         self._limit_price = asymmetric_round_price_to_penny(limit_price, prefer_round_down=pref_round_down)
+
+    @property
+    def asset(self):
+        """Make asset always return the ticker unless directly accessed."""
+        if issubclass(self._asset.__class__, Asset):
+            return self._asset.ticker
+        else:
+            return self._asset
+
+    @asset.setter
+    def asset(self, asset):
+        """If an asset is passed in then use it otherwise use the string passed in."""
+        if issubclass(asset.__class__, Asset):
+            self._asset = asset.ticker
+        else:
+            self._asset = asset
 
     @property
     def qty(self):
@@ -190,7 +207,7 @@ class Order(object):
         self.status = OrderStatus.HELD
         self.reason = reason
 
-    def check_triggers(self, current_price=None, dt=None):
+    def check_triggers(self, current_price, dt):
         """
         Check if any of the order's triggers should be pulled and execute a trade and then delete the order.
 
@@ -205,14 +222,6 @@ class Order(object):
 
         if self.order_type is OrderType.MARKET or self.triggered:
             return True
-
-        if current_price is None and dt is None:
-            current_price = self.asset.get_price_quote()
-            current_price = current_price.price
-            dt = datetime.now()
-        elif current_price is None:
-            current_price = self.asset.get_price_quote(d=dt)
-            current_price = current_price.price
 
         if self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.BUY:
             if current_price >= self.stop_price:
@@ -284,6 +293,7 @@ class Order(object):
     def get_available_volume(self, dt):
         """
         Get the available volume to trade.  This will the min of open_amount and the assets volume.
+
         :param datetime dt:
         :return: The number of shares available to trade
         :rtype: int
@@ -330,32 +340,16 @@ class Trade(object):
         if trade_date:
             self.trade_date = dt_utils.parse_date(trade_date)
         else:
-            self.trade_date = datetime.now()
+            self.trade_date = pd.Timestamp(datetime.now())
 
         self.action = TradeAction.check_if_valid(action)
         self.strategy = strategy
         self.ticker = ticker
         self.qty = qty
         self.price_per_share = price_per_share
-        self.corresponding_trade_id = self._get_corresponding_trade_id(ticker=ticker)
         self.order = order
-        self.order_id = order.id
         self.commission = commission
         self.logger = logging.getLogger(self.LOGGER_NAME)
-
-    @classmethod
-    def _get_corresponding_trade_id(cls, ticker):
-        """Get the most recent trade's id"""
-
-        with db.query_session() as session:
-            corresponding_trade = session.query(cls) \
-                .filter(cls.ticker == ticker) \
-                .order_by(cls.trade_date.desc()) \
-                .first()
-        try:
-            return corresponding_trade.id
-        except AttributeError:
-            return None
 
     @classmethod
     def from_order(cls, order, trade_date, execution_price=None, strategy=None):
@@ -370,7 +364,7 @@ class Trade(object):
         """
 
         if not order.triggered:
-            raise UntriggeredTradeError(id=order.id)
+            raise UntriggeredTradeError(order=order.__dict__.__str__())
 
         if execution_price is None:
             exec_price = order.asset.get_price_quote()
