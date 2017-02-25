@@ -2,39 +2,56 @@ import logging
 from datetime import datetime
 
 import pytech.db.db_utils as db
-from pytech import Base
 from pytech.db.finders import AssetFinder
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.fin.asset import Asset
 from pytech.fin.portfolio import Portfolio
 from pytech.trading.order import Order, Trade
 from pytech.utils.enums import AssetPosition, TradeAction
-from pytech.utils.exceptions import NotAFinderError
+from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
 
 
-class Blotter(Base):
+class Blotter(object):
     """Holds and interacts with all orders."""
 
     LOGGER_NAME = 'blotter'
 
     def __init__(self, asset_finder=None, portfolio=None):
 
-        if asset_finder is not None:
-            self.asset_finder = asset_finder
-        else:
-            self.asset_finder = AssetFinder()
-
-        if portfolio is not None:
-            self.portfolio = portfolio
-        else:
-            self.portfolio = Portfolio()
+        self.logger = logging.getLogger(self.LOGGER_NAME)
+        self.asset_finder = asset_finder
+        self.portfolio = portfolio
         # dict of all orders. key is the ticker of the asset, value is the asset.
         self.orders = {}
         # keep a record of all past trades.
         self.trades = []
         self.current_dt = None
-        # TODO: reference portfolio in the logger name
-        self.logger = logging.getLogger(self.LOGGER_NAME)
+
+    @property
+    def asset_finder(self):
+        return self._asset_finder
+
+    @asset_finder.setter
+    def asset_finder(self, asset_finder):
+        if asset_finder is not None and isinstance(asset_finder, AssetFinder):
+            self._asset_finder = asset_finder
+        elif asset_finder is None:
+            self._asset_finder = AssetFinder()
+        else:
+            raise NotAFinderError(finder=type(asset_finder))
+
+    @property
+    def portfolio(self):
+        return self._portfolio
+
+    @portfolio.setter
+    def portfolio(self, portfolio):
+        if portfolio is not None and isinstance(portfolio, Portfolio):
+            self._portfolio = portfolio
+        elif portfolio is None:
+            self._portfolio = Portfolio()
+        else:
+            raise NotAPortfolioError(portfolio=type(portfolio))
 
     def __getitem__(self, key):
         """Get an order from the orders dict."""

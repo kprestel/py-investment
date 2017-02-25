@@ -25,6 +25,8 @@ class DBConnector(object):
         else:
             raise TypeError('Engine must be a URI to a database or a SQLAlchemy Engine.')
 
+        self.init_db()
+
     def init_db(self):
-        metadata.create_all(self.engine)
+        metadata.create_all(self.engine, checkfirst=True)
 

@@ -9,7 +9,6 @@ PYTECH_DB_TABLE_NAMES = frozenset({
     'asset',
     'fundamental',
     'owned_asset',
-    'owned_stock',
     'portfolio',
     'trade',
     'order',
@@ -27,7 +26,7 @@ asset = Table('asset', metadata,
 
 fundamental = Table('fundamental', metadata,
                     Column('id', Integer, primary_key=True),
-                    Column('ticker', Integer, ForeignKey=('asset.c.ticker')),
+                    Column('ticker', Integer, ForeignKey('asset.ticker')),
                     Column('amended', Boolean),
                     Column('assets', Numeric),
                     Column('current_assets', Numeric),
@@ -75,20 +74,20 @@ fundamental = Table('fundamental', metadata,
                     )
 
 portfolio = Table('portfolio', metadata,
-                  Column('id ', Integer, primary_key=True),
+                  Column('id', Integer, primary_key=True),
                   Column('cash', Numeric),
                   Column('benchmark_ticker', String)
                   )
 
 blotter = Table('blotter', metadata,
                 Column('id', Integer, primary_key=True),
-                Column('portfolio_id', Integer, ForeignKey=('portfolio.c.id'))
+                Column('portfolio_id', Integer, ForeignKey('portfolio.id'))
                 )
 
 order = Table('order', metadata,
-              Column('id ', Integer, primary_key=True),
-              Column('blotter_id', Integer, ForeignKey=('blotter.c.id'), primary_key=True),
-              Column('asset_id', Integer, ForeignKey=('asset.c.id'), primary_key=True),
+              Column('id', Integer, primary_key=True),
+              Column('blotter_id', Integer, ForeignKey('blotter.id'), primary_key=True),
+              Column('asset_id', Integer, ForeignKey('asset.id'), primary_key=True),
               Column('asset_type', String),
               Column('status', String),
               Column('created', Integer),
@@ -111,18 +110,18 @@ trade = Table('trade', metadata,
               Column('action', String),
               Column('strategy', String),
               Column('qty', Integer),
-              Column('corresponding_trade_id', Integer, ForeignKey=('trade.c.id')),
+              Column('corresponding_trade_id', Integer, ForeignKey('trade.id')),
               Column('net_trade_value', Numeric),
               Column('ticker', String),
-              Column('order_id ', Integer, ForeignKey=('order.c.id')),
+              Column('order_id ', Integer, ForeignKey('order.id')),
               Column('commission', Integer)
               )
 
 owned_asset = Table('owned_asset', metadata,
                     Column('id', Integer, primary_key=True),
-                    Column('asset_id', Integer, ForeignKey=('asset.c.id'), primary_key=True),
+                    Column('asset_id', Integer, ForeignKey('asset.id'), primary_key=True),
                     Column('asset_type', String),
-                    Column('portfolio_id', Integer, ForeignKey=('portfolio.c.id'), primary_key=True),
+                    Column('portfolio_id', Integer, ForeignKey('portfolio.id'), primary_key=True),
                     Column('purchase_date ', Integer),
                     Column('average_share_price_paid', Numeric),
                     Column('shares_owned', Integer),
@@ -130,7 +129,7 @@ owned_asset = Table('owned_asset', metadata,
                     )
 
 universe_ohlcv = Table('universe_ohlcv', metadata,
-                       Column('ticker', Integer, primary_key=True, ForeignKey=('asset.c.ticker')),
+                       Column('ticker', Integer,ForeignKey('asset.ticker'), primary_key=True),
                        Column('asof_date', Integer, primary_key=True),
                        Column('open', Numeric),
                        Column('high', Numeric),

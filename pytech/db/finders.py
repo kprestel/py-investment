@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 import pandas as pd
 from sqlalchemy import MetaData, create_engine, not_, select
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import InvalidRequestError
 
 from pytech.db.connector import DBConnector
 from pytech.db.pytech_db_schema import (PYTECH_DB_TABLE_NAMES, asset as asset_table,
@@ -37,12 +38,17 @@ class Finder(metaclass=ABCMeta):
         :type engine: :class:`SQLAlchemy.engine` or str
         """
 
-        self.engine = DBConnector(engine, **kwargs).engine
+        self.connector = DBConnector(engine, **kwargs)
+        self.engine = self.connector.engine
+        self.conn = self.engine.connect()
 
         metadata = MetaData(bind=self.engine)
-        metadata.reflect(only=PYTECH_DB_TABLE_NAMES)
 
-        self.conn = engine.connect()
+        metadata.reflect(only=PYTECH_DB_TABLE_NAMES)
+        # try:
+        # except InvalidRequestError:
+        #     metadata.create_all(bind=self.engine, checkfirst=True)
+            # self.connector.init_db()
 
         for table_name in PYTECH_DB_TABLE_NAMES:
             setattr(self, table_name, metadata.tables[table_name])

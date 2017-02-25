@@ -4,7 +4,7 @@ import io
 import os
 
 from pytech.crawler import utils
-from test.base import SAMPLE_DATA_DIR, TestCaseBase
+from tests.base import SAMPLE_DATA_DIR, TestCaseBase
 
 
 class UtilsTest(TestCaseBase):

@@ -5,7 +5,7 @@ import pytest
 from scrapy.http import HtmlResponse, XmlResponse
 
 from pytech.crawler.spiders.edgar import EdgarSpider, URLGenerator
-from test.base import TestCaseBase
+from tests.base import TestCaseBase
 
 
 def make_url(symbol, start_date='', end_date=''):

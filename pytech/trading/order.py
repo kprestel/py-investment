@@ -7,10 +7,8 @@ import pandas as pd
 import pandas_market_calendars as mcal
 from pandas.tseries.offsets import DateOffset
 
-import pytech.db.db_utils as db
 import pytech.utils.dt_utils as dt_utils
 from pytech.fin.asset import Asset
-from pytech import OwnedAsset
 from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
 from pytech.utils.exceptions import  UntriggeredTradeError
 
@@ -68,7 +66,7 @@ class Order(object):
 
         self.order_subtype = OrderSubType.check_if_valid(order_subtype) or OrderSubType.DAY
 
-        self._asset = asset
+        self.asset = asset
 
         if self.order_subtype is OrderSubType.DAY:
             self.max_days_open = 1
@@ -77,10 +75,10 @@ class Order(object):
         else:
             self.max_days_open = int(max_days_open)
 
-        self._qty = qty
+        self.qty = qty
         self.commission = commission
-        self._stop_price = stop
-        self._limit_price = limit
+        self.stop_price = stop
+        self.limit_price = limit
         self.stop_reached = False
         self.limit_reached = False
         self.filled = filled

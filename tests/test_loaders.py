@@ -8,7 +8,7 @@ import requests
 from scrapy.http.response.xml import XmlResponse
 
 from pytech.crawler.loaders import ReportItemLoader
-from test.base import SAMPLE_DATA_DIR, TestCaseBase
+from tests.base import SAMPLE_DATA_DIR, TestCaseBase
 
 
 def create_response(file_path):

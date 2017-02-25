@@ -5,7 +5,7 @@ from os.path import join
 
 import pandas as pd
 import pytest
-from pytech.portfolio import Portfolio
+from pytech.fin.portfolio import Portfolio
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
