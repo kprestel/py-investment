@@ -1,7 +1,12 @@
 import pytest
+import pytech.trading.blotter as blotter
 
 from pytech.fin.asset import Fundamental, Stock
 
+
+@pytest.fixture()
+def blotter():
+    return blotter.Blotter()
 
 @pytest.fixture()
 def stock():

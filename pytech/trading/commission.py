@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 
 DEFAULT_MINIMUM_COST_PER_ORDER = 5.0
 
+
 class AbstractCommissionModel(metaclass=ABCMeta):
     """
     Abstract Commission Model interface.
@@ -12,15 +13,13 @@ class AbstractCommissionModel(metaclass=ABCMeta):
     """
 
     @abstractmethod
-    def calculate(self, order, trade):
+    def calculate(self, order, execution_price):
         """
         Calculate the amount of commission to charge to an :class:``Order`` as the result of a :class:``Trade``.
 
         :param order: the :py:class:`~order.Order` to charge the commission to.
         :type order: Order
-        :param Trade trade: the :py:class:`~order.Trade` that is being executed.
-            NOTE: one :class:``Order`` may generate multiple :py:class:`~order.Trade` instances if there is not enough
-            shares available to execute the entire order in one trade.
+        :param float execution_price: The cost per share.
         :return: amount to charge
         :rtype: float or None
         """
@@ -41,7 +40,7 @@ class PerOrderCommissionModel(AbstractCommissionModel):
 
         self.cost = float(cost)
 
-    def calculate(self, order, trade):
+    def calculate(self, order, execution_price):
         """If the order hasn't paid any commission then pay the fixed commission."""
 
         if order.commission == 0.0:

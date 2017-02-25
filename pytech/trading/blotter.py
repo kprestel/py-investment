@@ -9,6 +9,7 @@ from pytech.fin.portfolio import Portfolio
 from pytech.trading.order import Order, Trade
 from pytech.utils.enums import AssetPosition, TradeAction
 from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
+from pytech.trading.commission import PerOrderCommissionModel
 
 
 class Blotter(object):
@@ -16,7 +17,7 @@ class Blotter(object):
 
     LOGGER_NAME = 'blotter'
 
-    def __init__(self, asset_finder=None, portfolio=None):
+    def __init__(self, asset_finder=None, portfolio=None, commission_model=None):
 
         self.logger = logging.getLogger(self.LOGGER_NAME)
         self.asset_finder = asset_finder
@@ -26,6 +27,7 @@ class Blotter(object):
         # keep a record of all past trades.
         self.trades = []
         self.current_dt = None
+        self.commission_model = commission_model or PerOrderCommissionModel
 
     @property
     def asset_finder(self):
@@ -83,13 +85,14 @@ class Blotter(object):
         """Iterate over the items dictionary directly"""
         yield self.orders.items()
 
-    def place_order(self, asset, action, order_type, stop_price=None, limit_price=None, qty=0,
+    def place_order(self, ticker, action, order_type, stop_price=None, limit_price=None, qty=0,
                     date_placed=None, order_subtype=None):
         """
-        Open a new order.
+        Open a new order.  If an open order for the given ``ticker`` already exists placing a new order will **NOT**
+        change the existing order, it will be added to the tuple.
 
-        :param asset: The asset of the :py:class:`~asset.Asset` to place an order for or the ticker of an asset.
-        :type asset: Asset or str
+        :param ticker: The asset of the :py:class:`~asset.Asset` to place an order for or the ticker of an asset.
+        :type ticker: Asset or str
         :param TradeAction or str action: **BUY** or **SELL**
         :param OrderType order_type: the type of order
         :param float stop_price: If creating a stop order this is the stop price.
@@ -102,17 +105,11 @@ class Blotter(object):
         :return: None
         """
 
-        try:
-            asset = self.portfolio[asset]
-        except KeyError:
-            self.logger.info('Placing a new order for an unowned asset with ticker: {}'.format(asset))
-            asset = self.asset_finder.find_instance(asset)
-
         if date_placed is None:
             date_placed = self.current_dt
 
         order = Order(
-                asset=asset,
+                asset=ticker,
                 action=action,
                 order_type=order_type,
                 order_subtype=order_subtype,
@@ -122,23 +119,20 @@ class Blotter(object):
                 created=date_placed
         )
 
-        self[asset] = order
+        if ticker in self.orders:
+            self[ticker] += (order,)
+        else:
+            self[ticker] = (order,)
 
     def check_order_triggers(self, dt=None, current_price=None):
         """
-        Check if any order has been triggered and if they have execute the trade.
+        Check if any order has been triggered and if they have execute the trade and then clean up closed orders.
 
         :param datetime dt: current datetime
         :param float current_price: The current price of the asset.
         """
 
-        closed_orders = []
-
         for order in self.orders.values():
-            if order.open_amount == 0 or not order.open:
-                closed_orders.append(order)
-                continue
-
             if order.check_triggers(dt=dt, current_price=current_price):
                 # make_trade will return the order if it closed
                 self.make_trade(order, current_price, dt)
@@ -168,19 +162,17 @@ class Blotter(object):
         * SELL
         """
 
-        if order.owned_asset:
-            self.logger.info('Updating {} position'.format(order.asset.ticker))
-            trade = self._update_existing_position(order=order, trade_date=trade_date, owned_asset=order.owned_asset,
-                                                   price_per_share=price_per_share)
+        commission_cost = self.commission_model.calculate(order, price_per_share)
+
+        order.commission += commission_cost
+
+        if self.portfolio.check_liquidity(commission_cost, price_per_share, order.qty):
+            trade = Trade.from_order(order, trade_date, price_per_share, commission_cost, 'Executing Order.')
+            order.filled += trade.qty
+            self.portfolio.cash += trade.trade_value()
+            self.trades.append(trade)
         else:
-            self.logger.info('Opening new position in {}'.format(order.asset.ticker))
-            trade = self._open_new_position(order=order, price_per_share=price_per_share, trade_date=trade_date)
-
-        order.filled += trade.qty
-
-        self.trades.append(trade)
-
-        return trade
+            self.logger.warning('Not enough cash to place the trade.')
 
     def _open_new_position(self, price_per_share, trade_date, order):
         """
@@ -240,7 +232,6 @@ class Blotter(object):
 
         return trade
 
-
     def _update_existing_position(self, price_per_share, trade_date, owned_asset, order):
         """
         Update the :class:``OwnedAsset`` associated with this portfolio as well as the cash position
@@ -262,8 +253,8 @@ class Blotter(object):
                                              price_per_share=price_per_share)
 
         if owned_asset.shares_owned != 0:
-            self.owned_assets[owned_asset.asset.ticker] = owned_asset
-            self.cash += owned_asset.total_position_cost
+            self.portfolio[owned_asset.asset.ticker] = owned_asset
+            self.portfolio.cash += owned_asset.total_position_cost
 
             trade = Trade.from_order(
                     order=order,
@@ -286,11 +277,13 @@ class Blotter(object):
         return trade
 
     def purge_closed_orders(self):
-        """
-        Remove any order that is no longer open.
+        """Remove any order that is no longer open."""
 
-        :param iterable closed_orders:
-        :return:
-        """
+        open_orders = {}
 
-        #TODO: this...
+        for ticker, asset_orders in self.orders:
+            for order in asset_orders:
+                if order.open and order.open_amount != 0:
+                    open_orders[ticker] = order
+
+        self.orders = open_orders

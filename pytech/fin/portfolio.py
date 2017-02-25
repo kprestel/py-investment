@@ -67,6 +67,26 @@ class Portfolio(object):
 
         yield self.owned_assets.items()
 
+    def check_liquidity(self, commission_cost, price_per_share, qty):
+        """
+        Check if the portfolio has enough liquidity to actually make the trade. This method should be called before
+        executing any trade.
+
+        :param float commission_cost: The commission that will be charged.
+        :param float price_per_share: The price per share in the trade.
+        :param int qty: The amount of shares to be traded.
+        :return: True if there is enough cash to make the trade or if qty is negative indicating a sale.
+        """
+
+        if qty < 0:
+            return True
+
+        cost = (qty * price_per_share) + commission_cost
+        cur_cash = self.cash
+        post_trade_cash = cur_cash - cost
+
+        return post_trade_cash > 0
+
     def get_total_value(self, include_cash=True):
         """
         Calculate the total value of the ``Portfolio`` owned_assets

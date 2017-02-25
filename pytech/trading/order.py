@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import datetime
 from sys import float_info
 
@@ -21,7 +22,7 @@ class Order(object):
     LOGGER_NAME = 'order'
 
     def __init__(self, asset, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
-                 filled=0, commission=0, created=None, max_days_open=None):
+                 filled=0, created=None, max_days_open=None):
         """
         Order constructor
 
@@ -40,7 +41,7 @@ class Order(object):
         :param int qty: The amount of shares the order is for.
             This should be negative if it is a sell order and positive if it is a buy order.
         :param int filled: How many shares of the order have already been filled, if any.
-        :param float commission: The amount of commission associated with placing the order.
+        :param float commission: The amount of commission that has already been charged on the order.
         :param datetime created: The date and time that the order was created
         :param int max_days_open: The max calendar days that an order can stay open without being cancelled.
             This parameter is not relevant to Day orders since they will be closed at the end of the day regardless.
@@ -76,7 +77,8 @@ class Order(object):
             self.max_days_open = int(max_days_open)
 
         self.qty = qty
-        self.commission = commission
+        # How much commission has already been charged on the order.
+        self.commission = 0.0
         self.stop_price = stop
         self.limit_price = limit
         self.stop_reached = False
@@ -164,7 +166,6 @@ class Order(object):
                 self._qty = int(qty)
         else:
             self._qty = int(qty)
-
 
     @property
     def triggered(self):
@@ -287,7 +288,6 @@ class Order(object):
         else:
             return
 
-
     def get_available_volume(self, dt):
         """
         Get the available volume to trade.  This will the min of open_amount and the assets volume.
@@ -298,7 +298,6 @@ class Order(object):
         """
 
         return int(min(self.asset.get_volume(dt=dt), abs(self.open_amount)))
-
 
 
 class Trade(object):
@@ -349,8 +348,13 @@ class Trade(object):
         self.commission = commission
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
+    def trade_value(self):
+        """Return the total financial impact of a trade. If this was a buy order then the impact will be negative."""
+
+        return (self.qty * self.price_per_share) + self.commission
+
     @classmethod
-    def from_order(cls, order, trade_date, execution_price=None, strategy=None):
+    def from_order(cls, order, trade_date, commission, execution_price, strategy=None):
         """
         Make a trade from a triggered order object.
 
@@ -364,12 +368,6 @@ class Trade(object):
         if not order.triggered:
             raise UntriggeredTradeError(order=order.__dict__.__str__())
 
-        if execution_price is None:
-            exec_price = order.asset.get_price_quote()
-            execution_price = exec_price.price
-        else:
-            execution_price = execution_price
-
         if strategy is None:
             strategy = order.order_type.name
 
@@ -380,7 +378,8 @@ class Trade(object):
             'price_per_share': execution_price,
             'strategy': strategy,
             'order': order,
-            'trade_date': trade_date
+            'trade_date': trade_date,
+            'commission': commission
         }
 
         return cls(**trade_dict)
@@ -409,7 +408,7 @@ def asymmetric_round_price_to_penny(price, prefer_round_down, diff=(0.0095 - .00
     # bound on buys and the lower bound on sells.  Using the actual system
     # epsilon doesn't quite get there, so use a slightly less epsilon-ey value.
     epsilon = float_info.epsilon * 10
-    diff = diff - epsilon
+    diff -= epsilon
 
     # relies on rounding half away from zero, unlike numpy's bankers' rounding
     rounded = round(price - (diff if prefer_round_down else -diff), 2)
