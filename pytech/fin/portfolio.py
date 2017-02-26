@@ -2,7 +2,9 @@ import logging
 from datetime import datetime
 
 
-from pytech import OwnedAsset
+from pytech.fin.owned_asset import OwnedAsset
+from pytech.trading.trade import Trade
+from pytech.utils.enums import TradeAction, AssetPosition
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +67,12 @@ class Portfolio(object):
 
         yield self.owned_assets.items()
 
-    def check_liquidity(self, commission_cost, price_per_share, qty):
+    def check_liquidity(self, avg_price_per_share, qty):
         """
         Check if the portfolio has enough liquidity to actually make the trade. This method should be called before
         executing any trade.
 
-        :param float commission_cost: The commission that will be charged.
-        :param float price_per_share: The price per share in the trade.
+        :param float avg_price_per_share: The price per share in the trade **AFTER** commission has been applied.
         :param int qty: The amount of shares to be traded.
         :return: True if there is enough cash to make the trade or if qty is negative indicating a sale.
         """
@@ -79,11 +80,47 @@ class Portfolio(object):
         if qty < 0:
             return True
 
-        cost = (qty * price_per_share) + commission_cost
+        cost = avg_price_per_share * qty
         cur_cash = self.cash
         post_trade_cash = cur_cash - cost
 
         return post_trade_cash > 0
+
+    def update_from_trade(self, trade):
+        """
+        Update the ``portfolio``'s state based on the execution of a trade.  This includes updating the cash position
+        as well as the ``owned_asset`` dictionary.
+
+        :param Trade trade: The trade that was executed.
+        :return:
+        """
+
+        self.cash += trade.trade_value()
+
+        if trade.ticker in self.owned_assets:
+            self._update_existing_owned_asset_from_trade(trade)
+        else:
+            self._create_new_owned_asset_from_trade(trade)
+
+    def _update_existing_owned_asset_from_trade(self, trade):
+        """Update an existing owned asset or delete it if the trade results in all shares being sold."""
+
+        updated_asset = self.owned_assets[trade.ticker].make_trade(trade.qty, trade.avg_price_per_share)
+
+        if updated_asset is None:
+            del self.owned_assets[trade.ticker]
+        else:
+            self.owned_assets[trade.ticker] = updated_asset
+
+    def _create_new_owned_asset_from_trade(self, trade):
+        """Create a new owned asset based on the execution of a trade."""
+
+        if trade.action is TradeAction.SELL:
+            asset_position = AssetPosition.SHORT
+        else:
+            asset_position = AssetPosition.LONG
+
+        self.owned_assets[trade.ticker] = OwnedAsset.from_trade(trade, asset_position)
 
     def get_total_value(self, include_cash=True):
         """

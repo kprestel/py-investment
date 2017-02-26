@@ -16,7 +16,7 @@ class AutoNumber(Enum):
         if value is None:
             return None
         elif isinstance(value, cls):
-            return value.name
+            return value
         for name, member in cls.__members__.items():
             if member.name == value.upper():
                 return member

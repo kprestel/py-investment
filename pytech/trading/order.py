@@ -7,11 +7,10 @@ import pandas as pd
 import pandas_market_calendars as mcal
 from pandas.tseries.offsets import DateOffset
 
-import pytech.utils.dt_utils as dt_utils
 import pytech.utils.common_utils as utils
+import pytech.utils.dt_utils as dt_utils
 from pytech.fin.asset import Asset
 from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
-from pytech.utils.exceptions import UntriggeredTradeError
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +20,16 @@ class Order(object):
 
     LOGGER_NAME = 'order'
 
-    def __init__(self, asset, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
+    def __init__(self, ticker, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
                  filled=0, created=None, max_days_open=None, id=None):
         """
         Order constructor
 
-        :param asset: The asset for which the order is associated with.  This can either be an instance of an
-            :class:`pytech.fin.asset.Asset` or a string with of ticker of the asset. If an asset is passed in the ticker
+        :param ticker: The ticker for which the order is associated with.  This can either be an instance of an
+            :class:`pytech.fin.ticker.Asset` or a string with of ticker of the ticker. If an ticker is passed in the ticker
             will be taken from it.
-        :type asset: Asset or str
-        :param Portfolio blotter: The :py:class:`pytech.blotter.Blotter` that the asset is associated with
+        :type ticker: Asset or str
+        :param Portfolio blot: The :py:class:`pytech.blot.Blotter` that the ticker is associated with
         :param TradeAction action: Either BUY or SELL
         :param OrderType order_type: The type of order to create.
             Also can be a str.
@@ -48,7 +47,7 @@ class Order(object):
             (default: None if the order_type is Day)
             (default: 90 if the order_type is not Day)
         :param str id: A uuid hex
-        :raises NotAnAssetError: If the asset passed in is not an asset
+        :raises NotAnAssetError: If the ticker passed in is not an ticker
         :raises InvalidActionError: If the action passed in is not a valid action
         :raises NotAPortfolioError: If the portfolio passed in is not a portfolio
 
@@ -72,7 +71,7 @@ class Order(object):
         else:
             self.order_subtype = OrderSubType.DAY
 
-        self.asset = asset
+        self.ticker = ticker
 
         if self.order_subtype is OrderSubType.DAY:
             self.max_days_open = 1
@@ -146,20 +145,18 @@ class Order(object):
             self._limit_price = None
 
     @property
-    def asset(self):
-        """Make asset always return the ticker unless directly accessed."""
-        if issubclass(self._asset.__class__, Asset):
-            return self._asset.ticker
+    def ticker(self):
+        """Make ticker always return the ticker unless directly accessed."""
+        if issubclass(self._ticker.__class__, Asset):
+            return self._ticker.ticker
         else:
-            return self._asset
+            return self._ticker
 
-    @asset.setter
-    def asset(self, asset):
-        """If an asset is passed in then use it otherwise use the string passed in."""
-        if issubclass(asset.__class__, Asset):
-            self._asset = asset.ticker
-        else:
-            self._asset = asset
+    @ticker.setter
+    def ticker(self, ticker):
+        """If an ticker is passed in then use it otherwise use the string passed in."""
+
+        self._ticker = ticker
 
     @property
     def qty(self):
@@ -219,13 +216,10 @@ class Order(object):
 
     def check_triggers(self, current_price, dt):
         """
-        Check if any of the order's triggers should be pulled and execute a trade and then delete the order.
+        Check if any of the ``order``'s limits have been broken in a way that would trigger the ``order``.
 
         :param datetime dt: The current datetime.
-            (default: ``datetime.now()``)
         :param float current_price: The current price to check the triggers against.
-            (default: ``None``)
-            If left at the default then the current price will retrieved.
         :return: True if the order is triggered otherwise False
         :rtype: bool
         """
@@ -284,7 +278,7 @@ class Order(object):
         if self.order_subtype is OrderSubType.DAY:
             if not trading_cal.open_at_time(schedule, pd.Timestamp(current_date)):
                 reason = 'Market closed without executing order.'
-                self.logger.info('Canceling trade for asset: {} due to {}'.format(self.asset.ticker, reason))
+                self.logger.info('Canceling trade for ticker: {} due to {}'.format(self.ticker.ticker, reason))
                 self.cancel(reason=reason)
         elif self.order_subtype is OrderSubType.GOOD_TIL_CANCELED:
             expr_date = self.created + DateOffset(days=self.max_days_open)
@@ -294,106 +288,21 @@ class Order(object):
                 if not trading_cal.open_at_time(schedule, pd.Timestamp(current_date)):
                     reason = 'Max days of {} had passed without the underlying order executing.'.format(
                         self.max_days_open)
-                    self.logger.info('Canceling trade for asset: {} due to {}'.format(self.asset.ticker, reason))
+                    self.logger.info('Canceling trade for ticker: {} due to {}'.format(self.ticker.ticker, reason))
                     self.cancel(reason=reason)
         else:
             return
 
-    def get_available_volume(self, dt):
+    def get_available_volume(self, available_volume):
         """
         Get the available volume to trade.  This will the min of open_amount and the assets volume.
 
-        :param datetime dt:
+        :param int available_volume: The amount of shares available to trade at a given point in time.
         :return: The number of shares available to trade
         :rtype: int
         """
 
-        return int(min(self.asset.get_volume(dt=dt), abs(self.open_amount)))
-
-
-class Trade(object):
-    """
-    This class is used to make trades and keep trade of past trades.
-
-    Trades must be created as a result of an :class:``Order`` executing.
-    """
-
-    LOGGER_NAME = 'trade'
-
-    def __init__(self, qty, price_per_share, action, strategy, order, commission=0.0, trade_date=None, ticker=None):
-        """
-        :param datetime trade_date: corresponding to the date and time of the trade date
-        :param int qty: number of shares traded
-        :param float price_per_share: price per individual share in the trade or the average share price in the trade
-        :param Asset ticker: a :py:class:`~.asset.Asset`, the ``asset`` object that was traded
-        :param Order order: a :py:class:`~.order.Order` that was executed as a result of the order executing
-        :param float commission: the amount of commission paid to execute this trade
-            (default: 0.0)
-        :param TradeAction or str action: :py:class:`~.enum.TradeAction`
-        :param str position: must be *long* or *short*
-
-        .. note::
-
-        Valid **action** parameter values are:
-
-        * TradeAction.BUY
-        * TradeAction.SELL
-        * BUY
-        * SELL
-
-        `commission` is not necessarily the same commission associated with the ``order`` this will depend on the
-        type of :class:``AbstractCommissionModel`` used.
-        """
-
-        if trade_date:
-            self.trade_date = dt_utils.parse_date(trade_date)
-        else:
-            self.trade_date = pd.Timestamp(datetime.now())
-
-        self.action = TradeAction.check_if_valid(action)
-        self.strategy = strategy
-        self.ticker = ticker
-        self.qty = qty
-        self.price_per_share = price_per_share
-        self.order = order
-        self.commission = commission
-        self.logger = logging.getLogger(self.LOGGER_NAME)
-
-    def trade_value(self):
-        """Return the total financial impact of a trade. If this was a buy order then the impact will be negative."""
-
-        return (self.qty * self.price_per_share) + self.commission
-
-    @classmethod
-    def from_order(cls, order, trade_date, commission, execution_price, strategy=None):
-        """
-        Make a trade from a triggered order object.
-
-        :param Order order: The ``order`` object creating the trade.
-        :param float execution_price: The price that the trade will be executed at.
-        :raises UntriggeredTradeError: if the order has not been triggered.
-        :return: a new ``trade``
-        :rtype: Trade
-        """
-
-        if not order.triggered:
-            raise UntriggeredTradeError(order=order.__dict__.__str__())
-
-        if strategy is None:
-            strategy = order.order_type.name
-
-        trade_dict = {
-            'ticker': order.asset.ticker,
-            'qty': order.get_available_volume(dt=trade_date),
-            'action': order.action,
-            'price_per_share': execution_price,
-            'strategy': strategy,
-            'order': order,
-            'trade_date': trade_date,
-            'commission': commission
-        }
-
-        return cls(**trade_dict)
+        return int(min(available_volume, abs(self.open_amount)))
 
 
 def asymmetric_round_price_to_penny(price, prefer_round_down, diff=(0.0095 - .005)):

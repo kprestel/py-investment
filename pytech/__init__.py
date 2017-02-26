@@ -26,11 +26,4 @@ engine = create_engine(cs, connect_args={'check_same_thread':False}, poolclass=S
 
 # Session must be created before importing the other classes.
 Session = sessionmaker(bind=engine)
-from pytech.base import Base
-from pytech.trading.order import Trade
-from pytech.fin.asset import Stock, Fundamental
-from pytech.fin.owned_asset import OwnedAsset
-
-Base.metadata.drop_all(engine)
-Base.metadata.create_all(engine)
 logging.basicConfig(level=logging.DEBUG)

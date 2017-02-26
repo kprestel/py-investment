@@ -1,5 +1,6 @@
 import pytest
-import pytech.trading.blotter as blotter
+import pytech.trading.blotter as blot
+import pytech.trading.order as ord
 import pytech.db.finders as finders
 import pytech.fin.portfolio as portfolio
 from pytech.utils.exceptions import NotAPortfolioError, NotAFinderError
@@ -9,7 +10,7 @@ from pytech.utils.enums import TradeAction, OrderSubType, OrderStatus, OrderType
 class TestBlotter(object):
 
     def test_blotter_constructor(self):
-        test_blotter = blotter.Blotter()
+        test_blotter = blot.Blotter()
 
         assert isinstance(test_blotter.portfolio, portfolio.Portfolio)
         assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
@@ -17,19 +18,28 @@ class TestBlotter(object):
         test_portfolio = portfolio.Portfolio()
         test_finder = finders.AssetFinder()
 
-        test_blotter = blotter.Blotter(portfolio=test_portfolio)
+        test_blotter = blot.Blotter(portfolio=test_portfolio)
         assert isinstance(test_blotter.portfolio, portfolio.Portfolio)
         assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
 
-        test_blotter = blotter.Blotter(test_finder)
+        test_blotter = blot.Blotter(test_finder)
         assert isinstance(test_blotter.portfolio, portfolio.Portfolio)
         assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
 
         with pytest.raises(NotAPortfolioError):
-            blotter.Blotter(portfolio='NOT A PORTFOLIO')
+            blot.Blotter(portfolio='NOT A PORTFOLIO')
 
         with pytest.raises(NotAFinderError):
-            blotter.Blotter(asset_finder='NOT A FINDER')
+            blot.Blotter(asset_finder='NOT A FINDER')
+
+    def test_place_order(self, blotter):
+
+        blotter.place_order('AAPL', 'BUY', 'LIMIT', 50, limit_price=100.10, order_id='one')
+        blotter.place_order('MSFT', 'SELL', 'LIMIT', 50, limit_price=93.10, order_id='three')
+        blotter.place_order('FB', 'SELL', 'LIMIT', 50, limit_price=105.10, order_id='four')
+
+        for k, v in blotter:
+            assert isinstance(v, ord.Order)
 
     def test_cancel_order(self, populated_blotter):
         """
@@ -43,7 +53,7 @@ class TestBlotter(object):
 
         for k, v in populated_blotter:
                 if k == 'one':
-                    assert v.status == OrderStatus.CANCELLED.name
+                    assert v.status is OrderStatus.CANCELLED
 
     def test_cancel_all_orders_for_asset(self, populated_blotter):
         """
@@ -56,7 +66,7 @@ class TestBlotter(object):
         populated_blotter.cancel_all_orders_for_asset('AAPL')
 
         for order in populated_blotter:
-            assert order.status == OrderStatus.CANCELLED.name
+            assert order.status is OrderStatus.CANCELLED
 
 
 

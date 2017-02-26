@@ -17,7 +17,7 @@ class Algorithim(metaclass=ABCMeta):
         self.environment = kwargs.pop('env', Environment())
         self.asset_finder = kwargs.pop('asset_finder', self.environment.asset_finder)
         self.portfolio = kwargs.pop('portfolio', Portfolio())
-        self.blotter = kwargs.pop('blotter')
+        self.blotter = kwargs.pop('blot')
 
         if self.blotter is None:
             self.blotter = Blotter(

@@ -1,14 +1,17 @@
 import logging
 from datetime import datetime
+import pandas as pd
 
 import collections
 
 import pytech.db.db_utils as db
+import pytech.utils.pandas_utils as pd_utils
 from pytech.db.finders import AssetFinder
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.fin.asset import Asset
 from pytech.fin.portfolio import Portfolio
-from pytech.trading.order import Order, Trade
+from pytech.trading.order import Order
+from pytech.trading.trade import Trade
 from pytech.utils.enums import AssetPosition, TradeAction
 from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
 from pytech.trading.commission import PerOrderCommissionModel
@@ -17,7 +20,7 @@ from pytech.trading.commission import PerOrderCommissionModel
 class Blotter(object):
     """Holds and interacts with all orders."""
 
-    LOGGER_NAME = 'blotter'
+    LOGGER_NAME = 'blot'
 
     def __init__(self, asset_finder=None, portfolio=None, commission_model=None):
 
@@ -65,10 +68,10 @@ class Blotter(object):
     def __setitem__(self, key, value):
         """
         Add an order to the orders dict.
-        If the key is an instance of :class:`~asset.Asset` then the ticker is used as the key, otherwise the key is the
+        If the key is an instance of :class:`~ticker.Asset` then the ticker is used as the key, otherwise the key is the
         ticker.
         :param key: The key to dictionary, will always be the ticker of the ``Asset`` the order is for but an instance
-        of :class:`~asset.Asset` will also work as long as the ticker is set.
+        of :class:`~ticker.Asset` will also work as long as the ticker is set.
         :type key: Asset or str
         :param Order value: The order.
         """
@@ -99,22 +102,23 @@ class Blotter(object):
         return do_iter(self.orders)
 
     def place_order(self, ticker, action, order_type, qty, stop_price=None, limit_price=None,
-                    date_placed=None, order_subtype=None, order_id=None):
+                    date_placed=None, order_subtype=None, order_id=None, max_days_open=90):
         """
         Open a new order.  If an open order for the given ``ticker`` already exists placing a new order will **NOT**
         change the existing order, it will be added to the tuple.
 
-        :param ticker: The asset of the :py:class:`~asset.Asset` to place an order for or the ticker of an asset.
+        :param ticker: The ticker of the :py:class:`~ticker.Asset` to place an order for or the ticker of an ticker.
         :type ticker: Asset or str
         :param TradeAction or str action: **BUY** or **SELL**
         :param OrderType order_type: the type of order
-        :param float stop_price: If creating a stop order this is the stop price.
+        :param float stop_price: If creating a stop order this is the stop price that will trigger the ``order``.
         :param float limit_price: If creating a limit order this is the price that will trigger the ``order``.
         :param int qty: The number of shares to place an ``order`` for.
         :param datetime date_placed: The date and time the order is created.
-        :param OrderSubType order_subtype: The type of order subtype
+        :param OrderSubType order_subtype: (optional) The type of order subtype
             (default: ``OrderSubType.DAY``)
         :param int max_days_open: Number of days to leave the ``order`` open before it expires.
+        :param str order_id: (optional) The ID of the :class:`pytech.trading.order.Order`.
         :return: None
         """
 
@@ -126,7 +130,7 @@ class Blotter(object):
             date_placed = self.current_dt
 
         order = Order(
-                asset=ticker,
+                ticker=ticker,
                 action=action,
                 order_type=order_type,
                 order_subtype=order_subtype,
@@ -134,7 +138,8 @@ class Blotter(object):
                 limit=limit_price,
                 qty=qty,
                 created=date_placed,
-                id=order_id
+                id=order_id,
+                max_days_open=max_days_open
         )
 
         if ticker in self.orders:
@@ -169,9 +174,9 @@ class Blotter(object):
 
     def cancel_all_orders_for_asset(self, ticker, reason=''):
         """
-        Cancel all orders for a given asset's ticker and then clean up the orders dict.
+        Cancel all orders for a given ticker's ticker and then clean up the orders dict.
 
-        :param str ticker: The ticker of the asset to cancel all orders for.
+        :param str ticker: The ticker of the ticker to cancel all orders for.
         :param str reason: (optional) The reason for canceling the order.
         :return:
         """
@@ -185,14 +190,14 @@ class Blotter(object):
         if order.filled > 0:
             self.logger.warning('Order for {ticker} has been partially filled.'
                                 '{amt} shares have already been successfully purchased.'
-                                .format(ticker=order.asset, amt=order.filled))
+                                .format(ticker=order.ticker, amt=order.filled))
         elif order.filled < 0:
             self.logger.warning('Order for {ticker} has been partially filled.'
                                 '{amt} shares have already been successfully sold.'
-                                .format(ticker=order.asset, amt=order.filled))
+                                .format(ticker=order.ticker, amt=order.filled))
         else:
             self.logger.info('Canceled order for {ticker} successfully before it was executed.'
-                             .format(ticker=order.asset))
+                             .format(ticker=order.ticker))
         order.cancel(reason)
         order.last_updated = self.current_dt
 
@@ -213,27 +218,29 @@ class Blotter(object):
         self.logger.warning('Order id: {id} for ticker: {ticker} was rejected because: {reason}'
                             .format(id=order_id, ticker=ticker, reason=reason or 'Unknown'))
 
-    def check_order_triggers(self, dt=None, current_price=None):
+    def check_order_triggers(self, tick_data):
         """
         Check if any order has been triggered and if they have execute the trade and then clean up closed orders.
 
-        :param datetime dt: current datetime
-        :param float current_price: The current price of the asset.
+        :param pd.DataFrame tick_data: The current tick data
         """
 
-        for order in self.orders.values():
+        dt = tick_data.iloc[0][pd_utils.DATE_COL]
+        for order_id, order in self:
+            # should this be looking the close column?
+            current_price = tick_data.ix[order.ticker][pd_utils.CLOSE_COL]
+            available_volume = tick_data.ix[order.ticker][pd_utils.VOL_COL]
+            # check_triggers returns a boolean indicating if it is triggered.
             if order.check_triggers(dt=dt, current_price=current_price):
-                # make_trade will return the order if it closed
-                self.make_trade(order, current_price, dt)
+                self.make_trade(order, current_price, dt, available_volume)
 
         self.purge_orders()
 
-    def make_trade(self, order, price_per_share, trade_date):
+    def make_trade(self, order, price_per_share, trade_date, volume):
         """
-        Buy or sell an asset from the asset universe.
+        Buy or sell an ticker from the ticker universe.
 
         :param str ticker: The ticker of the :class:``Asset`` to trade.
-        :param int qty: the number of shares to trade
         :param TradeAction or str action: :py:class:``enum.TradeAction`` see comments below.
         :param float price_per_share: the cost per share in the trade
         :param datetime trade_date: The date and time that the trade is taking place.
@@ -241,7 +248,7 @@ class Blotter(object):
             and ``None`` if the order is still open
         :rtype: Order or None
 
-        This method will add the asset to the :py:class:``Portfolio`` asset dict and update the db to reflect the trade.
+        This method will add the ticker to the :py:class:``Portfolio`` ticker dict and update the db to reflect the trade.
 
         Valid **action** parameter values are:
 
@@ -252,13 +259,17 @@ class Blotter(object):
         """
 
         commission_cost = self.commission_model.calculate(order, price_per_share)
+        available_volume = order.get_available_volume(volume)
+        avg_price_per_share = ((price_per_share * available_volume) + commission_cost) / available_volume
 
         order.commission += commission_cost
 
-        if self.portfolio.check_liquidity(commission_cost, price_per_share, order.qty):
-            trade = Trade.from_order(order, trade_date, price_per_share, commission_cost, 'Executing Order.')
+        if self.portfolio.check_liquidity(avg_price_per_share, available_volume):
+            trade = Trade.from_order(order, trade_date, commission_cost, price_per_share, available_volume,
+                                     avg_price_per_share)
+
             order.filled += trade.qty
-            self.portfolio.cash += trade.trade_value()
+            self.portfolio.update_from_trade(trade)
             self.trades.append(trade)
         else:
             order.reject('Insufficient Funds to make trade.  Order was rejected.')
@@ -279,10 +290,10 @@ class Blotter(object):
         :param Order order: The order
         :return: None
         :raises InvalidActionError: If action is not 'BUY' or 'SELL'
-        :raises AssetNotInUniverseError: when an asset is traded that does not yet exist in the Universe
+        :raises AssetNotInUniverseError: when an ticker is traded that does not yet exist in the Universe
 
         This method processes the trade and then writes the results to the database. It will create a new instance of
-        :py:class:`~stock.OwnedStock` class and at it to the :py:class:`~portfolio.Portfolio` asset dict.
+        :py:class:`~stock.OwnedStock` class and at it to the :py:class:`~portfolio.Portfolio` ticker dict.
 
         .. note::
 
@@ -294,10 +305,10 @@ class Blotter(object):
         * SELL
         """
 
-        asset = order.asset
+        asset = order.ticker
 
         if order.action is TradeAction.SELL:
-            # if selling an asset that is not in the portfolio that means it has to be a short sale.
+            # if selling an ticker that is not in the portfolio that means it has to be a short sale.
             position = AssetPosition.SHORT
             # qty *= -1
         else:
@@ -315,7 +326,7 @@ class Blotter(object):
 
         trade = Trade.from_order(
                 order=order,
-                execution_price=price_per_share,
+                price_per_share=price_per_share,
                 trade_date=trade_date,
                 strategy='Open new {} position'.format(position)
         )
@@ -333,7 +344,7 @@ class Blotter(object):
             This should always be positive no matter what the trade's position is.
         :param datetime trade_date: the date and time the trade takes place
             (default: now)
-        :param OwnedAsset owned_asset: the asset that is already in the portfolio
+        :param OwnedAsset owned_asset: the ticker that is already in the portfolio
         :param TradeAction action: **BUY** or **SELL**
         :param Order order:
         :raises InvalidActionError:
@@ -348,7 +359,7 @@ class Blotter(object):
 
             trade = Trade.from_order(
                     order=order,
-                    execution_price=price_per_share,
+                    price_per_share=price_per_share,
                     trade_date=trade_date,
                     strategy='Update an existing {} position'.format(owned_asset.position)
             )
@@ -359,7 +370,7 @@ class Blotter(object):
 
             trade = Trade.from_order(
                     order=order,
-                    execution_price=price_per_share,
+                    price_per_share=price_per_share,
                     trade_date=trade_date,
                     strategy='Close an existing {} position'.format(owned_asset.position)
             )

@@ -7,6 +7,7 @@ from pandas_datareader import data as web
 from pytech.fin.asset import Asset
 from pytech.utils import dt_utils as dt_utils
 from pytech.utils.enums import AssetPosition
+from pytech.trading.trade import Trade
 from pytech.utils.exceptions import NotAnAssetError
 
 
@@ -54,6 +55,28 @@ class OwnedAsset(object):
             self._ticker = ticker.ticker
         else:
             self._ticker = ticker
+
+    @classmethod
+    def from_trade(cls, trade, asset_position):
+        """
+        Create an owned_asset from a :class:``pytech.trading.trade.Trade``.  This the preferred method to create new
+        ``OwnedStock`` objects, and :func:``make_trade`` is the preferred way to update an instance of ``OwnedStock``.
+
+        :param Trade trade: The trade that will create the new instance of ``OwnedStock``.
+        :param AssetPosition asset_position: The position that the asset is, either **LONG** or **SHORT**.
+        :return: The newly created instance of ``OwnedStock`` to be added to the owner's :class:``pytech.fin.portfolio``
+        :rtype: OwnedAsset
+        """
+
+        owned_asset_dict = {
+            'ticker': trade.ticker,
+            'position': asset_position,
+            'shares_owned': trade.qty,
+            'average_share_price': trade.avg_price_per_share,
+            'purchase_date': trade.trade_date
+        }
+
+        return cls(**owned_asset_dict)
 
     def make_trade(self, qty, price_per_share):
         """

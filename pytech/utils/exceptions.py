@@ -25,7 +25,7 @@ class PyInvestmentError(Exception):
 class AssetExistsError(PyInvestmentError):
     """
     Raised when a :class:``Asset`` is trying to be inserted into either :class:``AssetUniverse`` or :class:``Portfolio``
-    and already is in the table.  In the event this exception is raised the asset should be updated to whatever the new
+    and already is in the table.  In the event this exception is raised the ticker should be updated to whatever the new
     attributes are.
     """
 
@@ -36,12 +36,12 @@ class AssetNotInUniverseError(PyInvestmentError):
     Raised when an :class:``Asset`` that is not the the :class:``AssetUniverse`` is traded.
     """
 
-    msg = 'Could not locate an asset with the ticker: {ticker}.'
+    msg = 'Could not locate an ticker with the ticker: {ticker}.'
 
 class NotAnAssetError(PyInvestmentError):
     """Raised when a subclass of :class:``Asset`` is required but another object is provided"""
 
-    msg = 'asset must be an instance of a subclass of the Asset class. {asset} was provided.'
+    msg = 'ticker must be an instance of a subclass of the Asset class. {ticker} was provided.'
 
 
 class NotAPortfolioError(PyInvestmentError):
@@ -94,9 +94,9 @@ class UntriggeredTradeError(PyInvestmentError):
 
 
 class NotABlotterError(PyInvestmentError):
-    """Raised when a :py:class:`pytech.blotter.Blotter` is expected but a different type is provided"""
+    """Raised when a :py:class:`pytech.blot.Blotter` is expected but a different type is provided"""
 
-    msg = 'blotter must be an instance of Blotter. {blotter} was provided.'
+    msg = 'blot must be an instance of Blotter. {blot} was provided.'
 
 class NotAFinderError(PyInvestmentError):
 

@@ -51,7 +51,6 @@ class Asset(metaclass=ABCMeta):
         self._start_date = start_date
         self._end_date = end_date
 
-
         if self.start_date >= self.end_date:
             raise ValueError(
                     'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
@@ -130,17 +129,6 @@ class Asset(metaclass=ABCMeta):
             price = self.ohlcv.ix[d][column][0]
             return quote(price=price, time=d)
 
-    def get_volume(self, dt):
-        """
-        Get the current volume traded for the ``Asset``
-
-        :param datetime dt: The datetime to get the volume for.
-        :return: The volume for the ``Asset``
-        :rtype: int
-        """
-
-        return self.ohlcv.ix[dt]['Volume'][0]
-
     def get_ohlcv_series(self, data_source='yahoo', start_date=None, end_date=None):
         """
         Load the ohlcv_to_sql timeseries.
@@ -180,7 +168,7 @@ class Asset(metaclass=ABCMeta):
             return None
 
         # rename the columns to what the DB expects
-        self.ohlcv = pd_utils.rename_yahoo_ohlcv_cols(temp_ohlcv)
+        return pd_utils.rename_yahoo_ohlcv_cols(temp_ohlcv)
 
     @classmethod
     def get_subclass_dict(cls, subclass_dict=None):
