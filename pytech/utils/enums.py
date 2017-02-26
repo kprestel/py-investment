@@ -13,7 +13,9 @@ class AutoNumber(Enum):
 
     @classmethod
     def check_if_valid(cls, value):
-        if isinstance(value, cls):
+        if value is None:
+            return None
+        elif isinstance(value, cls):
             return value.name
         for name, member in cls.__members__.items():
             if member.name == value.upper():

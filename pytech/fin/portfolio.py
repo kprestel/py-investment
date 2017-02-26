@@ -1,10 +1,8 @@
-# from pytech import Session
 import logging
 from datetime import datetime
 
-import pytech.db.db_utils as db
+
 from pytech import OwnedAsset
-from pytech.fin.asset import Asset
 
 logger = logging.getLogger(__name__)
 
@@ -105,10 +103,6 @@ class Portfolio(object):
 
         if include_cash:
             total_value += self.cash
-
-        with db.transactional_session() as session:
-            # update the owned stocks in the db
-            session.add(self)
 
         return total_value
 

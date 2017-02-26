@@ -1,5 +1,4 @@
 import logging
-import math
 from datetime import datetime
 from sys import float_info
 
@@ -9,9 +8,10 @@ import pandas_market_calendars as mcal
 from pandas.tseries.offsets import DateOffset
 
 import pytech.utils.dt_utils as dt_utils
+import pytech.utils.common_utils as utils
 from pytech.fin.asset import Asset
 from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
-from pytech.utils.exceptions import  UntriggeredTradeError
+from pytech.utils.exceptions import UntriggeredTradeError
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class Order(object):
     LOGGER_NAME = 'order'
 
     def __init__(self, asset, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
-                 filled=0, created=None, max_days_open=None):
+                 filled=0, created=None, max_days_open=None, id=None):
         """
         Order constructor
 
@@ -47,6 +47,7 @@ class Order(object):
             This parameter is not relevant to Day orders since they will be closed at the end of the day regardless.
             (default: None if the order_type is Day)
             (default: 90 if the order_type is not Day)
+        :param str id: A uuid hex
         :raises NotAnAssetError: If the asset passed in is not an asset
         :raises InvalidActionError: If the action passed in is not a valid action
         :raises NotAPortfolioError: If the portfolio passed in is not a portfolio
@@ -59,13 +60,17 @@ class Order(object):
             `stop_price` and `limit_price` will get rounded.
         """
 
-        self.logger = logging.getLogger(self.LOGGER_NAME)
+        self.id = id or utils.make_id()
+        self.logger = logging.getLogger('{}_id_{}'.format(self.LOGGER_NAME, self.id))
 
         # TODO: validate that all of these inputs make sense together. e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)
         self.order_type = OrderType.check_if_valid(order_type)
 
-        self.order_subtype = OrderSubType.check_if_valid(order_subtype) or OrderSubType.DAY
+        if order_subtype is not None:
+            self.order_subtype = OrderSubType.check_if_valid(order_subtype)
+        else:
+            self.order_subtype = OrderSubType.DAY
 
         self.asset = asset
 
@@ -121,8 +126,11 @@ class Order(object):
     @stop_price.setter
     def stop_price(self, stop_price):
         """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
-        pref_round_down = self.action is not TradeAction.BUY
-        self._stop_price = asymmetric_round_price_to_penny(stop_price, prefer_round_down=pref_round_down)
+        if stop_price is not None:
+            pref_round_down = self.action is not TradeAction.BUY
+            self._stop_price = asymmetric_round_price_to_penny(stop_price, prefer_round_down=pref_round_down)
+        else:
+            self._stop_price = None
 
     @property
     def limit_price(self):
@@ -131,8 +139,11 @@ class Order(object):
     @limit_price.setter
     def limit_price(self, limit_price):
         """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
-        pref_round_down = self.action is TradeAction.BUY
-        self._limit_price = asymmetric_round_price_to_penny(limit_price, prefer_round_down=pref_round_down)
+        if limit_price is not None:
+            pref_round_down = self.action is TradeAction.BUY
+            self._limit_price = asymmetric_round_price_to_penny(limit_price, prefer_round_down=pref_round_down)
+        else:
+            self._limit_price = None
 
     @property
     def asset(self):

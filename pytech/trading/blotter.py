@@ -1,6 +1,8 @@
 import logging
 from datetime import datetime
 
+import collections
+
 import pytech.db.db_utils as db
 from pytech.db.finders import AssetFinder
 from pytech.fin.owned_asset import OwnedAsset
@@ -82,11 +84,22 @@ class Blotter(object):
         del self.orders[key]
 
     def __iter__(self):
-        """Iterate over the items dictionary directly"""
-        yield self.orders.items()
+        """
+        Iterate over the orders dict as well as the nested orders dict which key=order_id and value=``Order``
+        This means you can iterate over a :class:``Blotter`` instance directly and access all of the open orders it has.
+        """
 
-    def place_order(self, ticker, action, order_type, stop_price=None, limit_price=None, qty=0,
-                    date_placed=None, order_subtype=None):
+        def do_iter(orders_dict):
+            for k, v in orders_dict.items():
+                if isinstance(v, collections.Mapping):
+                    yield from do_iter(v)
+                else:
+                    yield k, v
+
+        return do_iter(self.orders)
+
+    def place_order(self, ticker, action, order_type, qty, stop_price=None, limit_price=None,
+                    date_placed=None, order_subtype=None, order_id=None):
         """
         Open a new order.  If an open order for the given ``ticker`` already exists placing a new order will **NOT**
         change the existing order, it will be added to the tuple.
@@ -105,6 +118,10 @@ class Blotter(object):
         :return: None
         """
 
+        if qty == 0:
+            # No point in making an order for 0 shares.
+            return None
+
         if date_placed is None:
             date_placed = self.current_dt
 
@@ -116,13 +133,85 @@ class Blotter(object):
                 stop=stop_price,
                 limit=limit_price,
                 qty=qty,
-                created=date_placed
+                created=date_placed,
+                id=order_id
         )
 
         if ticker in self.orders:
-            self[ticker] += (order,)
+            self.orders[ticker].update({order.id: order})
         else:
-            self[ticker] = (order,)
+            self.orders[ticker] = {order.id: order}
+
+    def _find_order(self, order_id, ticker):
+
+        if ticker is None:
+            for asset_orders in self.orders:
+                if order_id in asset_orders:
+                    return asset_orders[order_id]
+        else:
+            for k, v in self.orders[ticker].items():
+                if k == order_id:
+                    return v
+
+    def cancel_order(self, order_id, ticker=None, reason=''):
+        """
+        Mark an order as canceled so that it will not get executed.
+
+        :param str order_id: The id of the order to cancel.
+        :param ticker: (optional) The ticker that the order is associated with.
+            Although it is not required to provide a ticker, it is **strongly** encouraged.
+            By providing a ticker the execution time of this method will increase greatly.
+        :param str reason: (optional) The reason that the order is being cancelled.
+        :return:
+        """
+
+        self._do_order_cancel(self._find_order(order_id, ticker), reason)
+
+    def cancel_all_orders_for_asset(self, ticker, reason=''):
+        """
+        Cancel all orders for a given asset's ticker and then clean up the orders dict.
+
+        :param str ticker: The ticker of the asset to cancel all orders for.
+        :param str reason: (optional) The reason for canceling the order.
+        :return:
+        """
+
+        for order in self.orders[ticker].values():
+            self._do_order_cancel(order, reason)
+
+    def _do_order_cancel(self, order, reason):
+        """Cancel any order that is passed to this method and log the appropriate message."""
+
+        if order.filled > 0:
+            self.logger.warning('Order for {ticker} has been partially filled.'
+                                '{amt} shares have already been successfully purchased.'
+                                .format(ticker=order.asset, amt=order.filled))
+        elif order.filled < 0:
+            self.logger.warning('Order for {ticker} has been partially filled.'
+                                '{amt} shares have already been successfully sold.'
+                                .format(ticker=order.asset, amt=order.filled))
+        else:
+            self.logger.info('Canceled order for {ticker} successfully before it was executed.'
+                             .format(ticker=order.asset))
+        order.cancel(reason)
+        order.last_updated = self.current_dt
+
+    def reject_order(self, order_id, ticker=None, reason=''):
+        """
+        Mark an order as rejected. A rejected order is functionally the same as a canceled order but an order being
+        marked rejected is typically involuntary or unexpected and comes from the broker. Another case that an order
+        will be rejected is if when the order is being executed the owner does not have enough cash to fully execute it.
+
+        :param str order_id: The id of the order being rejected.
+        :param str ticker: (optional) The ticker associated with the order being rejected.
+        :param str reason: (optional) The reason the order was rejected.
+        :return:
+        """
+
+        self._find_order(order_id, ticker).reject(reason)
+
+        self.logger.warning('Order id: {id} for ticker: {ticker} was rejected because: {reason}'
+                            .format(id=order_id, ticker=ticker, reason=reason or 'Unknown'))
 
     def check_order_triggers(self, dt=None, current_price=None):
         """
@@ -137,7 +226,7 @@ class Blotter(object):
                 # make_trade will return the order if it closed
                 self.make_trade(order, current_price, dt)
 
-        self.purge_closed_orders()
+        self.purge_orders()
 
     def make_trade(self, order, price_per_share, trade_date):
         """
@@ -172,6 +261,7 @@ class Blotter(object):
             self.portfolio.cash += trade.trade_value()
             self.trades.append(trade)
         else:
+            order.reject('Insufficient Funds to make trade.  Order was rejected.')
             self.logger.warning('Not enough cash to place the trade.')
 
     def _open_new_position(self, price_per_share, trade_date, order):
@@ -276,7 +366,7 @@ class Blotter(object):
 
         return trade
 
-    def purge_closed_orders(self):
+    def purge_orders(self):
         """Remove any order that is no longer open."""
 
         open_orders = {}
