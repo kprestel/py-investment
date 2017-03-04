@@ -6,7 +6,7 @@ from pandas_datareader import data as web
 
 from pytech.fin.asset import Asset
 from pytech.utils import dt_utils as dt_utils
-from pytech.utils.enums import AssetPosition
+from pytech.utils.enums import Position
 from pytech.trading.trade import Trade
 from pytech.utils.exceptions import NotAnAssetError
 
@@ -19,7 +19,7 @@ class OwnedAsset(object):
     def __init__(self, ticker, shares_owned, position, average_share_price=None, purchase_date=None):
 
         self._ticker = ticker
-        self.position = AssetPosition.check_if_valid(position)
+        self.position = Position.check_if_valid(position)
 
         if purchase_date is None:
             self.purchase_date = pd.Timestamp(datetime.now())
@@ -63,7 +63,7 @@ class OwnedAsset(object):
         ``OwnedStock`` objects, and :func:``make_trade`` is the preferred way to update an instance of ``OwnedStock``.
 
         :param Trade trade: The trade that will create the new instance of ``OwnedStock``.
-        :param AssetPosition asset_position: The position that the asset is, either **LONG** or **SHORT**.
+        :param Position asset_position: The position that the asset is, either **LONG** or **SHORT**.
         :return: The newly created instance of ``OwnedStock`` to be added to the owner's :class:``pytech.fin.portfolio``
         :rtype: OwnedAsset
         """
@@ -106,7 +106,7 @@ class OwnedAsset(object):
         :param price: price per share
         :type price: long
         """
-        if self.position is AssetPosition.SHORT:
+        if self.position is Position.SHORT:
             # short positions should have a negative number of shares owned but a positive total cost
             self.total_position_cost = (price * qty) * -1
             # but a negative total value
@@ -126,7 +126,7 @@ class OwnedAsset(object):
 
         self.latest_price = latest_price
         self.latest_price_time = dt_utils.parse_date(price_date)
-        if self.position is AssetPosition.SHORT:
+        if self.position is Position.SHORT:
             self.total_position_value = (self.latest_price * self.shares_owned) * -1
         else:
             self.total_position_value = self.latest_price * self.shares_owned

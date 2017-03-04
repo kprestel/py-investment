@@ -1,4 +1,5 @@
 from abc import ABCMeta
+from queue import Queue
 
 from pytech.db.enviornment import Environment
 from pytech.db.finders import AssetFinder
@@ -26,4 +27,6 @@ class Algorithim(metaclass=ABCMeta):
             )
 
         self.sim_params = kwargs.pop('sim_params')
+
+        self.events = Queue()
 

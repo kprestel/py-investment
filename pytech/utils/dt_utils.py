@@ -2,6 +2,7 @@ from dateutil import parser, tz
 from datetime import date, datetime, timedelta
 import pandas as pd
 
+
 def parse_date(date_to_parse):
     """
     Converts strings or datetime objects to UTC timestamps.
@@ -15,7 +16,7 @@ def parse_date(date_to_parse):
         raise TypeError('date must be a datetime object. {} was provided'.format(type(date_to_parse)))
     elif isinstance(date_to_parse, pd.TimeSeries):
         if date_to_parse.tz is None:
-             return date_to_parse.tz_localize('UTC')
+            return date_to_parse.tz_localize('UTC')
         else:
             return date_to_parse
     elif isinstance(date_to_parse, datetime):
@@ -26,13 +27,14 @@ def parse_date(date_to_parse):
         raise TypeError('date_to_parse must be a pandas Timestamp, datetime, or a date string. '
                         '{} was provided'.format(type(date_to_parse)))
 
-def get_default_date(is_start_date):
 
+def get_default_date(is_start_date):
     if is_start_date:
         temp_date = datetime.now() - timedelta(days=365)
         return parse_date(temp_date)
     else:
         return parse_date(datetime.now())
+
 
 def old_parse_date(date_to_parse):
     """

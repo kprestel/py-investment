@@ -24,9 +24,33 @@ class AutoNumber(Enum):
             return None
 
 
+class EventType(AutoNumber):
+    """Different Event types"""
+
+    MARKET = ()
+    SIGNAL = ()
+    ORDER = ()
+    FILL = ()
+
+
+class SignalType(AutoNumber):
+    BUY = ()
+    SELL = ()
+    EXIT = ()
+
+    @classmethod
+    def check_if_valid(cls, value):
+        name = super().check_if_valid(value)
+        if name is not None:
+            return name
+        else:
+            raise InvalidActionError(action=value)
+
+
 class TradeAction(AutoNumber):
     BUY = ()
     SELL = ()
+    EXIT = ()
 
     @classmethod
     def check_if_valid(cls, value):
@@ -85,7 +109,7 @@ class OrderSubType(AutoNumber):
             raise InvalidOrderSubTypeError(order_subtype=value)
 
 
-class AssetPosition(AutoNumber):
+class Position(AutoNumber):
     LONG = ()
     SHORT = ()
 

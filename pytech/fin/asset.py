@@ -162,7 +162,6 @@ class Asset(metaclass=ABCMeta):
         try:
             temp_ohlcv = web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
             temp_ohlcv.reset_index(inplace=True, drop=False)
-
         except:
             logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
             return None

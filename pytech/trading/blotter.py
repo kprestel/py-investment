@@ -12,15 +12,15 @@ from pytech.fin.asset import Asset
 from pytech.fin.portfolio import Portfolio
 from pytech.trading.order import Order
 from pytech.trading.trade import Trade
-from pytech.utils.enums import AssetPosition, TradeAction
+from pytech.utils.enums import Position, TradeAction
 from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
-from pytech.trading.commission import PerOrderCommissionModel
+from pytech.trading.commission import PerOrderCommissionModel, AbstractCommissionModel
 
 
 class Blotter(object):
     """Holds and interacts with all orders."""
 
-    LOGGER_NAME = 'blot'
+    LOGGER_NAME = 'blotter'
 
     def __init__(self, asset_finder=None, portfolio=None, commission_model=None):
 
@@ -32,7 +32,14 @@ class Blotter(object):
         # keep a record of all past trades.
         self.trades = []
         self.current_dt = None
-        self.commission_model = commission_model or PerOrderCommissionModel
+
+        if commission_model is None:
+            self.commission_model = PerOrderCommissionModel()
+        elif issubclass(commission_model.__class__, AbstractCommissionModel):
+            self.commission_model = commission_model
+        else:
+            raise TypeError('commission_model must be a subclass of AbstractCommissionModel. {} was provided'
+                            .format(type(commission_model)))
 
     @property
     def asset_finder(self):
@@ -274,108 +281,6 @@ class Blotter(object):
         else:
             order.reject('Insufficient Funds to make trade.  Order was rejected.')
             self.logger.warning('Not enough cash to place the trade.')
-
-    def _open_new_position(self, price_per_share, trade_date, order):
-        """
-        Create a new :py:class:``~stock.OwnedStock`` object associated with this portfolio as well as update the cash position
-
-        :param int qty: how many shares are being bought or sold.
-            If the position is a **long** position use a negative number to close it and positive to open it.
-            If the position is a **short** position use a negative number to open it and positive to close it.
-        :param float price_per_share: the average price per share in the trade.
-            This should always be positive no matter what the trade's position is.
-        :param datetime trade_date: the date and time the trade takes place
-            (default: now)
-        :param TradeAction or str action: either **BUY** or **SELL**
-        :param Order order: The order
-        :return: None
-        :raises InvalidActionError: If action is not 'BUY' or 'SELL'
-        :raises AssetNotInUniverseError: when an ticker is traded that does not yet exist in the Universe
-
-        This method processes the trade and then writes the results to the database. It will create a new instance of
-        :py:class:`~stock.OwnedStock` class and at it to the :py:class:`~portfolio.Portfolio` ticker dict.
-
-        .. note::
-
-        Valid **action** parameter values are:
-
-        * TradeAction.BUY
-        * TradeAction.SELL
-        * BUY
-        * SELL
-        """
-
-        asset = order.ticker
-
-        if order.action is TradeAction.SELL:
-            # if selling an ticker that is not in the portfolio that means it has to be a short sale.
-            position = AssetPosition.SHORT
-            # qty *= -1
-        else:
-            position = AssetPosition.LONG
-
-        owned_asset = OwnedAsset(
-                ticker=asset,
-                shares_owned=order.get_available_volume(dt=trade_date),
-                average_share_price=price_per_share,
-                position=position
-        )
-
-        self.portfolio.cash += owned_asset.total_position_cost
-        self.portfolio[asset] = owned_asset
-
-        trade = Trade.from_order(
-                order=order,
-                price_per_share=price_per_share,
-                trade_date=trade_date,
-                strategy='Open new {} position'.format(position)
-        )
-
-        return trade
-
-    def _update_existing_position(self, price_per_share, trade_date, owned_asset, order):
-        """
-        Update the :class:``OwnedAsset`` associated with this portfolio as well as the cash position
-
-        :param int qty: how many shares are being bought or sold.
-            If the position is a **long** position use a negative number to close it and positive to open it.
-            If the position is a **short** position use a negative number to open it and positive to close it.
-        :param float price_per_share: the average price per share in the trade.
-            This should always be positive no matter what the trade's position is.
-        :param datetime trade_date: the date and time the trade takes place
-            (default: now)
-        :param OwnedAsset owned_asset: the ticker that is already in the portfolio
-        :param TradeAction action: **BUY** or **SELL**
-        :param Order order:
-        :raises InvalidActionError:
-        """
-
-        owned_asset = owned_asset.make_trade(qty=order.get_available_volume(dt=trade_date),
-                                             price_per_share=price_per_share)
-
-        if owned_asset.shares_owned != 0:
-            self.portfolio[owned_asset.asset.ticker] = owned_asset
-            self.portfolio.cash += owned_asset.total_position_cost
-
-            trade = Trade.from_order(
-                    order=order,
-                    price_per_share=price_per_share,
-                    trade_date=trade_date,
-                    strategy='Update an existing {} position'.format(owned_asset.position)
-            )
-        else:
-            self.portfolio.cash += owned_asset.total_position_value
-
-            del self.portfolio.owned_assets[owned_asset.asset.ticker]
-
-            trade = Trade.from_order(
-                    order=order,
-                    price_per_share=price_per_share,
-                    trade_date=trade_date,
-                    strategy='Close an existing {} position'.format(owned_asset.position)
-            )
-
-        return trade
 
     def purge_orders(self):
         """Remove any order that is no longer open."""
