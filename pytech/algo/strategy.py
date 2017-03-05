@@ -21,7 +21,7 @@ class BuyAndHold(Strategy):
     def __init__(self, data_handler, events):
 
         if not issubclass(data_handler.__class__, DataHandler):
-            raise TypeError('data_handler must be a subclass of DataHandler. {} was provided'
+            raise TypeError('bars must be a subclass of DataHandler. {} was provided'
                             .format(type(data_handler)))
         else:
             self.data_handler = data_handler

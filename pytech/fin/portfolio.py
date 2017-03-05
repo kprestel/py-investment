@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from abc import ABCMeta, abstractmethod
 from math import floor
+import pytech.utils.pandas_utils as pd_utils
 
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.backtest.event import SignalEvent, FillEvent, OrderEvent
@@ -32,9 +33,9 @@ class NaivePortfolio(AbstractPortfolio):
 
     def __init__(self, data_handler, events, start_date, initial_capital=100000):
 
-        self.data_handler = data_handler
+        self.bars = data_handler
         self.events = events
-        self.ticker_list = self.data_handler.ticker_list
+        self.ticker_list = self.bars.ticker_list
         self.start_date = start_date
         self.initial_capital = initial_capital
         self.all_positions = self.construct_all_positions()
@@ -76,14 +77,16 @@ class NaivePortfolio(AbstractPortfolio):
         :return:
         """
 
+        latest_dt = self.bars.get_latest_bar_dt(self.ticker_list[0])
+
         bars = {}
 
         for ticker in self.ticker_list:
-            bars[ticker] = self.data_handler.get_latest_bars(ticker)
+            bars[ticker] = self.bars.get_latest_bars(ticker)
 
         # update positions
         dp = self._get_temp_dict()
-        dp['datetime'] = bars[self.ticker_list[0][0][1]]
+        dp['datetime'] = latest_dt
 
         for ticker in self.ticker_list:
             dp[ticker] = self.current_positions[ticker]
@@ -94,14 +97,15 @@ class NaivePortfolio(AbstractPortfolio):
 
         # update holdings
         dh = self._get_temp_dict()
-        dh['datetime'] = bars[self.ticker_list[0][0][1]]
+        dh['datetime'] = latest_dt
         dh['cash'] = self.current_holdings['cash']
         dh['commission'] = self.current_holdings['commission']
         dh['total'] = self.current_holdings['cash']
 
         for ticker in self.ticker_list:
             # approximate to real value.
-            market_value = self.current_holdings[ticker] * bars[ticker][0][5]
+            market_value = (self.current_positions[ticker] *
+                            self.bars.get_latest_bar_value(ticker, pd_utils.ADJ_CLOSE_COL))
             dh[ticker] = market_value
             dh['total'] += market_value
 
@@ -134,7 +138,7 @@ class NaivePortfolio(AbstractPortfolio):
         else:
             fill_dir = -1
 
-        fill_cost = self.data_handler.get_latest_bars(fill.ticker)[0][5]
+        fill_cost = self.bars.get_latest_bars(fill.ticker)[0][5]
         cost = fill_dir * fill_cost * fill.qty
         self.current_holdings[fill.ticker] += cost
         self.current_holdings['commission'] += fill.commission

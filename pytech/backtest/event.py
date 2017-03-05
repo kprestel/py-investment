@@ -36,7 +36,7 @@ class SignalEvent(Event):
 
     LOGGER_NAME = EventType.SIGNAL.name
 
-    def __init__(self, ticker, dt, signal_type, strength):
+    def __init__(self, ticker, dt, signal_type, strength=None):
 
         super().__init__()
 

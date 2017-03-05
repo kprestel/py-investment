@@ -925,7 +925,7 @@ class Stock(Asset):
         """
         Start a subprocess to run the spiders in.
 
-        :param ticker_list: list of tickers to get fundamentals for
+        :param ticker_list: list of ticker_list to get fundamentals for
         :type ticker_list: list
         :param start_date: date to start scraping as of
         :type start_date: datetime
@@ -995,7 +995,7 @@ class Stock(Asset):
         :param get_ohlc: boolean, if true then an ohlc time series will bce created based on the start and end dates
         :param close_session: boolean, if a user passes a session in and they don't want it to be closed after then set
         this to false
-        :return: dict, contains asset objects with their corresponding tickers as the key
+        :return: dict, contains asset objects with their corresponding ticker_list as the key
 
         create a dict of stocks for a given time period based on the list of ticker symbols passed in
         """
@@ -1021,14 +1021,14 @@ class Stock(Asset):
                                      session=None):
         """
         :param session: sqlalchemy session, if None is provided then the stocks will not be written to the DB
-        :param ticker_list: list of str objects that have corresponding tickers
+        :param ticker_list: list of str objects that have corresponding ticker_list
         :param start: datetime
         :param end: datetime
         :param get_fundamentals: boolean
         :param get_ohlc: boolean
         :return: dict
 
-        create a dictionary of asset objects with their tickers as keys and write them to the DB if a session is provided
+        create a dictionary of asset objects with their ticker_list as keys and write them to the DB if a session is provided
         NOTE: if get_fundamentals is True then stocks have to be written to the DB
         """
         if get_fundamentals:
