@@ -10,10 +10,10 @@ from pytech.data.handler import YahooDataHandler, DataHandler
 class Strategy(metaclass=ABCMeta):
 
     @abstractmethod
-    def calculate_signals(self, event):
+    def generate_signals(self, event):
         """Provides the mechanisms to calculate a list of signals."""
 
-        raise NotImplementedError('Must implement calculate_signals()')
+        raise NotImplementedError('Must implement generate_signals()')
 
 
 class BuyAndHold(Strategy):
@@ -40,7 +40,7 @@ class BuyAndHold(Strategy):
 
         return bought
 
-    def calculate_signals(self, event):
+    def generate_signals(self, event):
         """
         For buy and hold we generate a single single per symbol and then no more signals.  Meaning we are always long
         the market from the start to the end of the sim.

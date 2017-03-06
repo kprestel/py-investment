@@ -78,7 +78,6 @@ class YahooDataHandler(DataHandler):
         self.latest_ticker_data = {}
         self.continue_backtest = True
         self._get_ohlcvs(start_date, end_date)
-        self._bar_gen = self._get_new_bar()
 
     def _get_ohlcvs(self, start_date, end_date):
         """Populate the ticker_data dict with a pandas OHLCV df as the value and the ticker as the key."""
@@ -150,7 +149,7 @@ class YahooDataHandler(DataHandler):
 
     def update_bars(self):
 
-        for ticker in  self.ticker_list:
+        for ticker in self.ticker_list:
             try:
                 bar = next(self._get_new_bar(ticker))
             except StopIteration:

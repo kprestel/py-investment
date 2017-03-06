@@ -70,7 +70,7 @@ class NaivePortfolio(AbstractPortfolio):
 
     def update_timeindex(self, event):
         """
-        Adds a new record tot eh positions matrix for all the current market data bar. This reflects the PREVIOUS bar.
+        Adds a new record to the positions matrix for all the current market data bar. This reflects the PREVIOUS bar.
         Makes use of MarketEvent from the events queue.
 
         :param MarketEvent event:
@@ -181,7 +181,7 @@ class NaivePortfolio(AbstractPortfolio):
             raise TypeError('Invalid EventType. Must be EventType.SIGNAL. {} was provided'.format(type(event)))
 
     def create_equity_curve_df(self):
-        """Create a df from all_holdings list of dicts.l"""
+        """Create a df from all_holdings list of dicts."""
 
         curve = pd.DataFrame(self.all_holdings)
         curve.set_index('datetime', inplace=True)
