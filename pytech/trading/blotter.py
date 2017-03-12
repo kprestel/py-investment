@@ -6,6 +6,8 @@ import collections
 
 import pytech.db.db_utils as db
 import pytech.utils.pandas_utils as pd_utils
+from pytech.backtest.event import FillEvent, TradeEvent
+from pytech.data.handler import DataHandler
 from pytech.db.finders import AssetFinder
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.fin.asset import Asset
@@ -22,16 +24,17 @@ class Blotter(object):
 
     LOGGER_NAME = 'blotter'
 
-    def __init__(self, asset_finder=None, portfolio=None, commission_model=None):
+    def __init__(self, events, asset_finder=None, commission_model=None):
 
         self.logger = logging.getLogger(self.LOGGER_NAME)
         self.asset_finder = asset_finder
-        self.portfolio = portfolio
         # dict of all orders. key is the ticker of the asset, value is the asset.
         self.orders = {}
         # keep a record of all past trades.
         self.trades = []
         self.current_dt = None
+        # events queue
+        self.events = events
 
         if commission_model is None:
             self.commission_model = PerOrderCommissionModel()
@@ -40,6 +43,19 @@ class Blotter(object):
         else:
             raise TypeError('commission_model must be a subclass of AbstractCommissionModel. {} was provided'
                             .format(type(commission_model)))
+
+    @property
+    def bars(self):
+        """Allow access to the :class:`DataHandler`"""
+        return self._bars
+
+    @bars.setter
+    def bars(self, data_handler):
+        if isinstance(data_handler, DataHandler):
+            self._bars = data_handler
+        else:
+            raise TypeError('data_handler must be an instance of DataHandler. {} was provided'
+                            .format(type(data_handler)))
 
     @property
     def asset_finder(self):
@@ -53,19 +69,6 @@ class Blotter(object):
             self._asset_finder = AssetFinder()
         else:
             raise NotAFinderError(finder=type(asset_finder))
-
-    @property
-    def portfolio(self):
-        return self._portfolio
-
-    @portfolio.setter
-    def portfolio(self, portfolio):
-        if portfolio is not None and isinstance(portfolio, Portfolio):
-            self._portfolio = portfolio
-        elif portfolio is None:
-            self._portfolio = Portfolio()
-        else:
-            raise NotAPortfolioError(portfolio=type(portfolio))
 
     def __getitem__(self, key):
         """Get an order from the orders dict."""
@@ -225,23 +228,25 @@ class Blotter(object):
         self.logger.warning('Order id: {id} for ticker: {ticker} was rejected because: {reason}'
                             .format(id=order_id, ticker=ticker, reason=reason or 'Unknown'))
 
-    def check_order_triggers(self, tick_data):
+    def check_order_triggers(self):
         """
         Check if any order has been triggered and if they have execute the trade and then clean up closed orders.
 
         :param pd.DataFrame tick_data: The current tick data
         """
 
-        dt = tick_data.iloc[0][pd_utils.DATE_COL]
         for order_id, order in self:
             # should this be looking the close column?
-            current_price = tick_data.ix[order.ticker][pd_utils.CLOSE_COL]
-            available_volume = tick_data.ix[order.ticker][pd_utils.VOL_COL]
+            bar = self.bars.get_latest_bar(order.ticker)
+            dt = bar[pd_utils.DATE_COL]
+            current_price = bar[pd_utils.ADJ_CLOSE_COL]
+            # available_volume = bar[pd_utils.VOL_COL]
             # check_triggers returns a boolean indicating if it is triggered.
             if order.check_triggers(dt=dt, current_price=current_price):
-                self.make_trade(order, current_price, dt, available_volume)
+                self.events.put(TradeEvent(order_id, current_price, order.qty, dt))
+                # self.make_trade(order, current_price, dt, available_volume)
 
-        self.purge_orders()
+        # self.purge_orders()
 
     def make_trade(self, order, price_per_share, trade_date, volume):
         """
@@ -271,16 +276,12 @@ class Blotter(object):
 
         order.commission += commission_cost
 
-        if self.portfolio.check_liquidity(avg_price_per_share, available_volume):
-            trade = Trade.from_order(order, trade_date, commission_cost, price_per_share, available_volume,
-                                     avg_price_per_share)
+        trade = Trade.from_order(order, trade_date, commission_cost, price_per_share, available_volume,
+                                 avg_price_per_share)
 
-            order.filled += trade.qty
-            self.portfolio.update_from_trade(trade)
-            self.trades.append(trade)
-        else:
-            order.reject('Insufficient Funds to make trade.  Order was rejected.')
-            self.logger.warning('Not enough cash to place the trade.')
+        order.filled += trade.qty
+        self.trades.append(trade)
+        return trade
 
     def purge_orders(self):
         """Remove any order that is no longer open."""

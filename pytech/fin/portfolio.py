@@ -1,19 +1,48 @@
 import logging
-import pandas as pd
-from datetime import datetime
 from abc import ABCMeta, abstractmethod
+from datetime import datetime
 from math import floor
-import pytech.utils.pandas_utils as pd_utils
 
+import pandas as pd
+
+import pytech.utils.pandas_utils as pd_utils
+from pytech.backtest.event import FillEvent, TradeEvent, SignalEvent
 from pytech.fin.owned_asset import OwnedAsset
-from pytech.backtest.event import SignalEvent, FillEvent, OrderEvent
 from pytech.trading.trade import Trade
-from pytech.utils.enums import TradeAction, Position, EventType, OrderType, SignalType
+from pytech.utils.enums import EventType, OrderType, Position, SignalType, TradeAction
 
 logger = logging.getLogger(__name__)
 
 
 class AbstractPortfolio(metaclass=ABCMeta):
+    """
+    Base class for all portfolios.
+
+    Any portfolio MUST inherit from this class an implement the following methods:
+        * update_signal(self, event)
+        * update_fill(self, event)
+
+    Child portfolio classes must also call super().__init__() in order to set the class up correctly.
+    """
+
+    def __init__(self, data_handler, events, start_date, blotter, initial_capital=100000.00):
+
+        self.logger = logging.getLogger(__name__)
+        # holdings = mv
+        self.all_holdings = self.construct_all_holdings()
+        # positions = qty
+        self.all_positions = self.construct_all_positions()
+        self.current_holdings = self.construct_current_holdings()
+        self.blotter = blotter
+        self.bars = data_handler
+        self.events = events
+        self.ticker_list = self.bars.ticker_list
+        self.current_positions = self._get_temp_dict()
+        self.start_date = start_date
+        self.initial_capital = initial_capital
+        self.cash = initial_capital
+        self.total_commission = 0.0
+        self.total_value = 0.0
 
     @abstractmethod
     def update_signal(self, event):
@@ -27,25 +56,9 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
         raise NotImplementedError('Must implement update_fill()')
 
-
-class NaivePortfolio(AbstractPortfolio):
-    """Here for testing and stuff."""
-
-    def __init__(self, data_handler, events, start_date, initial_capital=100000):
-
-        self.bars = data_handler
-        self.events = events
-        self.ticker_list = self.bars.ticker_list
-        self.start_date = start_date
-        self.initial_capital = initial_capital
-        self.all_positions = self.construct_all_positions()
-        self.current_positions = {k: v for k, v in [(ticker, 0) for ticker in self.ticker_list]}
-
-        self.all_holdings = self.construct_all_holdings()
-        self.current_holdings = self.construct_current_holdings()
-
     def construct_all_positions(self):
         """Constructs the position list using the start date to determine when the index will begin"""
+
         d = self._get_temp_dict()
         d['datetime'] = self.start_date
         return [d]
@@ -63,10 +76,45 @@ class NaivePortfolio(AbstractPortfolio):
         """Construct a dict which holds the instantaneous value of the portfolio across all symbols."""
 
         d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
-        d['cash'] = self.initial_capital
-        d['commission'] = 0.0
-        d['total'] = self.initial_capital
         return d
+
+    def create_equity_curve_df(self):
+        """Create a df from all_holdings list of dicts."""
+
+        curve = pd.DataFrame(self.all_holdings)
+        curve.set_index('datetime', inplace=True)
+        curve['returns'] = curve['total'].pct_change()
+        curve['equity_curve'] = (1.0 + curve['returns']).cumprod()
+        self.equity_curve = curve
+
+    def _get_temp_dict(self):
+        return {k: v for k, v in [(ticker, 0) for ticker in self.ticker_list]}
+
+    def check_liquidity(self, avg_price_per_share, qty):
+        """
+        Check if the portfolio has enough liquidity to actually make the trade. This method should be called before
+        executing any trade.
+
+        :param float avg_price_per_share: The price per share in the trade **AFTER** commission has been applied.
+        :param int qty: The amount of shares to be traded.
+        :return: True if there is enough cash to make the trade or if qty is negative indicating a sale.
+        """
+
+        if qty < 0:
+            return True
+
+        cost = avg_price_per_share * qty
+        cur_cash = self.cash
+        post_trade_cash = cur_cash - cost
+
+        return post_trade_cash > 0
+
+
+class NaivePortfolio(AbstractPortfolio):
+    """Here for testing and stuff."""
+
+    def __init__(self, data_handler, events, start_date, initial_capital=100000):
+        super().__init__(data_handler, events, start_date, initial_capital)
 
     def update_timeindex(self, event):
         """
@@ -77,12 +125,14 @@ class NaivePortfolio(AbstractPortfolio):
         :return:
         """
 
+        self.blotter.check_order_triggers()
+
         latest_dt = self.bars.get_latest_bar_dt(self.ticker_list[0])
 
-        bars = {}
-
-        for ticker in self.ticker_list:
-            bars[ticker] = self.bars.get_latest_bars(ticker)
+        # bars = {}
+        #
+        # for ticker in self.ticker_list:
+        #     bars[ticker] = self.bars.get_latest_bars(ticker)
 
         # update positions
         dp = self._get_temp_dict()
@@ -98,9 +148,9 @@ class NaivePortfolio(AbstractPortfolio):
         # update holdings
         dh = self._get_temp_dict()
         dh['datetime'] = latest_dt
-        dh['cash'] = self.current_holdings['cash']
-        dh['commission'] = self.current_holdings['commission']
-        dh['total'] = self.current_holdings['cash']
+        dh['cash'] = self.cash
+        dh['commission'] = self.total_commission
+        dh['total'] = self.cash
 
         for ticker in self.ticker_list:
             # approximate to real value.
@@ -111,49 +161,43 @@ class NaivePortfolio(AbstractPortfolio):
 
         self.all_holdings.append(dh)
 
-    def update_positions_from_fill(self, fill):
+    def update_positions_from_fill(self, trade):
         """
-        Takes a :class:`FillEvent` and updates the position matrix to reflect new the position.
-        :param FillEvent fill:
+        Takes a :class:`Trade` and updates the position matrix to reflect new the position.
+        :param Trade trade:
         :return:
         """
 
-        if fill.action is TradeAction.BUY:
-            fill_dir = 1
-        else:
-            fill_dir = -1
+        self.current_positions[trade.ticker] += trade.qty
 
-        self.current_positions[fill.ticker] += fill_dir * fill.qty
-
-    def update_holdings_from_fill(self, fill):
+    def update_holdings_from_fill(self, trade):
         """
         Update the holdings matrix to reflect the holdings value.
 
-        :param FillEvent fill:
+        :param Trade trade:
         :return:
         """
 
-        if fill.action is TradeAction.BUY:
-            fill_dir = 1
-        else:
-            fill_dir = -1
-
-        fill_cost = self.bars.get_latest_bars(fill.ticker)[0][5]
-        cost = fill_dir * fill_cost * fill.qty
-        self.current_holdings[fill.ticker] += cost
-        self.current_holdings['commission'] += fill.commission
-        self.current_holdings['cash'] -= cost + fill.commission
-        self.current_holdings['total'] -= cost + fill.commission
+        self.current_holdings[trade.ticker] += trade.trade_value()
+        self.total_commission += trade.commission
+        self.cash += trade.trade_value()
+        self.total_value += trade.trade_value()
 
     def update_fill(self, event):
 
         if event.type is EventType.FILL:
-            self.update_positions_from_fill(event)
-            self.update_holdings_from_fill(event)
+            order = self.blotter[event.order_id]
+            if self.check_liquidity(event.price, event.available_volume):
+                trade = self.blotter.make_trade(order, event.price, event.dt, event.available_volume)
+                self.update_positions_from_fill(trade)
+                self.update_holdings_from_fill(trade)
+            else:
+                self.logger.warning('Insufficient funds available to execute trade for ticker: {}'
+                                    .format(order.ticker))
 
     def generate_naive_order(self, signal):
         """
-        Transacts an OrderEvent as a constant qty
+        Transacts an TradeEvent as a constant qty
 
         :param SignalEvent signal:
         :return:
@@ -163,34 +207,76 @@ class NaivePortfolio(AbstractPortfolio):
         cur_qty = self.current_positions[signal.ticker]
 
         if signal.signal_type is SignalType.LONG and cur_qty == 0:
-            return OrderEvent(signal.ticker, OrderType.MARKET, mkt_qty, TradeAction.BUY)
+            return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty, TradeAction.BUY)
         elif signal.signal_type is SignalType.SHORT and cur_qty == 0:
-            return OrderEvent(signal.ticker, OrderType.MARKET, mkt_qty, TradeAction.SELL)
+            return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty, TradeAction.SELL)
         elif signal.signal_type is SignalType.EXIT and cur_qty > 0:
-            return OrderEvent(signal.ticker, OrderType.MARKET, abs(cur_qty), TradeAction.SELL)
+            return TradeEvent(signal.ticker, OrderType.MARKET, abs(cur_qty), TradeAction.SELL)
         elif signal.signal_type is SignalType.EXIT and cur_qty < 0:
-            return OrderEvent(signal.ticker, OrderType.MARKET, abs(cur_qty), TradeAction.BUY)
+            return TradeEvent(signal.ticker, OrderType.MARKET, abs(cur_qty), TradeAction.BUY)
         else:
             raise ValueError('Invalid signal. Cannot Create an order.')
 
     def update_signal(self, event):
 
         if event.type is EventType.SIGNAL:
-            self.events.put(self.generate_naive_order(event))
+            self.process_signal(event)
+            self.blotter.check_order_triggers()
+            # self.events.put(self.generate_naive_order(event))
         else:
             raise TypeError('Invalid EventType. Must be EventType.SIGNAL. {} was provided'.format(type(event)))
 
-    def create_equity_curve_df(self):
-        """Create a df from all_holdings list of dicts."""
+    def process_signal(self, signal):
+        """
+        Call different methods depending on the type of signal received.
 
-        curve = pd.DataFrame(self.all_holdings)
-        curve.set_index('datetime', inplace=True)
-        curve['returns'] = curve['total'].pct_change()
-        curve['equity_curve'] = (1.0 + curve['returns']).cumprod()
-        self.equity_curve = curve
+        :param SignalEvent signal:
+        :return:
+        """
 
-    def _get_temp_dict(self):
-        return {k: v for k, v in [(ticker, 0) for ticker in self.ticker_list]}
+        if signal.signal_type is SignalType.EXIT:
+            self.handle_exit_signal(signal)
+        elif signal.signal_type is SignalType.CANCEL:
+            self.handle_cancel_singal(signal)
+        elif signal.signal_type is SignalType.HOLD:
+            self.handle_hold_signal(signal)
+        elif signal.signal_type not in [SignalType.LONG, SignalType.SHORT]:
+            raise TypeError('Invalid EventType. Must be EventType.SIGNAL. {} was provided'
+                            .format(type(signal.signal_type)))
+        else:
+            self.handle_long_short_signal(signal)
+
+    def handle_long_short_signal(self, signal):
+        """
+        Create an order based on the **long** or **short** signal.
+
+        :param SignalEvent signal:
+        :return:
+        """
+
+    def handle_exit_signal(self, signal):
+        """
+        Create an order that will close out the position in the signal.
+
+        :param SignalEvent signal:
+        :return:
+        """
+
+    def handle_cancel_singal(self, signal):
+        """
+        Cancel all open orders for the asset in the signal.
+
+        :param SignalEvent signal:
+        :return:
+        """
+
+    def handle_hold_signal(self, signal):
+        """
+        Place all open orders for the asset in the signal on hold.
+
+        :param SignalEvent signal:
+        :return:
+        """
 
 
 class Portfolio(object):

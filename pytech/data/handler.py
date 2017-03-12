@@ -101,7 +101,8 @@ class YahooDataHandler(DataHandler):
     def _get_new_bar(self, ticker):
         """
         Get the latest bar from the data feed and return it as a tuple.
-        :return: tuple(ticker, dt, open, high, low, close, volume)
+
+        :return: bar
         """
 
         for bar in self.ticker_data[ticker]:

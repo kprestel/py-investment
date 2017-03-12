@@ -1,6 +1,6 @@
 import logging
 from abc import ABCMeta
-from pytech.utils.enums import EventType, TradeAction, OrderType, Position
+from pytech.utils.enums import EventType, TradeAction, OrderType, Position, SignalType
 
 
 class Event(metaclass=ABCMeta):
@@ -36,30 +36,38 @@ class SignalEvent(Event):
 
     LOGGER_NAME = EventType.SIGNAL.name
 
-    def __init__(self, ticker, dt, signal_type, strength=None):
+    def __init__(self, ticker, dt, signal_type, strength=None, target_price=None):
 
         super().__init__()
 
         self.type = EventType.SIGNAL
         self.ticker = ticker
         self.dt = dt
-        # long or short
-        self.signal_type = TradeAction.check_if_valid(signal_type)
+        # long, short, exit, hold, or cancel
+        # TODO: hold all orders
+        self.signal_type = SignalType.check_if_valid(signal_type)
+        # a way of adding extra logic?
         self.strength = strength
+        self.target_price = target_price
 
 
-class OrderEvent(Event):
+class TradeEvent(Event):
+    """
+    Handles the event of actually executing an order and sending it to a broker for execution/filling.
 
-    LOGGER_NAME = EventType.ORDER.name
+    This event should only be created in the event that an :class:`Order` is triggered.
+    """
 
-    def __init__(self, ticker, order_type, qty, action):
+    LOGGER_NAME = EventType.TRADE.name
+
+    def __init__(self, order_id, price, qty, dt):
 
         super().__init__()
-        self.type = EventType.ORDER
-        self.ticker = ticker
-        self.order_type = OrderType.check_if_valid(order_type)
+        self.type = EventType.TRADE
+        self.order_id = order_id
+        self.price = price
         self.qty = qty
-        self.action = TradeAction.check_if_valid(action)
+        self.dt = dt
 
     def log_order(self):
 
@@ -67,19 +75,15 @@ class OrderEvent(Event):
 
 
 class FillEvent(Event):
+    """Handles the event of a broker actually filling the order and returning either cash or the asset."""
 
     LOGGER_NAME = EventType.FILL.name
 
-    def __init__(self, time_index, ticker, exchange, qty, action, fill_cost, commission=None):
+    def __init__(self, order_id, price, available_volume, dt):
 
         super().__init__()
         self.type = EventType.FILL
-        self.time_index = time_index
-        self.ticker = ticker
-        self.exchange = exchange
-        self.qty = qty
-        self.action = TradeAction.check_if_valid(action)
-        self.fill_cost = fill_cost
-        # TODO: make this use commission models.
-        self.commission = commission
-
+        self.order_id = order_id
+        self.price = price
+        self.available_volume = available_volume
+        self.dt = dt

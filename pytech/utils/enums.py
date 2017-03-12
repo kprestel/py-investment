@@ -29,14 +29,16 @@ class EventType(AutoNumber):
 
     MARKET = ()
     SIGNAL = ()
-    ORDER = ()
+    TRADE = ()
     FILL = ()
 
 
 class SignalType(AutoNumber):
-    BUY = ()
-    SELL = ()
+    LONG = ()
+    SHORT = ()
     EXIT = ()
+    CANCEL = ()
+    HOLD = ()
 
     @classmethod
     def check_if_valid(cls, value):

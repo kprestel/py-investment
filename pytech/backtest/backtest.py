@@ -4,6 +4,7 @@ import queue
 import pytech.utils.dt_utils as dt_utils
 
 from pytech.data.handler import YahooDataHandler
+from pytech.trading.blotter import Blotter
 from pytech.trading.execution import SimpleExecutionHandler
 from pytech.fin.portfolio import NaivePortfolio
 from pytech.utils.enums import EventType
@@ -53,6 +54,8 @@ class Backtest(object):
 
         self.events = queue.Queue()
 
+        self.blotter = Blotter(self.events)
+
         self.signals = 0
         self.orders = 0
         self.fills = 0
@@ -61,8 +64,10 @@ class Backtest(object):
     def _init_trading_instances(self):
 
         self.data_handler = self.data_handler_cls(self.events, self.ticker_list)
+        self.blotter.bars = self.data_handler
         self.strategy = self.strategy_cls(self.data_handler, self.events)
-        self.portfolio = self.portfolio_cls(self.data_handler, self.events, self.start_date, self.initial_capital)
+        self.portfolio = self.portfolio_cls(self.data_handler, self.events, self.start_date, self.blotter,
+                                            self.initial_capital)
         self.execution_handler = self.execution_handler_cls(self.data_handler, self.events, self.start_date,
                                                             self.initial_capital)
 
@@ -89,11 +94,11 @@ class Backtest(object):
                 if event is not None:
                     if event.type is EventType.MARKET:
                         self.strategy.calculate_signals(event)
-                        self.portfolio.update_timeindex()
+                        self.portfolio.update_timeindex(event)
                     elif event.type is EventType.SIGNAL:
                         self.signals += 1
                         self.portfolio.update_signal(event)
-                    elif event.type is EventType.ORDER:
+                    elif event.type is EventType.TRADE:
                         self.orders += 1
                         self.execution_handler.execute_order(event)
                     elif event.type is EventType.FILL:

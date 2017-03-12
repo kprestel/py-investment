@@ -24,7 +24,7 @@ class SimpleExecutionHandler(ExecutionHandler):
 
     def execute_order(self, event):
 
-        if event.type is EventType.ORDER:
+        if event.type is EventType.TRADE:
             fill_event = FillEvent(dt.datetime.utcnow(), event.ticker, 'NYSE', event.qty, event.action, None)
 
             self.events.put(fill_event)
