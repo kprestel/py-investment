@@ -1,10 +1,13 @@
 import datetime as dt
-import numpy as np
 import logging
 from abc import ABCMeta, abstractmethod
-from pytech.backtest.event import MarketEvent
-import pytech.utils.pandas_utils as pd_utils
+
+import numpy as np
+import pandas as pd
 import pandas_datareader.data as web
+
+import pytech.utils.pandas_utils as pd_utils
+from pytech.backtest.event import MarketEvent
 
 
 class DataHandler(metaclass=ABCMeta):
@@ -46,7 +49,7 @@ class DataHandler(metaclass=ABCMeta):
         raise NotImplementedError('Must implement get_latest_bar_dt()')
 
     @abstractmethod
-    def get_latest_bars_values(self, ticker, val_type, n=1):
+    def get_latest_bar_value(self, ticker, val_type, n=1):
         """
         Return the last **n** bars from the latest_symbol list.
 
@@ -56,7 +59,7 @@ class DataHandler(metaclass=ABCMeta):
         :return:
         """
 
-        raise NotImplementedError('Must implement get_latest_bars_values()')
+        raise NotImplementedError('Must implement get_latest_bar_value()')
 
     @abstractmethod
     def update_bars(self):
@@ -86,6 +89,7 @@ class YahooDataHandler(DataHandler):
 
         for t in self.ticker_list:
             self.ticker_data[t] = web.DataReader(t, data_source=self.DATA_SOURCE, start=start_date, end=end_date)
+            self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(self.ticker_data[t])
 
             if comb_index is None:
                 comb_index = self.ticker_data[t].index
@@ -96,7 +100,7 @@ class YahooDataHandler(DataHandler):
 
         for t in self.ticker_list:
             self.ticker_data[t] = self.ticker_data[t].reindex(index=comb_index, method='pad').iterrows()
-            self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(self.ticker_data[t])
+            # self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(self.ticker_data[t])
 
     def _get_new_bar(self, ticker):
         """
@@ -136,9 +140,9 @@ class YahooDataHandler(DataHandler):
             self.logger.exception('Could not find {ticker} in latest_ticker_data'.format(ticker=ticker))
             raise
         else:
-            return bars_list[-1][pd_utils.DATE_COL]
+            return bars_list[-1][1][pd_utils.DATE_COL]
 
-    def get_latest_bars_values(self, ticker, val_type, n=1):
+    def get_latest_bar_value(self, ticker, val_type, n=1):
 
         try:
             bars_list = self.get_latest_bars(ticker, n)
@@ -157,6 +161,7 @@ class YahooDataHandler(DataHandler):
                 self.continue_backtest = False
             else:
                 if bar is not None:
+                    self.logger.debug('Appending bar: {}'.format(bar))
                     self.latest_ticker_data[ticker].append(bar)
 
         self.events.put(MarketEvent())

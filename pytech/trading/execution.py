@@ -23,8 +23,13 @@ class SimpleExecutionHandler(ExecutionHandler):
         self.events = events
 
     def execute_order(self, event):
+        """
+        Execute the order and create a fill event.
+
+        :param TradeEvent event:
+        :return:
+        """
 
         if event.type is EventType.TRADE:
-            fill_event = FillEvent(dt.datetime.utcnow(), event.ticker, 'NYSE', event.qty, event.action, None)
-
+            fill_event = FillEvent(event.order_id, event.price, event.qty, event.dt)
             self.events.put(fill_event)

@@ -28,19 +28,19 @@ class AbstractPortfolio(metaclass=ABCMeta):
     def __init__(self, data_handler, events, start_date, blotter, initial_capital=100000.00):
 
         self.logger = logging.getLogger(__name__)
+        self.bars = data_handler
+        self.events = events
+        self.blotter = blotter
+        self.start_date = start_date
+        self.initial_capital = initial_capital
+        self.cash = initial_capital
+        self.ticker_list = self.bars.ticker_list
+        self.current_positions = self._get_temp_dict()
         # holdings = mv
         self.all_holdings = self.construct_all_holdings()
         # positions = qty
         self.all_positions = self.construct_all_positions()
         self.current_holdings = self.construct_current_holdings()
-        self.blotter = blotter
-        self.bars = data_handler
-        self.events = events
-        self.ticker_list = self.bars.ticker_list
-        self.current_positions = self._get_temp_dict()
-        self.start_date = start_date
-        self.initial_capital = initial_capital
-        self.cash = initial_capital
         self.total_commission = 0.0
         self.total_value = 0.0
 
@@ -113,8 +113,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
 class NaivePortfolio(AbstractPortfolio):
     """Here for testing and stuff."""
 
-    def __init__(self, data_handler, events, start_date, initial_capital=100000):
-        super().__init__(data_handler, events, start_date, initial_capital)
+    def __init__(self, data_handler, events, start_date, blotter, initial_capital=100000):
+        super().__init__(data_handler, events, start_date, blotter, initial_capital)
 
     def update_timeindex(self, event):
         """
@@ -127,12 +127,8 @@ class NaivePortfolio(AbstractPortfolio):
 
         self.blotter.check_order_triggers()
 
-        latest_dt = self.bars.get_latest_bar_dt(self.ticker_list[0])
-
-        # bars = {}
-        #
-        # for ticker in self.ticker_list:
-        #     bars[ticker] = self.bars.get_latest_bars(ticker)
+        # get an element from the set
+        latest_dt = self.bars.get_latest_bar_dt(next(iter(self.ticker_list)))
 
         # update positions
         dp = self._get_temp_dict()

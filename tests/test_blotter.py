@@ -12,25 +12,14 @@ class TestBlotter(object):
     def test_blotter_constructor(self):
         test_blotter = blot.Blotter()
 
-        assert isinstance(test_blotter.portfolio, portfolio.Portfolio)
         assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
 
-        test_portfolio = portfolio.Portfolio()
         test_finder = finders.AssetFinder()
 
-        test_blotter = blot.Blotter(portfolio=test_portfolio)
-        assert isinstance(test_blotter.portfolio, portfolio.Portfolio)
         assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
 
         test_blotter = blot.Blotter(test_finder)
-        assert isinstance(test_blotter.portfolio, portfolio.Portfolio)
         assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
-
-        with pytest.raises(NotAPortfolioError):
-            blot.Blotter(portfolio='NOT A PORTFOLIO')
-
-        with pytest.raises(NotAFinderError):
-            blot.Blotter(asset_finder='NOT A FINDER')
 
     def test_place_order(self, blotter):
 

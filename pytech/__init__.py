@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 PROJECT_DIR = dirname(__file__)
 RESOURCE_DIR = join(pardir, 'resources')
 DATA_DIR = join(RESOURCE_DIR, 'data')
+TEST_DATA_DIR = join(pardir, 'tests', 'sample_data', 'csv')
 
 try:
     os.makedirs(RESOURCE_DIR)

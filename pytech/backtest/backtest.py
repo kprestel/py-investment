@@ -2,12 +2,14 @@ import datetime as dt
 import logging
 import queue
 import pytech.utils.dt_utils as dt_utils
+import pytech.utils.common_utils as com_utils
 
 from pytech.data.handler import YahooDataHandler
 from pytech.trading.blotter import Blotter
 from pytech.trading.execution import SimpleExecutionHandler
 from pytech.fin.portfolio import NaivePortfolio
 from pytech.utils.enums import EventType
+
 
 
 class Backtest(object):
@@ -17,7 +19,7 @@ class Backtest(object):
     update me.
     """
 
-    def __init__(self, ticker_list, initial_capital, start_date, strategy,
+    def __init__(self, ticker_list, initial_capital, start_date, strategy, end_date=None,
                  data_handler=None, execution_handler=None, portfolio=None):
         """
         Initialize the backtest.
@@ -32,9 +34,14 @@ class Backtest(object):
         """
 
         self.logger = logging.getLogger(__name__)
-        self.ticker_list = ticker_list
+        self.ticker_list = com_utils.iterable_to_set(ticker_list)
         self.initial_capital = initial_capital
         self.start_date = dt_utils.parse_date(start_date)
+
+        if end_date is None:
+            self.end_date = dt.datetime.utcnow()
+        else:
+            self.end_date = dt_utils.parse_date(end_date)
         self.strategy_cls = strategy
 
         if data_handler is None:
@@ -61,15 +68,16 @@ class Backtest(object):
         self.fills = 0
         self.num_strats = 1
 
+        self._init_trading_instances()
+
     def _init_trading_instances(self):
 
-        self.data_handler = self.data_handler_cls(self.events, self.ticker_list)
+        self.data_handler = self.data_handler_cls(self.events, self.ticker_list, self.start_date, self.end_date)
         self.blotter.bars = self.data_handler
         self.strategy = self.strategy_cls(self.data_handler, self.events)
         self.portfolio = self.portfolio_cls(self.data_handler, self.events, self.start_date, self.blotter,
                                             self.initial_capital)
-        self.execution_handler = self.execution_handler_cls(self.data_handler, self.events, self.start_date,
-                                                            self.initial_capital)
+        self.execution_handler = self.execution_handler_cls(self.events)
 
     def _run(self):
 
@@ -80,8 +88,10 @@ class Backtest(object):
             self.logger.info('Iteration #{}'.format(iterations))
 
             if self.data_handler.continue_backtest:
+                self.logger.debug('Updating bars.')
                 self.data_handler.update_bars()
             else:
+                self.logger.info('Backtest completed.')
                 break
 
             # handle events
@@ -89,11 +99,13 @@ class Backtest(object):
                 try:
                     event = self.events.get(False)
                 except queue.Empty:
+                    self.logger.info('Event queue is empty. Continuing to next day.')
                     break
 
                 if event is not None:
+                    self.logger.info('Processing {event_type}'.format(event_type=event.type))
                     if event.type is EventType.MARKET:
-                        self.strategy.calculate_signals(event)
+                        self.strategy.generate_signals(event)
                         self.portfolio.update_timeindex(event)
                     elif event.type is EventType.SIGNAL:
                         self.signals += 1

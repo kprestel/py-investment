@@ -22,7 +22,8 @@ def parse_date(date_to_parse):
     elif isinstance(date_to_parse, datetime):
         return pd.Timestamp(date_to_parse.replace(tzinfo=tz.tzutc()), utc=True)
     elif isinstance(date_to_parse, str):
-        return pd.Timestamp(parser.parse(date_to_parse, tzinfo=tz.tzutc()), utc=True)
+        # TODO: timezone
+        return pd.Timestamp(parser.parse(date_to_parse))
     else:
         raise TypeError('date_to_parse must be a pandas Timestamp, datetime, or a date string. '
                         '{} was provided'.format(type(date_to_parse)))

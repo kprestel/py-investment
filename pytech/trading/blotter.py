@@ -54,7 +54,7 @@ class Blotter(object):
         if isinstance(data_handler, DataHandler):
             self._bars = data_handler
         else:
-            raise TypeError('data_handler must be an instance of DataHandler. {} was provided'
+            raise TypeError('bars must be an instance of DataHandler. {} was provided'
                             .format(type(data_handler)))
 
     @property
