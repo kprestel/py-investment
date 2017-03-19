@@ -9,18 +9,6 @@ from pytech.utils.enums import TradeAction, OrderSubType, OrderStatus, OrderType
 
 class TestBlotter(object):
 
-    def test_blotter_constructor(self):
-        test_blotter = blot.Blotter()
-
-        assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
-
-        test_finder = finders.AssetFinder()
-
-        assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
-
-        test_blotter = blot.Blotter(test_finder)
-        assert isinstance(test_blotter.asset_finder, finders.AssetFinder)
-
     def test_place_order(self, blotter):
 
         blotter.place_order('AAPL', 'BUY', 'LIMIT', 50, limit_price=100.10, order_id='one')
@@ -54,8 +42,9 @@ class TestBlotter(object):
 
         populated_blotter.cancel_all_orders_for_asset('AAPL')
 
-        for order in populated_blotter:
-            assert order.status is OrderStatus.CANCELLED
+        for k, order in populated_blotter:
+            if order.ticker == 'AAPL':
+                assert order.status is OrderStatus.CANCELLED
 
 
 

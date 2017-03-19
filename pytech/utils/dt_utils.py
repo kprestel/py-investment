@@ -12,7 +12,7 @@ def parse_date(date_to_parse):
     :return: ``pandas.TimeStamp``
     """
 
-    if isinstance(date_to_parse, date):
+    if isinstance(date_to_parse, date) and not isinstance(date_to_parse, datetime):
         raise TypeError('date must be a datetime object. {} was provided'.format(type(date_to_parse)))
     elif isinstance(date_to_parse, pd.TimeSeries):
         if date_to_parse.tz is None:
@@ -20,10 +20,10 @@ def parse_date(date_to_parse):
         else:
             return date_to_parse
     elif isinstance(date_to_parse, datetime):
-        return pd.Timestamp(date_to_parse.replace(tzinfo=tz.tzutc()), utc=True)
+        return pd.to_datetime(date_to_parse.replace(tzinfo=tz.tzutc()), utc=True)
     elif isinstance(date_to_parse, str):
         # TODO: timezone
-        return pd.Timestamp(parser.parse(date_to_parse))
+        return pd.to_datetime(parser.parse(date_to_parse))
     else:
         raise TypeError('date_to_parse must be a pandas Timestamp, datetime, or a date string. '
                         '{} was provided'.format(type(date_to_parse)))

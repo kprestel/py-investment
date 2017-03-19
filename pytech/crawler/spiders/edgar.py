@@ -1,11 +1,11 @@
 import logging
 from builtins import object
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
-from pytech import utils
+import pytech.utils.dt_utils as dt_utils
 from pytech.crawler.loaders import ReportItemLoader
 
 logger = logging.getLogger(__name__)
@@ -43,15 +43,15 @@ class EdgarSpider(CrawlSpider):
         if 'start_date' in kwargs:
             start_date = kwargs.get('start_date')
         else:
-            start_date = date.today() - timedelta(days=365)
-            start_date = start_date
+            start_date = datetime.now() - timedelta(days=365)
+
         if 'end_date' in kwargs:
             end_date = kwargs.get('end_date')
         else:
-            end_date = date.today()
+            end_date = datetime.now()
 
-        self.start_date = utils.parse_date(start_date).strftime('%Y%m%d')
-        self.end_date = utils.parse_date(end_date).strftime('%Y%m%d')
+        self.start_date = dt_utils.parse_date(start_date).strftime('%Y%m%d')
+        self.end_date = dt_utils.parse_date(end_date).strftime('%Y%m%d')
 
         # limit_arg = kwargs.get('limit', '')
         start = int(kwargs.get('start', 0))

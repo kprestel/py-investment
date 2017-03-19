@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pandas_datareader.data as web
 
+import pytech
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent
 
