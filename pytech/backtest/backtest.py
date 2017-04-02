@@ -7,7 +7,7 @@ import pytech.utils.common_utils as com_utils
 from pytech.data.handler import YahooDataHandler
 from pytech.trading.blotter import Blotter
 from pytech.trading.execution import SimpleExecutionHandler
-from pytech.fin.portfolio import NaivePortfolio
+from pytech.fin.portfolio import BasicPortfolio
 from pytech.utils.enums import EventType
 
 
@@ -54,7 +54,7 @@ class Backtest(object):
             self.execution_handler_cls = execution_handler
 
         if portfolio is None:
-            self.portfolio_cls = NaivePortfolio
+            self.portfolio_cls = BasicPortfolio
         else:
             self.portfolio_cls = portfolio
 

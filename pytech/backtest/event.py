@@ -35,18 +35,117 @@ class SignalEvent(Event):
 
     LOGGER_NAME = EventType.SIGNAL.name
 
-    def __init__(self, ticker, dt, signal_type, strength=None,
-                 target_price=None):
+    def __init__(self, ticker, dt, signal_type):
+        """
+        Base SignalEvent constructor.
+        
+        :param ticker: The ticker to create the signal for.
+        :param dt: The date the signal is being created. 
+        :param signal_type: The type of signal being created.
+        """
+
         super().__init__()
 
         self.type = EventType.SIGNAL
         self.ticker = ticker
         self.dt = dt
-        # long, short, exit, hold, or cancel
-        # TODO: hold all orders
         self.signal_type = SignalType.check_if_valid(signal_type)
-        # a way of adding extra logic?
+
+
+class HoldSignalEvent(SignalEvent):
+    """Indicates a hold signal."""
+    SIGNAL_TYPE = SignalType.HOLD
+
+    def __init__(self, ticker, dt):
+        super().__init__(ticker, dt, self.SIGNAL_TYPE)
+
+
+class ExitSignalEvent(SignalEvent):
+    """
+    Signal indicating to close all positions for an Asset.
+    
+    An :class:`OrderType` as well as a stop and/or limit price may be specified 
+    otherwise a MarketOrder will be created.
+    """
+
+    SIGNAL_TYPE = SignalType.EXIT
+
+    def __init__(self, ticker, dt, order_type=OrderType.MARKET,
+                 stop_price=None, limit_price=None):
+        """
+        Constructor for ExitSignal.
+        
+        :param order_type: (optional) The :class:`OrderType` to create to 
+        exit the position.
+        (default: ``OrderType.MARKET``)
+        :param stop_price: (optional) The stop price for the order.
+        If the order type is not ``OrderType.STOP`` or ``OrderType.STOP_LIMIT``
+        then this value is ignored.
+        :param limit_price: (optional) The limit price for the order.
+        If the order type is not ``OrderType.LIMIT`` 
+        or ``OrderType.STOP_LIMIT`` then this value is ignored. 
+        """
+        super().__init__(ticker, dt, self.SIGNAL_TYPE)
+        self.order_type = OrderType.check_if_valid(order_type)
+        self.stop_price = stop_price
+        self.limit_price = limit_price
+
+
+class CancelSignalEvent(SignalEvent):
+    """
+    Signal indicating that all open orders for a given asset should be 
+    canceled.
+    """
+    SIGNAL_TYPE = SignalType.CANCEL
+
+    def __init__(self, ticker, dt, trade_action=None, upper_price=None,
+                 lower_price=None):
+        """
+        Constructor for CancelSignal.
+        
+        :param TradeAction trade_action: (optional) Type of open orders to 
+        cancel. If None, then all orders will be canceled.
+        :param float upper_price: (optional) Only cancel orders that are for 
+        more than this amount.
+        :param float lower_price: (optional) Only cancel orders that are below
+        this this amount
+        """
+        super().__init__(ticker, dt, self.SIGNAL_TYPE)
+        self.trade_action = TradeAction.check_if_valid(trade_action)
+        self.upper_price = upper_price
+        self.lower_price = lower_price
+
+
+class TradeSignalEvent(SignalEvent):
+    """
+    Signal indicating a possible trade opportunity. Either long or short.
+    
+    These events will **ALWAYS** generate a new order and will not affect any 
+    other order that already exists.
+    
+    Most of the attributes are optional because it is up to the portfolio to 
+    determine how to interpret them.
+    """
+    SIGNAL_TYPE = SignalType.TRADE
+
+    def __init__(self, ticker, dt, position, order_type, strength=None,
+                 stop_price=None, limit_price=None, target_price=None):
+        """
+        Constructor for TradeSignalEvent
+        
+        :param Position position: LONG or SHORT
+        :param OrderType order_type: Type of order to create
+        :param Any strength: An indicator about confidence in the signal.
+        :param stop_price: (optional) The stop price.
+        :param limit_price: (optional) The limit price. 
+        :param target_price: (optional) The ideal price to buy at.
+        """
+        super().__init__(ticker, dt, self.SIGNAL_TYPE)
+        self.position = Position.check_if_valid(position)
+        self.order_type = OrderType.check_if_valid(order_type)
         self.strength = strength
+        self.stop_price = stop_price
+        self.limit_price = limit_price
         self.target_price = target_price
 
 

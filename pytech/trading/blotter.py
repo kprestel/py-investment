@@ -14,7 +14,7 @@ from pytech.fin.asset import Asset
 from pytech.fin.portfolio import Portfolio
 from pytech.trading.order import Order
 from pytech.trading.trade import Trade
-from pytech.utils.enums import Position, TradeAction
+from pytech.utils.enums import Position, TradeAction, OrderStatus
 from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
 from pytech.trading.commission import PerOrderCommissionModel, \
     AbstractCommissionModel
@@ -45,7 +45,7 @@ class Blotter(object):
             raise TypeError(
                     'commission_model must be a subclass of '
                     'AbstractCommissionModel. {} was provided'
-                    .format(type(commission_model))
+                        .format(type(commission_model))
             )
 
     @property
@@ -60,7 +60,7 @@ class Blotter(object):
         else:
             raise TypeError(
                     'bars must be an instance of DataHandler. {} was provided'
-                    .format(type(data_handler))
+                        .format(type(data_handler))
             )
 
     @property
@@ -103,7 +103,7 @@ class Blotter(object):
         """
         Iterate over the orders dict as well as the nested orders dict which 
         key=order_id and value=``Order``
-        k
+        
         This means you can iterate over a :class:``Blotter`` instance directly 
         and access all of the open orders it has.
         """
@@ -118,25 +118,30 @@ class Blotter(object):
         return do_iter(self.orders)
 
     def place_order(self, ticker, action, order_type, qty, stop_price=None,
-                    limit_price=None,
-                    date_placed=None, order_subtype=None, order_id=None,
-                    max_days_open=90):
+                    limit_price=None, date_placed=None, order_subtype=None,
+                    order_id=None, max_days_open=90):
         """
-        Open a new order.  If an open order for the given ``ticker`` already exists placing a new order will **NOT**
-        change the existing order, it will be added to the tuple.
+        Open a new order.  If an open order for the given ``ticker`` already 
+        exists placing a new order will **NOT** change the existing order, 
+        it will be added to the tuple.
 
-        :param ticker: The ticker of the :py:class:`~ticker.Asset` to place an order for or the ticker of an ticker.
+        :param ticker: The ticker of the :py:class:`~ticker.Asset` to place an 
+        order for or the ticker of an ticker.
         :type ticker: Asset or str
         :param TradeAction or str action: **BUY** or **SELL**
         :param OrderType order_type: the type of order
-        :param float stop_price: If creating a stop order this is the stop price that will trigger the ``order``.
-        :param float limit_price: If creating a limit order this is the price that will trigger the ``order``.
+        :param float stop_price: If creating a stop order this is the 
+        stop price that will trigger the ``order``.
+        :param float limit_price: If creating a limit order this is the price 
+        that will trigger the ``order``.
         :param int qty: The number of shares to place an ``order`` for.
         :param datetime date_placed: The date and time the order is created.
         :param OrderSubType order_subtype: (optional) The type of order subtype
             (default: ``OrderSubType.DAY``)
-        :param int max_days_open: Number of days to leave the ``order`` open before it expires.
-        :param str order_id: (optional) The ID of the :class:`pytech.trading.order.Order`.
+        :param int max_days_open: Number of days to leave the ``order`` open 
+        before it expires.
+        :param str order_id: (optional) 
+        The ID of the :class:`pytech.trading.order.Order`.
         :return: None
         """
         if qty == 0:
@@ -208,7 +213,8 @@ class Blotter(object):
 
     def _do_order_cancel(self, order, reason):
         """
-        Cancel any order that is passed to this method and log the appropriate message.
+        Cancel any order that is passed to this method and log the appropriate 
+        message.
         """
         if order.filled > 0:
             self.logger.warning('Order for ticker: {ticker} has been '
@@ -227,6 +233,23 @@ class Blotter(object):
                         .format(ticker=order.ticker))
         order.cancel(reason)
         order.last_updated = self.current_dt
+
+    def hold_order(self, order):
+        """
+        Place an order on hold. 
+        
+        :param order: 
+        """
+        self.orders[order.ticker][order.id].status = OrderStatus.HELD
+
+    def hold_all_orders_for_asset(self, ticker):
+        """
+        Place all open orders for the given asset on hold.
+        
+        :param str ticker: The ticker of the asset to place all orders on hold.
+        """
+        for order in self.orders[ticker].values():
+            self.hold_order(order)
 
     def reject_order(self, order_id, ticker=None, reason=''):
         """
@@ -248,15 +271,13 @@ class Blotter(object):
         self.logger.warning(
                 'Order id: {id} for ticker: {ticker} '
                 'was rejected because: {reason}'
-                    .format(id=order_id, ticker=ticker,
-                            reason=reason or 'Unknown'))
+                .format(id=order_id, ticker=ticker,
+                        reason=reason or 'Unknown'))
 
     def check_order_triggers(self):
         """
         Check if any order has been triggered and if they have execute the 
         trade and then clean up closed orders.
-
-        :param pd.DataFrame tick_data: The current tick data
         """
         for order_id, order in self:
             # should this be looking the close column?
@@ -298,8 +319,9 @@ class Blotter(object):
         commission_cost = self.commission_model.calculate(order,
                                                           price_per_share)
         available_volume = order.get_available_volume(volume)
-        avg_price_per_share = ((price_per_share * available_volume)
-                               + commission_cost) / available_volume
+        avg_price_per_share = (
+            ((price_per_share * available_volume) + commission_cost)
+            / available_volume)
 
         order.commission += commission_cost
 

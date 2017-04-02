@@ -39,6 +39,7 @@ class SignalType(AutoNumber):
     EXIT = ()
     CANCEL = ()
     HOLD = ()
+    TRADE = ()
 
     @classmethod
     def check_if_valid(cls, value):

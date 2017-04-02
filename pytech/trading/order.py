@@ -70,12 +70,12 @@ class Order(object):
         See :py:func:`asymmetric_round_price_to_penny` for more information on how
             `stop_price` and `limit_price` will get rounded.
         """
-
         self.id = id or utils.make_id()
         self.logger = logging.getLogger(
                 '{}_id_{}'.format(self.LOGGER_NAME, self.id))
 
-        # TODO: validate that all of these inputs make sense together. e.g. if its a stop order stop shouldn't be none
+        # TODO: validate that all of these inputs make sense together.
+        # e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)
         self.order_type = OrderType.check_if_valid(order_type)
 

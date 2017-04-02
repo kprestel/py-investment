@@ -3,7 +3,6 @@ import logging
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
-import pandas as pd
 import pandas_datareader.data as web
 
 import pytech.utils.dt_utils as dt_utils

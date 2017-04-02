@@ -6,12 +6,15 @@ from math import floor
 import pandas as pd
 
 import pytech.utils.pandas_utils as pd_utils
-from pytech.backtest.event import FillEvent, TradeEvent, SignalEvent
+from pytech.backtest.event import (FillEvent, TradeEvent, SignalEvent,
+                                   ExitSignalEvent, TradeSignalEvent,
+                                   CancelSignalEvent, HoldSignalEvent)
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.trading.trade import Trade
-from pytech.utils.enums import EventType, OrderType, Position, SignalType, \
-    TradeAction
+from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
+                                TradeAction)
 import pytech.utils.dt_utils as dt_utils
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,10 +42,10 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.ticker_list = self.bars.ticker_list
         self.current_positions = self._get_temp_dict()
         # holdings = mv
-        self.all_holdings = self.construct_all_holdings()
+        self.all_holdings = self._construct_all_holdings()
         # positions = qty
-        self.all_positions = self.construct_all_positions()
-        self.current_holdings = self.construct_current_holdings()
+        self.all_positions = self._construct_all_positions()
+        self.current_holdings = self._construct_current_holdings()
         self.total_commission = 0.0
         self.total_value = 0.0
 
@@ -62,17 +65,19 @@ class AbstractPortfolio(metaclass=ABCMeta):
         """
         raise NotImplementedError('Must implement update_fill()')
 
-    def construct_all_positions(self):
+    def _construct_all_positions(self):
         """
         Constructs the position list using the start date to determine when 
         the index will begin.
+        
+        This should only be called once.
         """
 
         d = self._get_temp_dict()
         d['datetime'] = self.start_date
         return [d]
 
-    def construct_all_holdings(self):
+    def _construct_all_holdings(self):
         d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
         d['datetime'] = self.start_date
         d['cash'] = self.initial_capital
@@ -80,10 +85,12 @@ class AbstractPortfolio(metaclass=ABCMeta):
         d['total'] = self.initial_capital
         return [d]
 
-    def construct_current_holdings(self):
+    def _construct_current_holdings(self):
         """
-        Construct a dict which holds the instantaneous value of the 
+        Construct a dict which holds the instantaneous market value of the 
         portfolio across all symbols.
+        
+        This should only be called once.
         """
         d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
         return d
@@ -121,12 +128,13 @@ class AbstractPortfolio(metaclass=ABCMeta):
         return post_trade_cash > 0
 
 
-class NaivePortfolio(AbstractPortfolio):
+class BasicPortfolio(AbstractPortfolio):
     """Here for testing and stuff."""
+
     def __init__(self, data_handler, events, start_date, blotter,
                  initial_capital=100000):
-        super().__init__(data_handler, events, start_date, blotter,
-                         initial_capital)
+        super().__init__(
+                data_handler, events, start_date, blotter, initial_capital)
 
     def update_timeindex(self, event):
         """
@@ -163,9 +171,10 @@ class NaivePortfolio(AbstractPortfolio):
 
         for ticker in self.ticker_list:
             # approximate to real value.
-            market_value = (self.current_positions[ticker] *
-                            self.bars.get_latest_bar_value(ticker,
-                                                           pd_utils.ADJ_CLOSE_COL))
+            market_value = (
+                self.current_positions[ticker]
+                * self.bars.get_latest_bar_value(ticker,
+                                                 pd_utils.ADJ_CLOSE_COL))
             dh[ticker] = market_value
             dh['total'] += market_value
 
@@ -192,19 +201,25 @@ class NaivePortfolio(AbstractPortfolio):
         self.cash += trade.trade_value()
         self.total_value += trade.trade_value()
 
+    def _update_from_fill(self, trade):
+        self.current_positions[trade.ticker] += trade.qty
+        self.current_holdings[trade.ticker] += trade.trade_value()
+        self.total_commission += trade.commission
+        self.cash += trade.trade_value()
+        self.total_value += trade.trade_value()
+
     def update_fill(self, event):
         if event.type is EventType.FILL:
             order = self.blotter[event.order_id]
             if self.check_liquidity(event.price, event.available_volume):
                 trade = self.blotter.make_trade(order, event.price, event.dt,
                                                 event.available_volume)
-                self.update_positions_from_fill(trade)
-                self.update_holdings_from_fill(trade)
+                self._update_from_fill(trade)
             else:
                 self.logger.warning(
-                    'Insufficient funds available to execute trade for '
-                    'ticker: {} '
-                    .format(order.ticker))
+                        'Insufficient funds available to execute trade for '
+                        'ticker: {} '
+                        .format(order.ticker))
 
     def generate_naive_order(self, signal):
         """
@@ -214,7 +229,8 @@ class NaivePortfolio(AbstractPortfolio):
         :return:
         """
 
-        mkt_qty = floor(100 * signal.strength)
+        # TODO: update this.
+        mkt_qty = 100
         cur_qty = self.current_positions[signal.ticker]
 
         if signal.signal_type is SignalType.LONG and cur_qty == 0:
@@ -239,8 +255,8 @@ class NaivePortfolio(AbstractPortfolio):
             # self.events.put(self.generate_naive_order(event))
         else:
             raise TypeError(
-                'Invalid EventType. Must be EventType.SIGNAL. {} was provided'.format(
-                    type(event)))
+                    'Invalid EventType. Must be EventType.SIGNAL. '
+                    '{} was provided'.format(type(event)))
 
     def process_signal(self, signal):
         """
@@ -250,49 +266,52 @@ class NaivePortfolio(AbstractPortfolio):
         :return:
         """
         if signal.signal_type is SignalType.EXIT:
-            self.handle_exit_signal(signal)
+            self._handle_exit_signal(signal)
         elif signal.signal_type is SignalType.CANCEL:
-            self.handle_cancel_singal(signal)
+            self._handle_cancel_signal(signal)
         elif signal.signal_type is SignalType.HOLD:
-            self.handle_hold_signal(signal)
-        elif signal.signal_type not in [SignalType.LONG, SignalType.SHORT]:
-            raise TypeError(
-                'Invalid EventType. Must be EventType.SIGNAL. {} was provided'
-                .format(type(signal.signal_type)))
+            self._handle_hold_signal(signal)
+        elif signal.signal_type is SignalType.TRADE:
+            self._handle_trade_signal(signal)
         else:
-            self.handle_long_short_signal(signal)
+            raise TypeError(
+                    'Invalid EventType. Must be EventType.SIGNAL. '
+                    '{} was provided'.format(type(signal.signal_type)))
 
-    def handle_long_short_signal(self, signal):
+    def _handle_trade_signal(self, signal):
         """
-        Create an order based on the **long** or **short** signal.
-
-        :param SignalEvent signal:
-        :return:
+        Create a new order based on the trade signal received
+        
+        :param TradeSignalEvent or SignalEvent signal: The trade signal.
+        :return: 
         """
 
-    def handle_exit_signal(self, signal):
+    def _handle_exit_signal(self, signal):
         """
         Create an order that will close out the position in the signal.
-
-        :param SignalEvent signal:
+        
+        :param ExitSignalEvent or SignalEvent signal:
         :return:
         """
+        asset_mv = self.current_holdings[signal.ticker]
+        asset_qty = self.current_positions[signal.ticker]
 
-    def handle_cancel_singal(self, signal):
+    def _handle_cancel_signal(self, signal):
         """
         Cancel all open orders for the asset in the signal.
 
-        :param SignalEvent signal:
-        :return:
+        :param CancelSignalEvent or SignalEvent signal:
         """
+        self.blotter.cancel_all_orders_for_asset(signal.ticker)
 
-    def handle_hold_signal(self, signal):
+    def _handle_hold_signal(self, signal):
         """
         Place all open orders for the asset in the signal on hold.
 
-        :param SignalEvent signal:
+        :param HoldSignalEvent or SignalEvent signal:
         :return:
         """
+        self.blotter.hold_all_orders_for_asset(signal.ticker)
 
 
 class Portfolio(object):
@@ -389,10 +408,13 @@ class Portfolio(object):
             self._create_new_owned_asset_from_trade(trade)
 
     def _update_existing_owned_asset_from_trade(self, trade):
-        """Update an existing owned asset or delete it if the trade results in all shares being sold."""
-
-        updated_asset = self.owned_assets[trade.ticker].make_trade(trade.qty,
-                                                                   trade.avg_price_per_share)
+        """
+        Update an existing owned asset or delete it if the trade results 
+        in all shares being sold.
+        """
+        owned_asset = self.owned_assets[trade.ticker]
+        updated_asset = owned_asset.make_trade(trade.qty,
+                                               trade.avg_price_per_share)
 
         if updated_asset is None:
             del self.owned_assets[trade.ticker]
