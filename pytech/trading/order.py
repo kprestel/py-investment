@@ -164,7 +164,7 @@ class Order(object):
         if limit_price is not None:
             pref_round_down = self.action is TradeAction.BUY
             self._limit_price = asymmetric_round_price_to_penny(limit_price,
-                                                                prefer_round_down=pref_round_down)
+                                                                pref_round_down)
         else:
             self._limit_price = None
 

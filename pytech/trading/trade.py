@@ -67,7 +67,7 @@ class Trade(object):
         self.avg_price_per_share = avg_price_per_share
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
-    def trade_value(self):
+    def trade_cost(self):
         """
         Return the total financial impact of a trade. 
         
@@ -75,6 +75,9 @@ class Trade(object):
         """
 
         return (self.qty * self.price_per_share) + self.commission
+
+    def trade_value(self):
+        return self.trade_value() * -1
 
     @classmethod
     def from_order(cls, order, trade_date, commission, price_per_share, qty,

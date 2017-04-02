@@ -7,7 +7,7 @@ import collections
 import pytech.db.db_utils as db
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import FillEvent, TradeEvent
-from pytech.data.handler import DataHandler
+from pytech.data.handler import DataHandler, YahooDataHandler
 from pytech.db.finders import AssetFinder
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.fin.asset import Asset
@@ -36,6 +36,7 @@ class Blotter(object):
         self.current_dt = None
         # events queue
         self.events = events
+        self.bars = None
 
         if commission_model is None:
             self.commission_model = PerOrderCommissionModel()
@@ -57,6 +58,8 @@ class Blotter(object):
     def bars(self, data_handler):
         if isinstance(data_handler, DataHandler):
             self._bars = data_handler
+        elif data_handler is None:
+            self._bars = None
         else:
             raise TypeError(
                     'bars must be an instance of DataHandler. {} was provided'
@@ -199,17 +202,44 @@ class Blotter(object):
         """
         self._do_order_cancel(self._find_order(order_id, ticker), reason)
 
-    def cancel_all_orders_for_asset(self, ticker, reason=''):
+    def cancel_all_orders_for_asset(self, ticker, reason='', upper_price=None,
+                                    lower_price=None, order_type=None,
+                                    trade_action=None):
         """
         Cancel all orders for a given ticker's ticker and then clean up the 
         orders dict.
 
         :param str ticker: The ticker of the ticker to cancel all orders for.
         :param str reason: (optional) The reason for canceling the order.
-        :return:
+        :param float lower_price: (optional) Only cancel orders 
+        lower than this price.
+        :param float upper_price: (optional) Only cancel orders greater than
+        this price.
+        :param OrderType order_type: (optional) Only cancel orders of the given
+        order type.
+        :param TradeAction trade_action: (optional) Only cancel orders that are
+        either BUY or SELL.
         """
         for order in self.orders[ticker].values():
             self._do_order_cancel(order, reason)
+
+    def _filter_orders(self, ticker, upper_price, lower_price, order_type,
+                       trade_action):
+        """
+        Return an iterable of orders that meet the provided criteria.
+        
+        :param ticker: 
+        :param upper_price: 
+        :param lower_price: 
+        :param OrderType order_type:
+        :param TradeAction trade_action:
+        :return: 
+        """
+        for order in self.orders[ticker].values():
+            if order_type is not None and order.order_type is not order_type:
+                continue
+            elif trade_action is not None and order.action is not trade_action:
+                continue
 
     def _do_order_cancel(self, order, reason):
         """
@@ -230,7 +260,7 @@ class Blotter(object):
             self.logger.info(
                     'Canceled order for ticker: {ticker} '
                     'successfully before it was executed.'
-                        .format(ticker=order.ticker))
+                    .format(ticker=order.ticker))
         order.cancel(reason)
         order.last_updated = self.current_dt
 
@@ -271,8 +301,8 @@ class Blotter(object):
         self.logger.warning(
                 'Order id: {id} for ticker: {ticker} '
                 'was rejected because: {reason}'
-                .format(id=order_id, ticker=ticker,
-                        reason=reason or 'Unknown'))
+                    .format(id=order_id, ticker=ticker,
+                            reason=reason or 'Unknown'))
 
     def check_order_triggers(self):
         """

@@ -5,16 +5,18 @@ import queue
 import pytest
 import queuelib.queue
 
+import pytech.fin.portfolio
 from pytech import TEST_DATA_DIR
 import pytech.trading.blotter as b
 from pytech.data.handler import YahooDataHandler
+from pytech.fin.portfolio import BasicPortfolio
 
 from pytech.fin.asset import Fundamental, Stock
 
 
 @pytest.fixture()
 def start_date():
-    return '2016-01-01'
+    return '2016-03-10'
 
 
 @pytest.fixture()
@@ -77,3 +79,9 @@ def yahoo_data_handler(events, ticker_list, start_date, end_date):
     bars.update_bars()
     return bars
 
+
+@pytest.fixture()
+def basic_portfolio(events, yahoo_data_handler, start_date, populated_blotter):
+    populated_blotter.bars = yahoo_data_handler
+    return BasicPortfolio(yahoo_data_handler, events, start_date,
+                          populated_blotter)

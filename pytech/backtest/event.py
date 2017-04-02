@@ -99,7 +99,7 @@ class CancelSignalEvent(SignalEvent):
     SIGNAL_TYPE = SignalType.CANCEL
 
     def __init__(self, ticker, dt, trade_action=None, upper_price=None,
-                 lower_price=None):
+                 lower_price=None, order_type=None):
         """
         Constructor for CancelSignal.
         
@@ -109,11 +109,14 @@ class CancelSignalEvent(SignalEvent):
         more than this amount.
         :param float lower_price: (optional) Only cancel orders that are below
         this this amount
+        :param OrderType order_type: (optional) Only cancel orders that are of 
+        the provided the order_type. e.g. Only cancel stop orders.
         """
         super().__init__(ticker, dt, self.SIGNAL_TYPE)
         self.trade_action = TradeAction.check_if_valid(trade_action)
         self.upper_price = upper_price
         self.lower_price = lower_price
+        self.order_type = OrderType.check_if_valid(order_type)
 
 
 class TradeSignalEvent(SignalEvent):

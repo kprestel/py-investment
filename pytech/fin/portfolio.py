@@ -145,7 +145,6 @@ class BasicPortfolio(AbstractPortfolio):
         :param MarketEvent event:
         :return:
         """
-
         self.blotter.check_order_triggers()
 
         # get an element from the set
@@ -180,7 +179,7 @@ class BasicPortfolio(AbstractPortfolio):
 
         self.all_holdings.append(dh)
 
-    def update_positions_from_fill(self, trade):
+    def _update_positions_from_trade(self, trade):
         """
         Takes a :class:`Trade` and updates the position matrix to reflect new 
         the position.
@@ -189,7 +188,7 @@ class BasicPortfolio(AbstractPortfolio):
         """
         self.current_positions[trade.ticker] += trade.qty
 
-    def update_holdings_from_fill(self, trade):
+    def _update_holdings_from_trade(self, trade):
         """
         Update the holdings matrix to reflect the holdings value.
 
@@ -197,16 +196,16 @@ class BasicPortfolio(AbstractPortfolio):
         :return:
         """
         self.current_holdings[trade.ticker] += trade.trade_value()
+        self.current_holdings['commission'] += trade.commission
         self.total_commission += trade.commission
-        self.cash += trade.trade_value()
-        self.total_value += trade.trade_value()
+        self.current_holdings['cash'] += trade.trade_cost()
+        self.cash += trade.trade_cost()
+        self.current_holdings['total'] += trade.trade_cost()
+        self.total_value += trade.trade_cost()
 
-    def _update_from_fill(self, trade):
-        self.current_positions[trade.ticker] += trade.qty
-        self.current_holdings[trade.ticker] += trade.trade_value()
-        self.total_commission += trade.commission
-        self.cash += trade.trade_value()
-        self.total_value += trade.trade_value()
+    def _update_from_trade(self, trade):
+        self._update_positions_from_trade(trade)
+        self._update_holdings_from_trade(trade)
 
     def update_fill(self, event):
         if event.type is EventType.FILL:
@@ -214,12 +213,12 @@ class BasicPortfolio(AbstractPortfolio):
             if self.check_liquidity(event.price, event.available_volume):
                 trade = self.blotter.make_trade(order, event.price, event.dt,
                                                 event.available_volume)
-                self._update_from_fill(trade)
+                self._update_from_trade(trade)
             else:
                 self.logger.warning(
                         'Insufficient funds available to execute trade for '
                         'ticker: {} '
-                        .format(order.ticker))
+                            .format(order.ticker))
 
     def generate_naive_order(self, signal):
         """
@@ -293,8 +292,19 @@ class BasicPortfolio(AbstractPortfolio):
         :param ExitSignalEvent or SignalEvent signal:
         :return:
         """
-        asset_mv = self.current_holdings[signal.ticker]
-        asset_qty = self.current_positions[signal.ticker]
+        qty = self.current_positions[signal.ticker]
+
+        if qty > 0:
+            action = TradeAction.SELL
+        elif qty < 0:
+            action = TradeAction.BUY
+        else:
+            raise ValueError('Cannot exit from a position that is not owned.'
+                             'Owned qty is 0 for ticker: {ticker}.'.
+                             format(ticker=signal.ticker))
+
+        self.blotter.place_order(signal.ticker, action, signal.order_type,
+                                 qty, signal.stop_price, signal.limit_price)
 
     def _handle_cancel_signal(self, signal):
         """
@@ -302,7 +312,10 @@ class BasicPortfolio(AbstractPortfolio):
 
         :param CancelSignalEvent or SignalEvent signal:
         """
-        self.blotter.cancel_all_orders_for_asset(signal.ticker)
+        self.blotter.cancel_all_orders_for_asset(signal.ticker,
+                                                 upper_price=signal.upper_price,
+                                                 lower_price=signal.lower_price,
+                                                 order_type=signal.order_type)
 
     def _handle_hold_signal(self, signal):
         """
@@ -400,7 +413,7 @@ class Portfolio(object):
         :return:
         """
 
-        self.cash += trade.trade_value()
+        self.cash += trade.trade_cost()
 
         if trade.ticker in self.owned_assets:
             self._update_existing_owned_asset_from_trade(trade)
