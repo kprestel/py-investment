@@ -9,7 +9,8 @@ import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import FillEvent, TradeEvent, SignalEvent
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.trading.trade import Trade
-from pytech.utils.enums import EventType, OrderType, Position, SignalType, TradeAction
+from pytech.utils.enums import EventType, OrderType, Position, SignalType, \
+    TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
     Child portfolio classes must also call super().__init__() in order to set the class up correctly.
     """
 
-    def __init__(self, data_handler, events, start_date, blotter, initial_capital=100000.00):
-
+    def __init__(self, data_handler, events, start_date, blotter,
+                 initial_capital=100000.00):
         self.logger = logging.getLogger(__name__)
         self.bars = data_handler
         self.events = events
@@ -64,7 +65,6 @@ class AbstractPortfolio(metaclass=ABCMeta):
         return [d]
 
     def construct_all_holdings(self):
-
         d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
         d['datetime'] = self.start_date
         d['cash'] = self.initial_capital
@@ -73,7 +73,10 @@ class AbstractPortfolio(metaclass=ABCMeta):
         return [d]
 
     def construct_current_holdings(self):
-        """Construct a dict which holds the instantaneous value of the portfolio across all symbols."""
+        """
+        Construct a dict which holds the instantaneous value of the 
+        portfolio across all symbols.
+        """
 
         d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
         return d
@@ -92,12 +95,15 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
     def check_liquidity(self, avg_price_per_share, qty):
         """
-        Check if the portfolio has enough liquidity to actually make the trade. This method should be called before
+        Check if the portfolio has enough liquidity to actually make the trade. 
+        This method should be called before
         executing any trade.
 
-        :param float avg_price_per_share: The price per share in the trade **AFTER** commission has been applied.
+        :param float avg_price_per_share: The price per share in the trade 
+        **AFTER** commission has been applied.
         :param int qty: The amount of shares to be traded.
-        :return: True if there is enough cash to make the trade or if qty is negative indicating a sale.
+        :return: True if there is enough cash to make the trade or if qty is 
+        negative indicating a sale.
         """
 
         if qty < 0:
@@ -113,12 +119,15 @@ class AbstractPortfolio(metaclass=ABCMeta):
 class NaivePortfolio(AbstractPortfolio):
     """Here for testing and stuff."""
 
-    def __init__(self, data_handler, events, start_date, blotter, initial_capital=100000):
-        super().__init__(data_handler, events, start_date, blotter, initial_capital)
+    def __init__(self, data_handler, events, start_date, blotter,
+                 initial_capital=100000):
+        super().__init__(data_handler, events, start_date, blotter,
+                         initial_capital)
 
     def update_timeindex(self, event):
         """
-        Adds a new record to the positions matrix for all the current market data bar. This reflects the PREVIOUS bar.
+        Adds a new record to the positions matrix for all the current market 
+        data bar. This reflects the PREVIOUS bar.
         Makes use of MarketEvent from the events queue.
 
         :param MarketEvent event:
@@ -151,7 +160,8 @@ class NaivePortfolio(AbstractPortfolio):
         for ticker in self.ticker_list:
             # approximate to real value.
             market_value = (self.current_positions[ticker] *
-                            self.bars.get_latest_bar_value(ticker, pd_utils.ADJ_CLOSE_COL))
+                            self.bars.get_latest_bar_value(ticker,
+                                                           pd_utils.ADJ_CLOSE_COL))
             dh[ticker] = market_value
             dh['total'] += market_value
 
@@ -184,12 +194,15 @@ class NaivePortfolio(AbstractPortfolio):
         if event.type is EventType.FILL:
             order = self.blotter[event.order_id]
             if self.check_liquidity(event.price, event.available_volume):
-                trade = self.blotter.make_trade(order, event.price, event.dt, event.available_volume)
+                trade = self.blotter.make_trade(order, event.price, event.dt,
+                                                event.available_volume)
                 self.update_positions_from_fill(trade)
                 self.update_holdings_from_fill(trade)
             else:
-                self.logger.warning('Insufficient funds available to execute trade for ticker: {}'
-                                    .format(order.ticker))
+                self.logger.warning(
+                    'Insufficient funds available to execute trade for '
+                    'ticker: {} '
+                    .format(order.ticker))
 
     def generate_naive_order(self, signal):
         """
@@ -203,13 +216,17 @@ class NaivePortfolio(AbstractPortfolio):
         cur_qty = self.current_positions[signal.ticker]
 
         if signal.signal_type is SignalType.LONG and cur_qty == 0:
-            return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty, TradeAction.BUY)
+            return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty,
+                              TradeAction.BUY)
         elif signal.signal_type is SignalType.SHORT and cur_qty == 0:
-            return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty, TradeAction.SELL)
+            return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty,
+                              TradeAction.SELL)
         elif signal.signal_type is SignalType.EXIT and cur_qty > 0:
-            return TradeEvent(signal.ticker, OrderType.MARKET, abs(cur_qty), TradeAction.SELL)
+            return TradeEvent(signal.ticker, OrderType.MARKET, abs(cur_qty),
+                              TradeAction.SELL)
         elif signal.signal_type is SignalType.EXIT and cur_qty < 0:
-            return TradeEvent(signal.ticker, OrderType.MARKET, abs(cur_qty), TradeAction.BUY)
+            return TradeEvent(signal.ticker, OrderType.MARKET, abs(cur_qty),
+                              TradeAction.BUY)
         else:
             raise ValueError('Invalid signal. Cannot Create an order.')
 
@@ -220,7 +237,9 @@ class NaivePortfolio(AbstractPortfolio):
             self.blotter.check_order_triggers()
             # self.events.put(self.generate_naive_order(event))
         else:
-            raise TypeError('Invalid EventType. Must be EventType.SIGNAL. {} was provided'.format(type(event)))
+            raise TypeError(
+                'Invalid EventType. Must be EventType.SIGNAL. {} was provided'.format(
+                    type(event)))
 
     def process_signal(self, signal):
         """
@@ -237,8 +256,9 @@ class NaivePortfolio(AbstractPortfolio):
         elif signal.signal_type is SignalType.HOLD:
             self.handle_hold_signal(signal)
         elif signal.signal_type not in [SignalType.LONG, SignalType.SHORT]:
-            raise TypeError('Invalid EventType. Must be EventType.SIGNAL. {} was provided'
-                            .format(type(signal.signal_type)))
+            raise TypeError(
+                'Invalid EventType. Must be EventType.SIGNAL. {} was provided'
+                .format(type(signal.signal_type)))
         else:
             self.handle_long_short_signal(signal)
 
@@ -371,7 +391,8 @@ class Portfolio(object):
     def _update_existing_owned_asset_from_trade(self, trade):
         """Update an existing owned asset or delete it if the trade results in all shares being sold."""
 
-        updated_asset = self.owned_assets[trade.ticker].make_trade(trade.qty, trade.avg_price_per_share)
+        updated_asset = self.owned_assets[trade.ticker].make_trade(trade.qty,
+                                                                   trade.avg_price_per_share)
 
         if updated_asset is None:
             del self.owned_assets[trade.ticker]
@@ -386,7 +407,8 @@ class Portfolio(object):
         else:
             asset_position = Position.LONG
 
-        self.owned_assets[trade.ticker] = OwnedAsset.from_trade(trade, asset_position)
+        self.owned_assets[trade.ticker] = OwnedAsset.from_trade(trade,
+                                                                asset_position)
 
     def get_total_value(self, include_cash=True):
         """

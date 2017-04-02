@@ -10,13 +10,13 @@ def make_id():
 
 def iterable_to_set(iterable):
     """
-    Take an iterable and turn it into a set to ensure that there are no duplicate entries.
+    Take an iterable and turn it into a set to ensure that there are no 
+    duplicate entries.
 
     :param iterable: Any iterable object who's contents is hashable.
     :return: A set
     :rtype: set
     """
-
     try:
         return set(iterable)
     except TypeError as e:

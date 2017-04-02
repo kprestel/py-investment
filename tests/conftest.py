@@ -10,21 +10,37 @@ import pytech.trading.blotter as b
 
 from pytech.fin.asset import Fundamental, Stock
 
+
+@pytest.fixture()
+def start_date():
+    return '2016-01-01'
+
+
+@pytest.fixture()
+def end_date():
+    return '2017-01-01'
+
+
 @pytest.fixture(autouse=True)
 def no_requests(monkeypatch):
     """Prevent making requests to yahoo to speed up testing"""
 
     def patch_requests(ticker, data_source, start, end):
         return pd.read_csv(get_test_csv_path(ticker))
+
     monkeypatch.setattr('pandas_datareader.data.DataReader', patch_requests)
+
 
 def get_test_csv_path(ticker):
     """Return the path to the test CSV file"""
+
     return TEST_DATA_DIR + os.sep + '{}.csv'.format(ticker)
+
 
 @pytest.fixture()
 def ticker_list():
     return ['AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST', 'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL']
+
 
 @pytest.fixture()
 def events():

@@ -27,8 +27,8 @@ class BuyAndHold(Strategy):
         super().__init__()
 
         if not issubclass(data_handler.__class__, DataHandler):
-            raise TypeError('bars must be a subclass of DataHandler. {} was provided'
-                            .format(type(data_handler)))
+            raise TypeError('bars must be a subclass of DataHandler. '
+                            '{} was provided'.format(type(data_handler)))
         else:
             self.bars = data_handler
 
@@ -48,12 +48,12 @@ class BuyAndHold(Strategy):
 
     def generate_signals(self, event):
         """
-        For buy and hold we generate a single single per symbol and then no more signals.  Meaning we are always long
-        the market from the start to the end of the sim.
+        For buy and hold we generate a single single per symbol and then 
+        no more signals. Meaning we are always long the market 
+        from the start to the end of the sim.
 
         :param MarketEvent event: A :class:`MarketEvent` object.
         """
-
         self.logger.info('Generating signals')
 
         if event.type is EventType.MARKET:

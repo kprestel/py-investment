@@ -13,8 +13,8 @@ import pytech.utils.dt_utils as dt_utils
 class Environment(object):
     """Set up the local trading environment settings"""
 
-    def __init__(self, benchmark_sym='^GPSC', trading_tz='US/Eastern', trade_cal='NYSE', db_path=None):
-
+    def __init__(self, benchmark_sym='^GPSC', trading_tz='US/Eastern',
+                 trade_cal='NYSE', db_path=None):
         self.benchmark_sym = benchmark_sym
         self.trading_tz = trading_tz
         self.trade_cal = mcal.get_calendar(trade_cal)
@@ -26,10 +26,10 @@ class Environment(object):
 class SimParams(object):
     """Parameters that will be held constant throughout the entire simulation."""
 
-    def __init__(self, trading_cal, start_date, end_date, data_frequency='daily'):
+    def __init__(self, trading_cal, start_date, end_date,
+                 data_frequency='daily'):
 
         self._trading_cal = trading_cal
-
 
         if start_date is None:
             self.start_date = datetime.now() - timedelta(days=365)

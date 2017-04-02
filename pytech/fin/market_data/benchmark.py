@@ -1,8 +1,8 @@
 import pytech.utils.dt_utils as dt_utils
 import pandas_datareader.data as web
 
-class BenchMark(object):
 
+class BenchMark(object):
     def __init__(self, start_date=None, end_date=None, ticker='^GPSC'):
 
         if start_date is None:
@@ -17,6 +17,5 @@ class BenchMark(object):
 
         self.ticker = ticker
 
-        self.ohlcv = web.DataReader(ticker, 'yahoo', start=self.start_date, end=self.end_date)
-
-
+        self.ohlcv = web.DataReader(ticker, 'yahoo', start=self.start_date,
+                                    end=self.end_date)

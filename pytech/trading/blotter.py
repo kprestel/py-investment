@@ -16,7 +16,8 @@ from pytech.trading.order import Order
 from pytech.trading.trade import Trade
 from pytech.utils.enums import Position, TradeAction
 from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
-from pytech.trading.commission import PerOrderCommissionModel, AbstractCommissionModel
+from pytech.trading.commission import PerOrderCommissionModel, \
+    AbstractCommissionModel
 
 
 class Blotter(object):
@@ -28,7 +29,7 @@ class Blotter(object):
 
         self.logger = logging.getLogger(self.LOGGER_NAME)
         self.asset_finder = asset_finder
-        # dict of all orders. key is the ticker of the asset, value is the asset.
+        # dict of all orders. key=ticker of the asset, value=the asset.
         self.orders = {}
         # keep a record of all past trades.
         self.trades = []
@@ -41,8 +42,10 @@ class Blotter(object):
         elif issubclass(commission_model.__class__, AbstractCommissionModel):
             self.commission_model = commission_model
         else:
-            raise TypeError('commission_model must be a subclass of AbstractCommissionModel. {} was provided'
-                            .format(type(commission_model)))
+            raise TypeError(
+                'commission_model must be a subclass of '
+                'AbstractCommissionModel. {} was provided'
+                .format(type(commission_model)))
 
     @property
     def bars(self):
@@ -54,8 +57,9 @@ class Blotter(object):
         if isinstance(data_handler, DataHandler):
             self._bars = data_handler
         else:
-            raise TypeError('bars must be an instance of DataHandler. {} was provided'
-                            .format(type(data_handler)))
+            raise TypeError(
+                'bars must be an instance of DataHandler. {} was provided'
+                .format(type(data_handler)))
 
     @property
     def asset_finder(self):
@@ -72,7 +76,6 @@ class Blotter(object):
 
     def __getitem__(self, key):
         """Get an order from the orders dict."""
-
         return self.orders[key]
 
     def __setitem__(self, key, value):
@@ -85,7 +88,6 @@ class Blotter(object):
         :type key: Asset or str
         :param Order value: The order.
         """
-
         if issubclass(key.__class__, Asset):
             self.orders[key.ticker] = value
         else:
@@ -98,10 +100,12 @@ class Blotter(object):
 
     def __iter__(self):
         """
-        Iterate over the orders dict as well as the nested orders dict which key=order_id and value=``Order``
-        This means you can iterate over a :class:``Blotter`` instance directly and access all of the open orders it has.
+        Iterate over the orders dict as well as the nested orders dict which 
+        key=order_id and value=``Order``
+        k
+        This means you can iterate over a :class:``Blotter`` instance directly 
+        and access all of the open orders it has.
         """
-
         def do_iter(orders_dict):
             for k, v in orders_dict.items():
                 if isinstance(v, collections.Mapping):
@@ -111,8 +115,10 @@ class Blotter(object):
 
         return do_iter(self.orders)
 
-    def place_order(self, ticker, action, order_type, qty, stop_price=None, limit_price=None,
-                    date_placed=None, order_subtype=None, order_id=None, max_days_open=90):
+    def place_order(self, ticker, action, order_type, qty, stop_price=None,
+                    limit_price=None,
+                    date_placed=None, order_subtype=None, order_id=None,
+                    max_days_open=90):
         """
         Open a new order.  If an open order for the given ``ticker`` already exists placing a new order will **NOT**
         change the existing order, it will be added to the tuple.
@@ -131,7 +137,6 @@ class Blotter(object):
         :param str order_id: (optional) The ID of the :class:`pytech.trading.order.Order`.
         :return: None
         """
-
         if qty == 0:
             # No point in making an order for 0 shares.
             return None
@@ -153,9 +158,13 @@ class Blotter(object):
         )
 
         if ticker in self.orders:
-            self.orders[ticker].update({order.id: order})
+            self.orders[ticker].update({
+                                           order.id: order
+                                       })
         else:
-            self.orders[ticker] = {order.id: order}
+            self.orders[ticker] = {
+                order.id: order
+            }
 
     def _find_order(self, order_id, ticker):
 
@@ -174,67 +183,79 @@ class Blotter(object):
 
         :param str order_id: The id of the order to cancel.
         :param ticker: (optional) The ticker that the order is associated with.
-            Although it is not required to provide a ticker, it is **strongly** encouraged.
-            By providing a ticker the execution time of this method will increase greatly.
-        :param str reason: (optional) The reason that the order is being cancelled.
+            Although it is not required to provide a ticker, 
+            it is **strongly** encouraged.
+            By providing a ticker the execution time of this method will 
+            increase greatly.
+        :param str reason: (optional) 
+            The reason that the order is being cancelled.
         :return:
         """
-
         self._do_order_cancel(self._find_order(order_id, ticker), reason)
 
     def cancel_all_orders_for_asset(self, ticker, reason=''):
         """
-        Cancel all orders for a given ticker's ticker and then clean up the orders dict.
+        Cancel all orders for a given ticker's ticker and then clean up the 
+        orders dict.
 
         :param str ticker: The ticker of the ticker to cancel all orders for.
         :param str reason: (optional) The reason for canceling the order.
         :return:
         """
-
         for order in self.orders[ticker].values():
             self._do_order_cancel(order, reason)
 
     def _do_order_cancel(self, order, reason):
-        """Cancel any order that is passed to this method and log the appropriate message."""
-
+        """
+        Cancel any order that is passed to this method and log the appropriate message.
+        """
         if order.filled > 0:
-            self.logger.warning('Order for {ticker} has been partially filled.'
-                                '{amt} shares have already been successfully purchased.'
+            self.logger.warning('Order for ticker: {ticker} has been '
+                                'partially filled. {amt} shares had already '
+                                'been purchased.'
                                 .format(ticker=order.ticker, amt=order.filled))
         elif order.filled < 0:
-            self.logger.warning('Order for {ticker} has been partially filled.'
-                                '{amt} shares have already been successfully sold.'
+            self.logger.warning('Order for ticker: {ticker} '
+                                'has been partially filled.'
+                                '{amt} shares had already been sold.'
                                 .format(ticker=order.ticker, amt=order.filled))
         else:
-            self.logger.info('Canceled order for {ticker} successfully before it was executed.'
-                             .format(ticker=order.ticker))
+            self.logger.info(
+                'Canceled order for ticker: {ticker} '
+                'successfully before it was executed.'
+                .format(ticker=order.ticker))
         order.cancel(reason)
         order.last_updated = self.current_dt
 
     def reject_order(self, order_id, ticker=None, reason=''):
         """
-        Mark an order as rejected. A rejected order is functionally the same as a canceled order but an order being
-        marked rejected is typically involuntary or unexpected and comes from the broker. Another case that an order
-        will be rejected is if when the order is being executed the owner does not have enough cash to fully execute it.
+        Mark an order as rejected. A rejected order is functionally the same as 
+        a canceled order but an order being marked rejected is typically 
+        involuntary or unexpected and comes from the broker. 
+        Another case that an order will be rejected is if when the order 
+        is being executed the owner does not have enough cash to fully execute it.
 
         :param str order_id: The id of the order being rejected.
-        :param str ticker: (optional) The ticker associated with the order being rejected.
+        :param str ticker: (optional) 
+            The ticker associated with the order being rejected.
         :param str reason: (optional) The reason the order was rejected.
         :return:
         """
 
         self._find_order(order_id, ticker).reject(reason)
 
-        self.logger.warning('Order id: {id} for ticker: {ticker} was rejected because: {reason}'
-                            .format(id=order_id, ticker=ticker, reason=reason or 'Unknown'))
+        self.logger.warning(
+            'Order id: {id} for ticker: {ticker} '
+            'was rejected because: {reason}'
+            .format(id=order_id, ticker=ticker, reason=reason or 'Unknown'))
 
     def check_order_triggers(self):
         """
-        Check if any order has been triggered and if they have execute the trade and then clean up closed orders.
+        Check if any order has been triggered and if they have execute the 
+        trade and then clean up closed orders.
 
         :param pd.DataFrame tick_data: The current tick data
         """
-
         for order_id, order in self:
             # should this be looking the close column?
             bar = self.bars.get_latest_bar(order.ticker)
@@ -243,24 +264,29 @@ class Blotter(object):
             # available_volume = bar[pd_utils.VOL_COL]
             # check_triggers returns a boolean indicating if it is triggered.
             if order.check_triggers(dt=dt, current_price=current_price):
-                self.events.put(TradeEvent(order_id, current_price, order.qty, dt))
+                self.events.put(
+                    TradeEvent(order_id, current_price, order.qty, dt))
                 # self.make_trade(order, current_price, dt, available_volume)
 
-        # self.purge_orders()
+                # self.purge_orders()
 
     def make_trade(self, order, price_per_share, trade_date, volume):
         """
         Buy or sell an ticker from the ticker universe.
 
         :param str ticker: The ticker of the :class:``Asset`` to trade.
-        :param TradeAction or str action: :py:class:``enum.TradeAction`` see comments below.
+        :param TradeAction or str action: :py:class:``enum.TradeAction`` 
+            see comments below.
         :param float price_per_share: the cost per share in the trade
-        :param datetime trade_date: The date and time that the trade is taking place.
-        :return: ``order`` if the order is no longer open so it can be removed from the ``portfolio`` order dict
+        :param datetime trade_date: The date and time that the trade is 
+            taking place.
+        :return: ``order`` if the order is no longer open so it can be removed 
+            from the ``portfolio`` order dict 
             and ``None`` if the order is still open
         :rtype: Order or None
 
-        This method will add the ticker to the :py:class:``Portfolio`` ticker dict and update the db to reflect the trade.
+        This method will add the ticker to the :py:class:``Portfolio`` ticker 
+        dict and update the db to reflect the trade.
 
         Valid **action** parameter values are:
 
@@ -270,13 +296,16 @@ class Blotter(object):
         * SELL
         """
 
-        commission_cost = self.commission_model.calculate(order, price_per_share)
+        commission_cost = self.commission_model.calculate(order,
+                                                          price_per_share)
         available_volume = order.get_available_volume(volume)
-        avg_price_per_share = ((price_per_share * available_volume) + commission_cost) / available_volume
+        avg_price_per_share = ((
+                               price_per_share * available_volume) + commission_cost) / available_volume
 
         order.commission += commission_cost
 
-        trade = Trade.from_order(order, trade_date, commission_cost, price_per_share, available_volume,
+        trade = Trade.from_order(order, trade_date, commission_cost,
+                                 price_per_share, available_volume,
                                  avg_price_per_share)
 
         order.filled += trade.qty
@@ -285,7 +314,6 @@ class Blotter(object):
 
     def purge_orders(self):
         """Remove any order that is no longer open."""
-
         open_orders = {}
 
         for ticker, asset_orders in self.orders:

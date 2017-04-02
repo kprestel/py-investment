@@ -1,6 +1,7 @@
 import logging
 from abc import ABCMeta
-from pytech.utils.enums import EventType, TradeAction, OrderType, Position, SignalType
+from pytech.utils.enums import EventType, TradeAction, OrderType, Position, \
+    SignalType
 
 
 class Event(metaclass=ABCMeta):
@@ -13,7 +14,6 @@ class Event(metaclass=ABCMeta):
     LOGGER_NAME = 'EVENT'
 
     def __init__(self):
-
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
 
@@ -23,7 +23,6 @@ class MarketEvent(Event):
     LOGGER_NAME = EventType.MARKET.name
 
     def __init__(self):
-
         super().__init__()
         self.type = EventType.MARKET
 
@@ -36,8 +35,8 @@ class SignalEvent(Event):
 
     LOGGER_NAME = EventType.SIGNAL.name
 
-    def __init__(self, ticker, dt, signal_type, strength=None, target_price=None):
-
+    def __init__(self, ticker, dt, signal_type, strength=None,
+                 target_price=None):
         super().__init__()
 
         self.type = EventType.SIGNAL
@@ -53,15 +52,15 @@ class SignalEvent(Event):
 
 class TradeEvent(Event):
     """
-    Handles the event of actually executing an order and sending it to a broker for execution/filling.
+    Handles the event of actually executing an order and sending it to a broker 
+    for execution/filling.
 
-    This event should only be created in the event that an :class:`Order` is triggered.
+    This event should only be created in the event that an :class:`Order` 
+    is triggered.
     """
-
     LOGGER_NAME = EventType.TRADE.name
 
     def __init__(self, order_id, price, qty, dt):
-
         super().__init__()
         self.type = EventType.TRADE
         self.order_id = order_id
@@ -70,17 +69,17 @@ class TradeEvent(Event):
         self.dt = dt
 
     def log_order(self):
-
         self.logger.info('Order: ')
 
 
 class FillEvent(Event):
-    """Handles the event of a broker actually filling the order and returning either cash or the asset."""
-
+    """
+    Handles the event of a broker actually filling the order and returning 
+    either cash or the asset.
+    """
     LOGGER_NAME = EventType.FILL.name
 
     def __init__(self, order_id, price, available_volume, dt):
-
         super().__init__()
         self.type = EventType.FILL
         self.order_id = order_id

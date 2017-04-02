@@ -20,14 +20,19 @@ class Trade(object):
 
     LOGGER_NAME = 'trade'
 
-    def __init__(self, qty, price_per_share, action, strategy, order, avg_price_per_share,
+    def __init__(self, qty, price_per_share, action, strategy, order,
+                 avg_price_per_share,
                  commission=0.0, trade_date=None, ticker=None):
         """
-        :param datetime trade_date: corresponding to the date and time of the trade date
+        :param datetime trade_date: corresponding to the date and time of the 
+            trade date
         :param int qty: number of shares traded
-        :param float price_per_share: price per individual share in the trade or the average share price in the trade
-        :param Asset ticker: a :py:class:`~.ticker.Asset`, the ``ticker`` object that was traded
-        :param Order order: a :py:class:`~.order.Order` that was executed as a result of the order executing
+        :param float price_per_share: price per individual share in the trade 
+            or the average share price in the trade
+        :param Asset ticker: a :py:class:`~.ticker.Asset`, the ``ticker`` 
+            object that was traded
+        :param Order order: a :py:class:`~.order.Order` that was executed as a 
+            result of the order executing
         :param float commission: the amount of commission paid to execute this trade
             (default: 0.0)
         :param TradeAction or str action: :py:class:`~.enum.TradeAction`
@@ -42,7 +47,8 @@ class Trade(object):
         * BUY
         * SELL
 
-        `commission` is not necessarily the same commission associated with the ``order`` this will depend on the
+        `commission` is not necessarily the same commission associated with the 
+        ``order`` this will depend on the
         type of :class:``AbstractCommissionModel`` used.
         """
 
@@ -62,21 +68,28 @@ class Trade(object):
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
     def trade_value(self):
-        """Return the total financial impact of a trade. If this was a buy order then the impact will be negative."""
+        """
+        Return the total financial impact of a trade. 
+        
+        If this was a buy order then the impact will be negative.
+        """
 
         return (self.qty * self.price_per_share) + self.commission
 
     @classmethod
-    def from_order(cls, order, trade_date, commission, price_per_share, qty, avg_price_per_share, strategy=None):
+    def from_order(cls, order, trade_date, commission, price_per_share, qty,
+                   avg_price_per_share, strategy=None):
         """
         Make a trade from a triggered order object.
 
         :param Order order: The ``order`` object creating the trade.
         :param datetime trade_date: The datetime that the trade was executed.
         :param float commission: The amount of commission charged on the trade.
-        :param float price_per_share: The true price per share, i.e. before commission has been added.
+        :param float price_per_share: The true price per share, i.e. 
+            before commission has been added.
         :param int qty: The number of shares that the trade is for.
-        :param float avg_price_per_share: The average price per share in the trade AFTER commission has been applied.
+        :param float avg_price_per_share: The average price per share in the 
+            trade AFTER commission has been applied.
         :param str strategy: (optional) The strategy of the trade.
         :raises UntriggeredTradeError: if the order has not been triggered.
         :return: a new ``trade``

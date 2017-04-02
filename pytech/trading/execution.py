@@ -17,9 +17,7 @@ class ExecutionHandler(metaclass=ABCMeta):
 
 
 class SimpleExecutionHandler(ExecutionHandler):
-
     def __init__(self, events):
-
         self.events = events
 
     def execute_order(self, event):
@@ -31,5 +29,6 @@ class SimpleExecutionHandler(ExecutionHandler):
         """
 
         if event.type is EventType.TRADE:
-            fill_event = FillEvent(event.order_id, event.price, event.qty, event.dt)
+            fill_event = FillEvent(event.order_id, event.price, event.qty,
+                                   event.dt)
             self.events.put(fill_event)

@@ -1,2 +1,2 @@
 [run]
-omit = tests/* lib/* bin/*
+omit = tests/* lib/* bin/* include/*

@@ -2,6 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 
+
 class AbstractSlippageModel(metaclass=ABCMeta):
     """
     Abstract Base Class that defines the interface for defining a slippage model.
@@ -28,5 +29,5 @@ class AbstractSlippageModel(metaclass=ABCMeta):
         :rtype: Trade
         """
 
-        raise NotImplementedError('process_order must be overridden by child classes')
-
+        raise NotImplementedError(
+            'process_order must be overridden by child classes')

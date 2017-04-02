@@ -6,13 +6,12 @@ import numpy as np
 import pandas as pd
 import pandas_datareader.data as web
 
-import pytech
+import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent
 
 
 class DataHandler(metaclass=ABCMeta):
-
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
@@ -64,13 +63,15 @@ class DataHandler(metaclass=ABCMeta):
 
     @abstractmethod
     def update_bars(self):
-        """Pushes the latest bar to the latest symbol structure for all symbols in the symbol list."""
+        """
+        Pushes the latest bar to the latest symbol structure for all symbols 
+        in the symbol list.
+        """
 
         raise NotImplementedError('Must implement update_bars()')
 
 
 class YahooDataHandler(DataHandler):
-
     DATA_SOURCE = 'yahoo'
 
     def __init__(self, events, ticker_list, start_date, end_date):
@@ -81,16 +82,25 @@ class YahooDataHandler(DataHandler):
         self.ticker_data = {}
         self.latest_ticker_data = {}
         self.continue_backtest = True
-        self._get_ohlcvs(start_date, end_date)
+        self.start_date = dt_utils.parse_date(start_date)
+        self.end_date = dt_utils.parse_date(end_date)
+        self._get_ohlcvs(self.start_date, self.end_date)
 
     def _get_ohlcvs(self, start_date, end_date):
-        """Populate the ticker_data dict with a pandas OHLCV df as the value and the ticker as the key."""
+        """
+        Populate the ticker_data dict with a pandas OHLCV 
+        df as the value and the ticker as the key.
+        """
 
         comb_index = None
 
         for t in self.ticker_list:
-            self.ticker_data[t] = web.DataReader(t, data_source=self.DATA_SOURCE, start=start_date, end=end_date)
-            self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(self.ticker_data[t])
+            self.ticker_data[t] = web.DataReader(t,
+                                                 data_source=self.DATA_SOURCE,
+                                                 start=start_date,
+                                                 end=end_date)
+            self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(
+                    self.ticker_data[t])
 
             if comb_index is None:
                 comb_index = self.ticker_data[t].index
@@ -100,8 +110,9 @@ class YahooDataHandler(DataHandler):
             self.latest_ticker_data[t] = []
 
         for t in self.ticker_list:
-            self.ticker_data[t] = self.ticker_data[t].reindex(index=comb_index, method='pad').iterrows()
-            # self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(self.ticker_data[t])
+            self.ticker_data[t] = (self.ticker_data[t]
+                                   .reindex(index=comb_index, method='pad')
+                                   .iterrows())
 
     def _get_new_bar(self, ticker):
         """
@@ -128,7 +139,9 @@ class YahooDataHandler(DataHandler):
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            self.logger.exception('Could not find {ticker} in latest_ticker_data'.format(ticker=ticker))
+            self.logger.exception(
+                    'Could not find {ticker} in latest_ticker_data'
+                    .format(ticker=ticker))
             raise
         else:
             return bars_list[-n:]
@@ -138,7 +151,9 @@ class YahooDataHandler(DataHandler):
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            self.logger.exception('Could not find {ticker} in latest_ticker_data'.format(ticker=ticker))
+            self.logger.exception(
+                    'Could not find {ticker} in latest_ticker_data'
+                    .format(ticker=ticker))
             raise
         else:
             return bars_list[-1][1][pd_utils.DATE_COL]
@@ -148,7 +163,9 @@ class YahooDataHandler(DataHandler):
         try:
             bars_list = self.get_latest_bars(ticker, n)
         except KeyError:
-            self.logger.exception('Could not find {ticker} in latest_ticker_data'.format(ticker=ticker))
+            self.logger.exception(
+                    'Could not find {ticker} in latest_ticker_data'
+                    .format(ticker=ticker))
             raise
         else:
             return np.array([getattr(bar[1], val_type) for bar in bars_list])

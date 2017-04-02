@@ -13,10 +13,12 @@ from pytech.utils.exceptions import NotAnAssetError
 
 class OwnedAsset(object):
     """
-    Contains data that only matters for a :class:`Asset` that is in a user's :class:`~pytech.portfolio.Portfolio`
+    Contains data that only matters for a :class:`Asset` that is 
+    in a user's :class:`~pytech.portfolio.Portfolio`.
     """
 
-    def __init__(self, ticker, shares_owned, position, average_share_price=None, purchase_date=None):
+    def __init__(self, ticker, shares_owned, position,
+                 average_share_price=None, purchase_date=None):
 
         self._ticker = ticker
         self.position = Position.check_if_valid(position)
@@ -32,7 +34,8 @@ class OwnedAsset(object):
             self.latest_price_time = self.purchase_date.time()
 
         self._shares_owned = shares_owned
-        self._set_position_cost_and_value(qty=shares_owned, price=self.average_share_price_paid)
+        self._set_position_cost_and_value(qty=shares_owned,
+                                          price=self.average_share_price_paid)
 
     @property
     def shares_owned(self):
@@ -59,8 +62,9 @@ class OwnedAsset(object):
     @classmethod
     def from_trade(cls, trade, asset_position):
         """
-        Create an owned_asset from a :class:``pytech.trading.trade.Trade``.  This the preferred method to create new
-        ``OwnedStock`` objects, and :func:``make_trade`` is the preferred way to update an instance of ``OwnedStock``.
+        Create an owned_asset from a :class:``pytech.trading.trade.Trade``.  
+        This the preferred method to create new ``OwnedStock`` objects, 
+        and :func:``make_trade`` is the preferred way to update an instance of ``OwnedStock``.
 
         :param Trade trade: The trade that will create the new instance of ``OwnedStock``.
         :param Position asset_position: The position that the asset is, either **LONG** or **SHORT**.
@@ -91,7 +95,8 @@ class OwnedAsset(object):
         self._set_position_cost_and_value(qty=qty, price=price_per_share)
 
         try:
-            self.average_share_price_paid = self.total_position_value / float(self.shares_owned)
+            self.average_share_price_paid = self.total_position_value / float(
+                self.shares_owned)
         except ZeroDivisionError:
             return None
         else:
@@ -127,7 +132,8 @@ class OwnedAsset(object):
         self.latest_price = latest_price
         self.latest_price_time = dt_utils.parse_date(price_date)
         if self.position is Position.SHORT:
-            self.total_position_value = (self.latest_price * self.shares_owned) * -1
+            self.total_position_value = (
+                                        self.latest_price * self.shares_owned) * -1
         else:
             self.total_position_value = self.latest_price * self.shares_owned
 
@@ -135,9 +141,11 @@ class OwnedAsset(object):
         """Get the current return on investment for a given :class:``OwnedAsset``"""
 
         self.update_total_position_value()
-        return (self.total_position_value + self.total_position_cost) / (self.total_position_cost * -1)
+        return (self.total_position_value + self.total_position_cost) / (
+        self.total_position_cost * -1)
 
-    def market_correlation(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+    def market_correlation(self, use_portfolio_benchmark=True,
+                           market_ticker='^GSPC'):
         """
         Compute the correlation between a :class: Stock's return and the market return.
         :param use_portfolio_benchmark:
@@ -149,10 +157,13 @@ class OwnedAsset(object):
         Best used to gauge the accuracy of the beta.
         """
 
-        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
+        pct_change = self._get_pct_change(
+            use_portfolio_benchmark=use_portfolio_benchmark,
+            market_ticker=market_ticker)
         return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
 
-    def calculate_beta(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+    def calculate_beta(self, use_portfolio_benchmark=True,
+                       market_ticker='^GSPC'):
         """
         Compute the beta for the :class: Stock
 
@@ -163,12 +174,15 @@ class OwnedAsset(object):
         :return: float
             The beta for the given Stock
         """
-        pct_change = self._get_pct_change(use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker)
+        pct_change = self._get_pct_change(
+            use_portfolio_benchmark=use_portfolio_benchmark,
+            market_ticker=market_ticker)
         covar = pct_change.stock_pct_change.cov(pct_change.market_pct_change)
         variance = pct_change.market_pct_change.var()
         return covar / variance
 
-    def _get_pct_change(self, use_portfolio_benchmark=True, market_ticker='^GSPC'):
+    def _get_pct_change(self, use_portfolio_benchmark=True,
+                        market_ticker='^GSPC'):
         """
         Get the percentage change over the :class: Stock's start and end dates for both the asset as well as the market
 
@@ -178,14 +192,20 @@ class OwnedAsset(object):
             Any valid ticker symbol to use as the market.
         :return: TimeSeries
         """
-        pct_change = namedtuple('Pct_Change', 'market_pct_change stock_pct_change')
+        pct_change = namedtuple('Pct_Change',
+                                'market_pct_change stock_pct_change')
         if use_portfolio_benchmark:
             market_df = self.portfolio.benchmark
         else:
-            market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
-        market_pct_change = pd.Series(market_df['adj_close'].pct_change(periods=1))
-        stock_pct_change = pd.Series(self.ohlcv['adj_close'].pct_change(periods=1))
-        return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
+            market_df = web.DataReader(market_ticker, 'yahoo',
+                                       start=self.start_date,
+                                       end=self.end_date)
+        market_pct_change = pd.Series(
+            market_df['adj_close'].pct_change(periods=1))
+        stock_pct_change = pd.Series(
+            self.ohlcv['adj_close'].pct_change(periods=1))
+        return pct_change(market_pct_change=market_pct_change,
+                          stock_pct_change=stock_pct_change)
 
     def _get_portfolio_benchmark(self):
         """
