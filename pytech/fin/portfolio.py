@@ -11,7 +11,7 @@ from pytech.fin.owned_asset import OwnedAsset
 from pytech.trading.trade import Trade
 from pytech.utils.enums import EventType, OrderType, Position, SignalType, \
     TradeAction
-
+import pytech.utils.dt_utils as dt_utils
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +23,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
         * update_signal(self, event)
         * update_fill(self, event)
 
-    Child portfolio classes must also call super().__init__() in order to set the class up correctly.
+    Child portfolio classes must also call super().__init__() in order to set 
+    the class up correctly.
     """
 
     def __init__(self, data_handler, events, start_date, blotter,
@@ -32,7 +33,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.bars = data_handler
         self.events = events
         self.blotter = blotter
-        self.start_date = start_date
+        self.start_date = dt_utils.parse_date(start_date)
         self.initial_capital = initial_capital
         self.cash = initial_capital
         self.ticker_list = self.bars.ticker_list
@@ -47,18 +48,25 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
     @abstractmethod
     def update_signal(self, event):
-        """Acts on a :class:`SignalEvent` to generate new orders based on the portfolio logic."""
-
+        """
+        Acts on a :class:`SignalEvent` to generate new orders based on the 
+        portfolio logic.
+        """
         raise NotImplementedError('Must implement update_signal()')
 
     @abstractmethod
     def update_fill(self, event):
-        """Updates the portfolio current positions and holdings based on a :class:`FillEvent`"""
-
+        """
+        Updates the portfolio current positions and holdings based on a 
+        :class:`FillEvent`.
+        """
         raise NotImplementedError('Must implement update_fill()')
 
     def construct_all_positions(self):
-        """Constructs the position list using the start date to determine when the index will begin"""
+        """
+        Constructs the position list using the start date to determine when 
+        the index will begin.
+        """
 
         d = self._get_temp_dict()
         d['datetime'] = self.start_date
@@ -77,13 +85,11 @@ class AbstractPortfolio(metaclass=ABCMeta):
         Construct a dict which holds the instantaneous value of the 
         portfolio across all symbols.
         """
-
         d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
         return d
 
     def create_equity_curve_df(self):
         """Create a df from all_holdings list of dicts."""
-
         curve = pd.DataFrame(self.all_holdings)
         curve.set_index('datetime', inplace=True)
         curve['returns'] = curve['total'].pct_change()
@@ -105,7 +111,6 @@ class AbstractPortfolio(metaclass=ABCMeta):
         :return: True if there is enough cash to make the trade or if qty is 
         negative indicating a sale.
         """
-
         if qty < 0:
             return True
 
@@ -118,7 +123,6 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
 class NaivePortfolio(AbstractPortfolio):
     """Here for testing and stuff."""
-
     def __init__(self, data_handler, events, start_date, blotter,
                  initial_capital=100000):
         super().__init__(data_handler, events, start_date, blotter,
@@ -169,11 +173,11 @@ class NaivePortfolio(AbstractPortfolio):
 
     def update_positions_from_fill(self, trade):
         """
-        Takes a :class:`Trade` and updates the position matrix to reflect new the position.
+        Takes a :class:`Trade` and updates the position matrix to reflect new 
+        the position.
         :param Trade trade:
         :return:
         """
-
         self.current_positions[trade.ticker] += trade.qty
 
     def update_holdings_from_fill(self, trade):
@@ -183,14 +187,12 @@ class NaivePortfolio(AbstractPortfolio):
         :param Trade trade:
         :return:
         """
-
         self.current_holdings[trade.ticker] += trade.trade_value()
         self.total_commission += trade.commission
         self.cash += trade.trade_value()
         self.total_value += trade.trade_value()
 
     def update_fill(self, event):
-
         if event.type is EventType.FILL:
             order = self.blotter[event.order_id]
             if self.check_liquidity(event.price, event.available_volume):
@@ -231,7 +233,6 @@ class NaivePortfolio(AbstractPortfolio):
             raise ValueError('Invalid signal. Cannot Create an order.')
 
     def update_signal(self, event):
-
         if event.type is EventType.SIGNAL:
             self.process_signal(event)
             self.blotter.check_order_triggers()
@@ -248,7 +249,6 @@ class NaivePortfolio(AbstractPortfolio):
         :param SignalEvent signal:
         :return:
         """
-
         if signal.signal_type is SignalType.EXIT:
             self.handle_exit_signal(signal)
         elif signal.signal_type is SignalType.CANCEL:

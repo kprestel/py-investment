@@ -10,7 +10,6 @@ import pytech.utils.pandas_utils as pd_utils
 
 
 class Strategy(metaclass=ABCMeta):
-
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
@@ -22,7 +21,6 @@ class Strategy(metaclass=ABCMeta):
 
 
 class BuyAndHold(Strategy):
-
     def __init__(self, data_handler, events):
         super().__init__()
 
@@ -37,8 +35,9 @@ class BuyAndHold(Strategy):
         self.bought = self._calculate_initial_bought()
 
     def _calculate_initial_bought(self):
-        """Adds keys to the bought dict for all symbols and sets them to false."""
-
+        """
+        Adds keys to the bought dict for all symbols and sets them to false.
+        """
         bought = {}
 
         for ticker in self.ticker_list:
@@ -59,8 +58,10 @@ class BuyAndHold(Strategy):
         if event.type is EventType.MARKET:
 
             for ticker in self.ticker_list:
-                self.logger.debug('Processing ticker: {ticker}'.format(ticker=ticker))
-                bars = self.bars.get_latest_bar_value(ticker, pd_utils.ADJ_CLOSE_COL)
+                self.logger.debug('Processing ticker: {ticker}'
+                                  .format(ticker=ticker))
+                bars = self.bars.get_latest_bar_value(ticker,
+                                                      pd_utils.ADJ_CLOSE_COL)
                 self.logger.debug('bars: {}'.format(bars))
 
                 if bars is not None:
@@ -68,7 +69,3 @@ class BuyAndHold(Strategy):
                         signal = SignalEvent(ticker, bars[0], 'LONG')
                         self.events.put(signal)
                         self.bought[ticker] = True
-
-
-
-

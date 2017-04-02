@@ -7,6 +7,7 @@ import queuelib.queue
 
 from pytech import TEST_DATA_DIR
 import pytech.trading.blotter as b
+from pytech.data.handler import YahooDataHandler
 
 from pytech.fin.asset import Fundamental, Stock
 
@@ -39,7 +40,8 @@ def get_test_csv_path(ticker):
 
 @pytest.fixture()
 def ticker_list():
-    return ['AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST', 'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL']
+    return ['AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST',
+            'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL']
 
 
 @pytest.fixture()
@@ -56,9 +58,22 @@ def blotter(events):
 def populated_blotter(blotter):
     """Populate the blot and return it."""
 
-    blotter.place_order('AAPL', 'BUY', 'LIMIT', 50, limit_price=100.10, order_id='one')
-    blotter.place_order('AAPL', 'BUY', 'LIMIT', 50, limit_price=98.10, order_id='two')
-    blotter.place_order('MSFT', 'SELL', 'LIMIT', 50, limit_price=93.10, order_id='three')
-    blotter.place_order('FB', 'SELL', 'LIMIT', 50, limit_price=105.10, order_id='four')
+    blotter.place_order('AAPL', 'BUY', 'LIMIT', 50, limit_price=100.10,
+                        order_id='one')
+    blotter.place_order('AAPL', 'BUY', 'LIMIT', 50, limit_price=98.10,
+                        order_id='two')
+    blotter.place_order('MSFT', 'SELL', 'LIMIT', 50, limit_price=93.10,
+                        order_id='three')
+    blotter.place_order('FB', 'SELL', 'LIMIT', 50, limit_price=105.10,
+                        order_id='four')
 
     return blotter
+
+
+@pytest.fixture()
+def yahoo_data_handler(events, ticker_list, start_date, end_date):
+    """Create a default :class:`YahooDataHandler`"""
+    bars = YahooDataHandler(events, ticker_list, start_date, end_date)
+    bars.update_bars()
+    return bars
+

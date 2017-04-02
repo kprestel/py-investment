@@ -28,12 +28,12 @@ class DataHandler(metaclass=ABCMeta):
     @abstractmethod
     def get_latest_bars(self, ticker, n=1):
         """
-        Returns the last **n** bars from the latest_symbol list, or fewer if less bars available.
+        Returns the last **n** bars from the latest_symbol list, 
+        or fewer if less bars available.
         :param ticker:
         :param int n: The number of bars.
         :return:
         """
-
         raise NotImplementedError('Must implement get_latest_bars()')
 
     @abstractmethod
@@ -45,7 +45,6 @@ class DataHandler(metaclass=ABCMeta):
         :return: The datetime of the last bar for the given asset
         :rtype: dt.datetime
         """
-
         raise NotImplementedError('Must implement get_latest_bar_dt()')
 
     @abstractmethod
@@ -58,7 +57,6 @@ class DataHandler(metaclass=ABCMeta):
         :param n:
         :return:
         """
-
         raise NotImplementedError('Must implement get_latest_bar_value()')
 
     @abstractmethod
@@ -67,7 +65,6 @@ class DataHandler(metaclass=ABCMeta):
         Pushes the latest bar to the latest symbol structure for all symbols 
         in the symbol list.
         """
-
         raise NotImplementedError('Must implement update_bars()')
 
 
@@ -91,7 +88,6 @@ class YahooDataHandler(DataHandler):
         Populate the ticker_data dict with a pandas OHLCV 
         df as the value and the ticker as the key.
         """
-
         comb_index = None
 
         for t in self.ticker_list:
@@ -120,7 +116,6 @@ class YahooDataHandler(DataHandler):
 
         :return: bar
         """
-
         for bar in self.ticker_data[ticker]:
             yield bar
 
@@ -132,7 +127,8 @@ class YahooDataHandler(DataHandler):
             self.logger.exception('{} is not available in the given data set.')
             raise
         else:
-            return bars_list[-1]
+            # bars_list is a tuple and index 1 is the Series we want.
+            return bars_list[-1][1]
 
     def get_latest_bars(self, ticker, n=1):
 
@@ -147,7 +143,6 @@ class YahooDataHandler(DataHandler):
             return bars_list[-n:]
 
     def get_latest_bar_dt(self, ticker):
-
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
@@ -156,10 +151,9 @@ class YahooDataHandler(DataHandler):
                     .format(ticker=ticker))
             raise
         else:
-            return bars_list[-1][1][pd_utils.DATE_COL]
+            return dt_utils.parse_date(bars_list[-1][1][pd_utils.DATE_COL])
 
     def get_latest_bar_value(self, ticker, val_type, n=1):
-
         try:
             bars_list = self.get_latest_bars(ticker, n)
         except KeyError:
@@ -171,7 +165,6 @@ class YahooDataHandler(DataHandler):
             return np.array([getattr(bar[1], val_type) for bar in bars_list])
 
     def update_bars(self):
-
         for ticker in self.ticker_list:
             try:
                 bar = next(self._get_new_bar(ticker))

@@ -43,9 +43,10 @@ class Blotter(object):
             self.commission_model = commission_model
         else:
             raise TypeError(
-                'commission_model must be a subclass of '
-                'AbstractCommissionModel. {} was provided'
-                .format(type(commission_model)))
+                    'commission_model must be a subclass of '
+                    'AbstractCommissionModel. {} was provided'
+                    .format(type(commission_model))
+            )
 
     @property
     def bars(self):
@@ -58,8 +59,9 @@ class Blotter(object):
             self._bars = data_handler
         else:
             raise TypeError(
-                'bars must be an instance of DataHandler. {} was provided'
-                .format(type(data_handler)))
+                    'bars must be an instance of DataHandler. {} was provided'
+                    .format(type(data_handler))
+            )
 
     @property
     def asset_finder(self):
@@ -95,7 +97,6 @@ class Blotter(object):
 
     def __delitem__(self, key):
         """Delete an order from the orders dict."""
-
         del self.orders[key]
 
     def __iter__(self):
@@ -106,6 +107,7 @@ class Blotter(object):
         This means you can iterate over a :class:``Blotter`` instance directly 
         and access all of the open orders it has.
         """
+
         def do_iter(orders_dict):
             for k, v in orders_dict.items():
                 if isinstance(v, collections.Mapping):
@@ -159,15 +161,14 @@ class Blotter(object):
 
         if ticker in self.orders:
             self.orders[ticker].update({
-                                           order.id: order
-                                       })
+                order.id: order
+            })
         else:
             self.orders[ticker] = {
                 order.id: order
             }
 
     def _find_order(self, order_id, ticker):
-
         if ticker is None:
             for asset_orders in self.orders:
                 if order_id in asset_orders:
@@ -221,9 +222,9 @@ class Blotter(object):
                                 .format(ticker=order.ticker, amt=order.filled))
         else:
             self.logger.info(
-                'Canceled order for ticker: {ticker} '
-                'successfully before it was executed.'
-                .format(ticker=order.ticker))
+                    'Canceled order for ticker: {ticker} '
+                    'successfully before it was executed.'
+                        .format(ticker=order.ticker))
         order.cancel(reason)
         order.last_updated = self.current_dt
 
@@ -245,9 +246,10 @@ class Blotter(object):
         self._find_order(order_id, ticker).reject(reason)
 
         self.logger.warning(
-            'Order id: {id} for ticker: {ticker} '
-            'was rejected because: {reason}'
-            .format(id=order_id, ticker=ticker, reason=reason or 'Unknown'))
+                'Order id: {id} for ticker: {ticker} '
+                'was rejected because: {reason}'
+                    .format(id=order_id, ticker=ticker,
+                            reason=reason or 'Unknown'))
 
     def check_order_triggers(self):
         """
@@ -265,10 +267,8 @@ class Blotter(object):
             # check_triggers returns a boolean indicating if it is triggered.
             if order.check_triggers(dt=dt, current_price=current_price):
                 self.events.put(
-                    TradeEvent(order_id, current_price, order.qty, dt))
-                # self.make_trade(order, current_price, dt, available_volume)
-
-                # self.purge_orders()
+                        TradeEvent(order_id, current_price, order.qty, dt)
+                )
 
     def make_trade(self, order, price_per_share, trade_date, volume):
         """
@@ -295,12 +295,11 @@ class Blotter(object):
         * BUY
         * SELL
         """
-
         commission_cost = self.commission_model.calculate(order,
                                                           price_per_share)
         available_volume = order.get_available_volume(volume)
-        avg_price_per_share = ((
-                               price_per_share * available_volume) + commission_cost) / available_volume
+        avg_price_per_share = ((price_per_share * available_volume)
+                               + commission_cost) / available_volume
 
         order.commission += commission_cost
 
