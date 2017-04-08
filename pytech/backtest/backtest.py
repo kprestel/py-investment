@@ -15,7 +15,7 @@ class Backtest(object):
     """
     Does backtest stuff...
 
-    update me.
+    update me. plz upd8 me.
     """
 
     def __init__(self, ticker_list, initial_capital, start_date, strategy,
