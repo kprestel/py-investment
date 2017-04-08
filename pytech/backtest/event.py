@@ -67,7 +67,6 @@ class ExitSignalEvent(SignalEvent):
     An :class:`OrderType` as well as a stop and/or limit price may be specified 
     otherwise a MarketOrder will be created.
     """
-
     SIGNAL_TYPE = SignalType.EXIT
 
     def __init__(self, ticker, dt, order_type=OrderType.MARKET,
@@ -150,6 +149,34 @@ class TradeSignalEvent(SignalEvent):
         self.stop_price = stop_price
         self.limit_price = limit_price
         self.target_price = target_price
+
+
+class LongSignalEvent(TradeSignalEvent):
+    """
+    Signal indicating a possible long trade opportunity.
+    
+    Short cut to creating a Long :class:`TradeEventSignal`
+    """
+    SIGNAL_TYPE = SignalType.LONG
+
+    def __init__(self, ticker, dt,  order_type, strength=None,
+                 stop_price=None, limit_price=None, target_price=None):
+        super().__init__(ticker, dt, Position.LONG, order_type, strength,
+                         stop_price, limit_price, target_price)
+
+
+class ShortSignalEvent(TradeSignalEvent):
+    """
+    Signal indicating a possible short trade opportunity.
+    
+    Short cut to creating a Short :class:`TradeEventSignal`
+    """
+    SIGNAL_TYPE = SignalType.SHORT
+
+    def __init__(self, ticker, dt, order_type, strength=None,
+                 stop_price=None, limit_price=None, target_price=None):
+        super().__init__(ticker, dt, Position.SHORT, order_type, strength,
+                         stop_price, limit_price, target_price)
 
 
 class TradeEvent(Event):

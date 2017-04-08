@@ -102,20 +102,25 @@ class Backtest(object):
                 except queue.Empty:
                     self.logger.info('Event queue is empty. '
                                      'Continuing to next day.')
-                    break
+                else:
+                    if event is not None:
+                        self._process_event(event)
 
-                if event is not None:
-                    self.logger.info('Processing {event_type}'.format(
-                        event_type=event.type))
-                    if event.type is EventType.MARKET:
-                        self.strategy.generate_signals(event)
-                        self.portfolio.update_timeindex(event)
-                    elif event.type is EventType.SIGNAL:
-                        self.signals += 1
-                        self.portfolio.update_signal(event)
-                    elif event.type is EventType.TRADE:
-                        self.orders += 1
-                        self.execution_handler.execute_order(event)
-                    elif event.type is EventType.FILL:
-                        self.fills += 1
-                        self.portfolio.update_fill(event)
+    def _process_event(self, event):
+        self.logger.info(
+                'Processing {event_type}'.format(event_type=event.type))
+
+        if event.type is EventType.MARKET:
+            self.strategy.generate_signals(event)
+            self.portfolio.update_timeindex(event)
+        elif event.type is EventType.SIGNAL:
+            self.signals += 1
+            self.portfolio.update_signal(event)
+        elif event.type is EventType.TRADE:
+            self.orders += 1
+            self.execution_handler.execute_order(event)
+        elif event.type is EventType.FILL:
+            self.fills += 1
+            self.portfolio.update_fill(event)
+        else:
+            return

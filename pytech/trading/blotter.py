@@ -235,6 +235,7 @@ class Blotter(object):
         :param TradeAction trade_action:
         :return: 
         """
+        # TODO: this... how to filter efficiently?
         for order in self.orders[ticker].values():
             if order_type is not None and order.order_type is not order_type:
                 continue
@@ -260,7 +261,7 @@ class Blotter(object):
             self.logger.info(
                     'Canceled order for ticker: {ticker} '
                     'successfully before it was executed.'
-                    .format(ticker=order.ticker))
+                        .format(ticker=order.ticker))
         order.cancel(reason)
         order.last_updated = self.current_dt
 

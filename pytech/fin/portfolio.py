@@ -8,12 +8,15 @@ import pandas as pd
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import (FillEvent, TradeEvent, SignalEvent,
                                    ExitSignalEvent, TradeSignalEvent,
-                                   CancelSignalEvent, HoldSignalEvent)
+                                   CancelSignalEvent, HoldSignalEvent,
+                                   ShortSignalEvent, LongSignalEvent)
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.trading.trade import Trade
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
                                 TradeAction)
 import pytech.utils.dt_utils as dt_utils
+from pytech.utils.exceptions import InvalidPositionError, \
+    InvalidEventTypeError, InvalidSignalTypeError
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +146,13 @@ class BasicPortfolio(AbstractPortfolio):
         Makes use of MarketEvent from the events queue.
 
         :param MarketEvent event:
-        :return:
+        :raises InvalidEventTypeError: When the event type passed in is not
+        a :class:`MarketEvent`
         """
+        if event.type is not EventType.MARKET:
+            raise InvalidEventTypeError(
+                    expected=EventType.MARKET, event_type=event.type)
+
         self.blotter.check_order_triggers()
 
         # get an element from the set
@@ -158,7 +166,6 @@ class BasicPortfolio(AbstractPortfolio):
             dp[ticker] = self.current_positions[ticker]
 
         # append current positions
-
         self.all_positions.append(dp)
 
         # update holdings
@@ -172,8 +179,8 @@ class BasicPortfolio(AbstractPortfolio):
             # approximate to real value.
             market_value = (
                 self.current_positions[ticker]
-                * self.bars.get_latest_bar_value(ticker,
-                                                 pd_utils.ADJ_CLOSE_COL))
+                * self.bars.get_latest_bar_value(
+                        ticker, pd_utils.ADJ_CLOSE_COL))
             dh[ticker] = market_value
             dh['total'] += market_value
 
@@ -211,14 +218,13 @@ class BasicPortfolio(AbstractPortfolio):
         if event.type is EventType.FILL:
             order = self.blotter[event.order_id]
             if self.check_liquidity(event.price, event.available_volume):
-                trade = self.blotter.make_trade(order, event.price, event.dt,
-                                                event.available_volume)
+                trade = self.blotter.make_trade(
+                        order, event.price, event.dt, event.available_volume)
                 self._update_from_trade(trade)
             else:
                 self.logger.warning(
                         'Insufficient funds available to execute trade for '
-                        'ticker: {} '
-                            .format(order.ticker))
+                        'ticker: {} '.format(order.ticker))
 
     def generate_naive_order(self, signal):
         """
@@ -227,8 +233,7 @@ class BasicPortfolio(AbstractPortfolio):
         :param SignalEvent signal:
         :return:
         """
-
-        # TODO: update this.
+        # TODO: update this or delete it. probably delete it.
         mkt_qty = 100
         cur_qty = self.current_positions[signal.ticker]
 
@@ -253,9 +258,9 @@ class BasicPortfolio(AbstractPortfolio):
             self.blotter.check_order_triggers()
             # self.events.put(self.generate_naive_order(event))
         else:
-            raise TypeError(
-                    'Invalid EventType. Must be EventType.SIGNAL. '
-                    '{} was provided'.format(type(event)))
+            raise InvalidEventTypeError(
+                    expected=type(EventType.SIGNAL),
+                    event_type=type(event.type))
 
     def process_signal(self, signal):
         """
@@ -272,10 +277,12 @@ class BasicPortfolio(AbstractPortfolio):
             self._handle_hold_signal(signal)
         elif signal.signal_type is SignalType.TRADE:
             self._handle_trade_signal(signal)
+        elif signal.signal_type is SignalType.LONG:
+            self._handle_long_signal(signal)
+        elif signal.signal_type is SignalType.SHORT:
+            self._handle_short_signal(signal)
         else:
-            raise TypeError(
-                    'Invalid EventType. Must be EventType.SIGNAL. '
-                    '{} was provided'.format(type(signal.signal_type)))
+            raise InvalidSignalTypeError(signal_type=type(signal.signal_type))
 
     def _handle_trade_signal(self, signal):
         """
@@ -284,6 +291,12 @@ class BasicPortfolio(AbstractPortfolio):
         :param TradeSignalEvent or SignalEvent signal: The trade signal.
         :return: 
         """
+        if signal.position is SignalType.LONG:
+            self._handle_long_signal(signal)
+        elif signal.position is SignalType.SHORT:
+            self._handle_short_signal(signal)
+        else:
+            raise InvalidPositionError(position=signal.position)
 
     def _handle_exit_signal(self, signal):
         """
@@ -312,10 +325,9 @@ class BasicPortfolio(AbstractPortfolio):
 
         :param CancelSignalEvent or SignalEvent signal:
         """
-        self.blotter.cancel_all_orders_for_asset(signal.ticker,
-                                                 upper_price=signal.upper_price,
-                                                 lower_price=signal.lower_price,
-                                                 order_type=signal.order_type)
+        self.blotter.cancel_all_orders_for_asset(
+                signal.ticker, upper_price=signal.upper_price,
+                lower_price=signal.lower_price, order_type=signal.order_type)
 
     def _handle_hold_signal(self, signal):
         """
@@ -325,6 +337,23 @@ class BasicPortfolio(AbstractPortfolio):
         :return:
         """
         self.blotter.hold_all_orders_for_asset(signal.ticker)
+
+    def _handle_long_signal(self, signal):
+        """
+        Handle a long signal by placing an order to **BUY**.
+        
+        :param LongSignalEvent or SignalEvent signal: 
+        :return: 
+        """
+
+
+    def _handle_short_signal(self, signal):
+        """
+        Handle a short signal.
+        
+        :param ShortSignalEvent or SignalEvent signal: 
+        :return: 
+        """
 
 
 class Portfolio(object):

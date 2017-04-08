@@ -41,7 +41,7 @@ class AssetNotInUniverseError(PyInvestmentError):
     msg = 'Could not locate an ticker with the ticker: {ticker}.'
 
 
-class NotAnAssetError(PyInvestmentError):
+class NotAnAssetError(TypeError, PyInvestmentError):
     """
     Raised when a subclass of :class:``Asset`` is required 
     but another object is provided
@@ -50,7 +50,7 @@ class NotAnAssetError(PyInvestmentError):
            '{ticker} was provided.')
 
 
-class NotAPortfolioError(PyInvestmentError):
+class NotAPortfolioError(TypeError, PyInvestmentError):
     """
     Raised when a :class:``Portfolio`` is required 
     but another object is provided
@@ -59,33 +59,33 @@ class NotAPortfolioError(PyInvestmentError):
            '{portfolio} was provided.')
 
 
-class InvalidPositionError(PyInvestmentError):
+class InvalidPositionError(ValueError, PyInvestmentError):
     """Raised when a position is not either long or short"""
-    msg = 'action must either be "BUY" or "SELL". {position} was provided.'
+    msg = 'action must either be "LONG" or "SHORT". {position} was provided.'
 
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
 
 
-class InvalidActionError(PyInvestmentError):
+class InvalidActionError(ValueError, PyInvestmentError):
     """Raised when a :class:``Trade`` action is not either buy or sell"""
     msg = 'action must either be "BUY" or "SELL". {action} was provided'
 
 
-class InvalidOrderStatusError(PyInvestmentError):
+class InvalidOrderStatusError(ValueError, PyInvestmentError):
     """Raised when an order status is not valid"""
     msg = ('order_status must either be "OPEN", "FILLED", "CANCELLED", '
            '"REJECTED", or "HELD". {order_status} was provided.')
 
 
-class InvalidOrderTypeError(PyInvestmentError):
+class InvalidOrderTypeError(ValueError, PyInvestmentError):
     """Raised when an order type is not valid"""
 
     msg = ('order_type must either be "STOP", "LIMIT", "STOP_LIMIT", '
            'or "MARKET". {order_type} was provided.')
 
 
-class InvalidOrderTypeParameters(PyInvestmentError):
+class InvalidOrderTypeParameters(ValueError, PyInvestmentError):
     """
     Raised when an :class:``pytech.order.Order`` 
     constructor args are not logically correct.
@@ -93,7 +93,7 @@ class InvalidOrderTypeParameters(PyInvestmentError):
     msg = ''
 
 
-class InvalidOrderSubTypeError(PyInvestmentError):
+class InvalidOrderSubTypeError(ValueError, PyInvestmentError):
     """Raised when an order subtype is not valid"""
     msg = ('order_subtype must either be "ALL_OR_NONE", "GOOD_TIL_CANCELED", '
            'or "DAY". {order_subtype} was provided.')
@@ -107,7 +107,7 @@ class UntriggeredTradeError(PyInvestmentError):
     msg = 'The order being traded has not been triggered yet. order: {order}'
 
 
-class NotABlotterError(PyInvestmentError):
+class NotABlotterError(TypeError, PyInvestmentError):
     """
     Raised when a :py:class:`pytech.blot.Blotter` is expected but a different 
     type is provided
@@ -115,5 +115,16 @@ class NotABlotterError(PyInvestmentError):
     msg = 'blot must be an instance of Blotter. {blot} was provided.'
 
 
-class NotAFinderError(PyInvestmentError):
+class NotAFinderError(TypeError, PyInvestmentError):
     msg = 'finder must be an instance of Finder. {finder} was provided.'
+
+
+class InvalidEventTypeError(TypeError, PyInvestmentError):
+    msg = ('Invalid EventType. Must be {expected}. '
+           '{event_type} was provided.')
+
+
+class InvalidSignalTypeError(TypeError, PyInvestmentError):
+    """Raised when a signal type is not right."""
+    msg = ('Invalid SignalType. Must be in the SignalType enum. '
+           '{signal_type} was provided.')
