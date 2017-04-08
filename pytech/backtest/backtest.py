@@ -102,6 +102,7 @@ class Backtest(object):
                 except queue.Empty:
                     self.logger.info('Event queue is empty. '
                                      'Continuing to next day.')
+                    break
                 else:
                     if event is not None:
                         self._process_event(event)

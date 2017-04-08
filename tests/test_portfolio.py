@@ -35,8 +35,6 @@ class TestBasicPortfolio(object):
         :param BasicPortfolio basic_portfolio: 
         """
         basic_portfolio.update_timeindex(MarketEvent())
-        print(basic_portfolio.current_positions)
-        print(basic_portfolio.current_holdings)
-        print(basic_portfolio.all_holdings)
-        print(basic_portfolio.all_positions)
-
+        assert basic_portfolio.owned_assets == {}
+        assert basic_portfolio.all_holdings_mv[0]['AAPL'] == 0.0
+        print(basic_portfolio.all_holdings_mv[0]['AAPL'])

@@ -1,4 +1,5 @@
 from collections import namedtuple
+import numbers
 from datetime import datetime
 
 import pandas as pd
@@ -17,10 +18,8 @@ class OwnedAsset(object):
     in a user's :class:`~pytech.portfolio.Portfolio`.
     """
 
-    def __init__(
-            self, ticker, shares_owned, position,
-            average_share_price=None, purchase_date=None):
-
+    def __init__(self, ticker, shares_owned, position,
+                 average_share_price=None, purchase_date=None):
         self._ticker = ticker
         self.position = Position.check_if_valid(position)
 
@@ -44,7 +43,10 @@ class OwnedAsset(object):
 
     @shares_owned.setter
     def shares_owned(self, shares_owned):
-        self._shares_owned = int(shares_owned)
+        if isinstance(shares_owned, numbers.Integral):
+            self._shares_owned = shares_owned
+        else:
+            raise TypeError('shares_owned MUST be an integer.')
 
     @property
     def ticker(self):
@@ -65,14 +67,17 @@ class OwnedAsset(object):
         """
         Create an owned_asset from a :class:``pytech.trading.trade.Trade``.  
         This the preferred method to create new ``OwnedStock`` objects, 
-        and :func:``make_trade`` is the preferred way to update an instance of ``OwnedStock``.
+        and :func:``make_trade`` is the preferred way to update an instance of 
+        :class:`OwnedStock`.
 
-        :param Trade trade: The trade that will create the new instance of ``OwnedStock``.
-        :param Position asset_position: The position that the asset is, either **LONG** or **SHORT**.
-        :return: The newly created instance of ``OwnedStock`` to be added to the owner's :class:``pytech.fin.portfolio``
+        :param Trade trade: The trade that will create the new instance of 
+        :class:`OwnedStock`.
+        :param Position asset_position: The position that the asset is, 
+        either **LONG** or **SHORT**.
+        :return: The newly created instance of ``OwnedStock`` to be added 
+        to the owner's :class:``pytech.fin.portfolio``
         :rtype: OwnedAsset
         """
-
         owned_asset_dict = {
             'ticker': trade.ticker,
             'position': asset_position,
@@ -91,13 +96,12 @@ class OwnedAsset(object):
         :param price_per_share: float, the average price per share in the trade
         :return: self
         """
-
         self.shares_owned += qty
         self._set_position_cost_and_value(qty=qty, price=price_per_share)
 
         try:
-            self.average_share_price_paid = self.total_position_value / float(
-                    self.shares_owned)
+            self.average_share_price_paid = (
+                self.total_position_value / self.shares_owned)
         except ZeroDivisionError:
             return None
         else:
@@ -113,7 +117,8 @@ class OwnedAsset(object):
         :type price: long
         """
         if self.position is Position.SHORT:
-            # short positions should have a negative number of shares owned but a positive total cost
+            # short positions should have a negative number of shares owned
+            # but a positive total cost
             self.total_position_cost = (price * qty) * -1
             # but a negative total value
             self.total_position_value = price * qty
@@ -123,13 +128,13 @@ class OwnedAsset(object):
 
     def update_total_position_value(self, latest_price, price_date):
         """
-        Set the ``latest_price`` and ``latest_price_time`` and update the total position's value
+        Set the ``latest_price`` and ``latest_price_time`` and 
+        update the total position's value
 
         :param latest_price:
         :param price_date:
         :return:
         """
-
         self.latest_price = latest_price
         self.latest_price_time = dt_utils.parse_date(price_date)
         if self.position is Position.SHORT:
@@ -139,8 +144,10 @@ class OwnedAsset(object):
             self.total_position_value = self.latest_price * self.shares_owned
 
     def return_on_investment(self):
-        """Get the current return on investment for a given :class:``OwnedAsset``"""
-
+        """
+        Get the current return on investment for a given 
+        :class:`OwnedAsset`
+        """
         self.update_total_position_value()
         return (self.total_position_value + self.total_position_cost) / (
             self.total_position_cost * -1)

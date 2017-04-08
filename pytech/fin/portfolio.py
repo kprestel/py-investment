@@ -1,22 +1,20 @@
 import logging
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
-from math import floor
 
 import pandas as pd
 
-import pytech.utils.pandas_utils as pd_utils
-from pytech.backtest.event import (FillEvent, TradeEvent, SignalEvent,
-                                   ExitSignalEvent, TradeSignalEvent,
-                                   CancelSignalEvent, HoldSignalEvent,
-                                   ShortSignalEvent, LongSignalEvent)
+import pytech.utils.dt_utils as dt_utils
+from pytech.backtest.event import CancelSignalEvent, ExitSignalEvent, \
+    HoldSignalEvent, LongSignalEvent, ShortSignalEvent, SignalEvent, \
+    TradeEvent, TradeSignalEvent
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.trading.trade import Trade
+from pytech.utils import pandas_utils as pd_utils
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
                                 TradeAction)
-import pytech.utils.dt_utils as dt_utils
-from pytech.utils.exceptions import InvalidPositionError, \
-    InvalidEventTypeError, InvalidSignalTypeError
+from pytech.utils.exceptions import InvalidEventTypeError, \
+    InvalidPositionError, InvalidSignalTypeError
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +41,11 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.initial_capital = initial_capital
         self.cash = initial_capital
         self.ticker_list = self.bars.ticker_list
-        self.current_positions = self._get_temp_dict()
+        self.owned_assets = {}
         # holdings = mv
-        self.all_holdings = self._construct_all_holdings()
+        self.all_holdings_mv = self._construct_all_holdings()
         # positions = qty
-        self.all_positions = self._construct_all_positions()
-        self.current_holdings = self._construct_current_holdings()
+        self.all_positions_qty = self._construct_all_positions()
         self.total_commission = 0.0
         self.total_value = 0.0
 
@@ -75,7 +72,6 @@ class AbstractPortfolio(metaclass=ABCMeta):
         
         This should only be called once.
         """
-
         d = self._get_temp_dict()
         d['datetime'] = self.start_date
         return [d]
@@ -99,8 +95,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
         return d
 
     def create_equity_curve_df(self):
-        """Create a df from all_holdings list of dicts."""
-        curve = pd.DataFrame(self.all_holdings)
+        """Create a df from all_holdings_mv list of dicts."""
+        curve = pd.DataFrame(self.all_holdings_mv)
         curve.set_index('datetime', inplace=True)
         curve['returns'] = curve['total'].pct_change()
         curve['equity_curve'] = (1.0 + curve['returns']).cumprod()
@@ -130,15 +126,6 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
         return post_trade_cash > 0
 
-
-class BasicPortfolio(AbstractPortfolio):
-    """Here for testing and stuff."""
-
-    def __init__(self, data_handler, events, start_date, blotter,
-                 initial_capital=100000):
-        super().__init__(
-                data_handler, events, start_date, blotter, initial_capital)
-
     def update_timeindex(self, event):
         """
         Adds a new record to the positions matrix for all the current market 
@@ -163,10 +150,13 @@ class BasicPortfolio(AbstractPortfolio):
         dp['datetime'] = latest_dt
 
         for ticker in self.ticker_list:
-            dp[ticker] = self.current_positions[ticker]
+            try:
+                dp[ticker] = self.owned_assets[ticker].shares_owned
+            except KeyError:
+                dp[ticker] = 0
 
         # append current positions
-        self.all_positions.append(dp)
+        self.all_positions_qty.append(dp)
 
         # update holdings
         dh = self._get_temp_dict()
@@ -176,15 +166,29 @@ class BasicPortfolio(AbstractPortfolio):
         dh['total'] = self.cash
 
         for ticker in self.ticker_list:
+            try:
+                shares_owned = self.owned_assets[ticker].shares_owned
+            except KeyError:
+                shares_owned = 0
+
+            adj_close = self.bars.get_latest_bar_value(
+                    ticker, pd_utils.ADJ_CLOSE_COL)
+
             # approximate to real value.
-            market_value = (
-                self.current_positions[ticker]
-                * self.bars.get_latest_bar_value(
-                        ticker, pd_utils.ADJ_CLOSE_COL))
+            market_value = (shares_owned * adj_close)
             dh[ticker] = market_value
             dh['total'] += market_value
 
-        self.all_holdings.append(dh)
+        self.all_holdings_mv.append(dh)
+
+
+class BasicPortfolio(AbstractPortfolio):
+    """Here for testing and stuff."""
+
+    def __init__(self, data_handler, events, start_date, blotter,
+                 initial_capital=100000):
+        super().__init__(
+                data_handler, events, start_date, blotter, initial_capital)
 
     def _update_positions_from_trade(self, trade):
         """
@@ -193,7 +197,8 @@ class BasicPortfolio(AbstractPortfolio):
         :param Trade trade:
         :return:
         """
-        self.current_positions[trade.ticker] += trade.qty
+        # todo update this.
+        self.owned_assets[trade.ticker] += trade.qty
 
     def _update_holdings_from_trade(self, trade):
         """
@@ -202,12 +207,13 @@ class BasicPortfolio(AbstractPortfolio):
         :param Trade trade:
         :return:
         """
-        self.current_holdings[trade.ticker] += trade.trade_value()
-        self.current_holdings['commission'] += trade.commission
+        # todo fix this shit to use owned assets.
+        self.owned_assets[trade.ticker] += trade.trade_value()
+        self.owned_assets['commission'] += trade.commission
         self.total_commission += trade.commission
-        self.current_holdings['cash'] += trade.trade_cost()
+        self.owned_assets['cash'] += trade.trade_cost()
         self.cash += trade.trade_cost()
-        self.current_holdings['total'] += trade.trade_cost()
+        self.owned_assets['total'] += trade.trade_cost()
         self.total_value += trade.trade_cost()
 
     def _update_from_trade(self, trade):
@@ -235,7 +241,7 @@ class BasicPortfolio(AbstractPortfolio):
         """
         # TODO: update this or delete it. probably delete it.
         mkt_qty = 100
-        cur_qty = self.current_positions[signal.ticker]
+        cur_qty = self.owned_assets[signal.ticker]
 
         if signal.signal_type is SignalType.LONG and cur_qty == 0:
             return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty,
@@ -305,7 +311,7 @@ class BasicPortfolio(AbstractPortfolio):
         :param ExitSignalEvent or SignalEvent signal:
         :return:
         """
-        qty = self.current_positions[signal.ticker]
+        qty = self.owned_assets[signal.ticker].shares_owned
 
         if qty > 0:
             action = TradeAction.SELL
@@ -345,7 +351,6 @@ class BasicPortfolio(AbstractPortfolio):
         :param LongSignalEvent or SignalEvent signal: 
         :return: 
         """
-
 
     def _handle_short_signal(self, signal):
         """
@@ -410,8 +415,10 @@ class Portfolio(object):
         self.owned_assets[key] = value
 
     def __iter__(self):
-        """Iterate over all the :class:`~.owned_asset.OwnedAsset`s in the portfolio."""
-
+        """
+        Iterate over all the :class:`~.owned_asset.OwnedAsset`s 
+        in the portfolio.
+        """
         yield self.owned_assets.items()
 
     def check_liquidity(self, avg_price_per_share, qty):
@@ -423,7 +430,6 @@ class Portfolio(object):
         :param int qty: The amount of shares to be traded.
         :return: True if there is enough cash to make the trade or if qty is negative indicating a sale.
         """
-
         if qty < 0:
             return True
 
@@ -441,7 +447,6 @@ class Portfolio(object):
         :param Trade trade: The trade that was executed.
         :return:
         """
-
         self.cash += trade.trade_cost()
 
         if trade.ticker in self.owned_assets:

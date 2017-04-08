@@ -9,7 +9,9 @@ class TestBacktest(object):
 
         initial_capital = 100000
         start_date = '2016-03-10'
-        backtest = Backtest(ticker_list=ticker_list, initial_capital=initial_capital, start_date=start_date,
+        backtest = Backtest(ticker_list=ticker_list,
+                            initial_capital=initial_capital,
+                            start_date=start_date,
                             strategy=BuyAndHold)
 
         assert isinstance(backtest, Backtest)
