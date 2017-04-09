@@ -7,11 +7,14 @@ import pandas as pd
 import pandas_market_calendars as mcal
 from pandas.tseries.offsets import DateOffset
 
+import pytech
 import pytech.utils.common_utils as utils
 import pytech.utils.dt_utils as dt_utils
 from pytech.fin.asset import Asset
-from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, \
-    TradeAction
+from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
+                                TradeAction)
+from pytech.backtest.event import (SignalEvent, LongSignalEvent,
+                                   ShortSignalEvent)
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +25,8 @@ class Order(object):
     LOGGER_NAME = 'order'
 
     def __init__(self, ticker, action, order_type, order_subtype=None,
-                 stop=None, limit=None, qty=0,
-                 filled=0, created=None, max_days_open=None, id=None):
+                 stop=None, limit=None, qty=0, filled=0,
+                 created=None, max_days_open=None, order_id=None):
         """
         Order constructor
 
@@ -36,21 +39,20 @@ class Order(object):
         :param Portfolio blot: The :py:class:`pytech.blot.Blotter` 
             that the ticker is associated with
         :param TradeAction action: Either BUY or SELL
-        :param OrderType order_type: The type of order to create.
-            Also can be a str.
+        :param OrderType or str order_type: The type of order to create.
         :param OrderSubType order_subtype: The order subtype to create
-            default: :py:class:`pytech.enums.OrderSubType.DAY`
+        default: :py:class:`pytech.enums.OrderSubType.DAY`
         :param float stop: The price at which to execute a stop order. 
-            If this is not a stop order then leave as None.
+        If this is not a stop order then leave as None.
         :param float limit: The price at which to execute a limit order. 
-            If this is not a limit order then leave as None.
+        If this is not a limit order then leave as None.
         :param int qty: The amount of shares the order is for.
-            This should be negative if it is a sell order and positive if it is 
-            a buy order.
+        This should be negative if it is a sell order and positive if it is 
+        a buy order.
         :param int filled: How many shares of the order have already been 
-            filled, if any.
+        filled, if any.
         :param float commission: The amount of commission that has already been 
-            charged on the order.
+        charged on the order.
         :param datetime created: The date and time that the order was created
         :param int max_days_open: The max calendar days that an order can stay 
             open without being cancelled.
@@ -58,7 +60,7 @@ class Order(object):
             closed at the end of the day regardless.
             (default: None if the order_type is Day)
             (default: 90 if the order_type is not Day)
-        :param str id: A uuid hex
+        :param str order_id: A uuid hex
         :raises NotAnAssetError: If the ticker passed in is not an ticker
         :raises InvalidActionError: If the action passed in is not a valid action
         :raises NotAPortfolioError: If the portfolio passed in is not a portfolio
@@ -70,7 +72,7 @@ class Order(object):
         See :py:func:`asymmetric_round_price_to_penny` for more information on how
             `stop_price` and `limit_price` will get rounded.
         """
-        self.id = id or utils.make_id()
+        self.id = order_id or utils.make_id()
         self.logger = logging.getLogger(
                 '{}_id_{}'.format(self.LOGGER_NAME, self.id))
 
@@ -120,6 +122,10 @@ class Order(object):
                     'stop_price and limit_price were both None and OrderType '
                     'was not MARKET. Changing order_type to a MARKET order')
             self.order_type = OrderType.MARKET
+
+    # @property
+    # def position(self):
+    #     if self.a
 
     @property
     def status(self):
@@ -296,11 +302,13 @@ class Order(object):
 
     def check_order_expiration(self, current_date=datetime.now()):
         """
-        Check if the order should be closed due to passage of time and update the order's status.
+        Check if the order should be closed due to passage of time and update 
+        the order's status.
 
-        :param datetime current_date: This is used to facilitate backtesting, so that the current date can be mocked in order to
-            accurately trigger/cancel orders in the past.
-            (default: datetime.now())
+        :param datetime current_date: This is used to facilitate backtesting, 
+        so that the current date can be mocked in order to accurately 
+        trigger/cancel orders in the past.
+        (default: datetime.now())
         """
         trading_cal = mcal.get_calendar(self.portfolio.trading_cal)
         schedule = trading_cal.schedule(start_date=self.portfolio.start_date,
@@ -318,7 +326,8 @@ class Order(object):
             expr_date = self.created + DateOffset(days=self.max_days_open)
             # check if the expiration date is today.
             if current_date.date() == expr_date.date():
-                # if the expiration date is today then check if the market has closed.
+                # if the expiration date is today then
+                # check if the market has closed.
                 if not trading_cal.open_at_time(schedule,
                                                 pd.Timestamp(current_date)):
                     reason = ('Max days of {} had passed without the '
@@ -343,6 +352,20 @@ class Order(object):
         :rtype: int
         """
         return int(min(available_volume, abs(self.open_amount)))
+
+    @classmethod
+    def from_signal_event(cls, signal, action):
+        """
+        Create an order from a :class:`pytech.backtest.event.SignalEvent`. 
+        
+        :param SignalEvent or LongSignalEvent or ShortSignalEvent signal:
+        The signal event that triggered the order to be created.
+        :param TradeAction action: The TradeAction that the order is for. 
+        :return: A new order
+        :rtype: Order
+        """
+        return cls(signal.ticker, action, signal.order_type,
+                   stop=signal.stop_price, limit=signal.limit_price)
 
 
 def asymmetric_round_price_to_penny(price, prefer_round_down,

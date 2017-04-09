@@ -16,6 +16,7 @@ class TestDataHandler(object):
             DataHandler()
 
 
+# noinspection PyTypeChecker
 class TestYahooDataHandler(object):
     """Test the :class:`YahooDataHandler`"""
 
@@ -23,12 +24,10 @@ class TestYahooDataHandler(object):
         """Test the constructor"""
         handler = YahooDataHandler(events, ticker_list, start_date, end_date)
         assert handler is not None
+        handler.update_bars()
 
         for t in ticker_list:
-            gen_df = handler.ticker_data[t]
-            df = handler._get_new_bar('AAPL')
-            df = next(df)[1]
-            # df = next(gen_df)[1]
+            df = handler.latest_ticker_data[t][0]
             assert isinstance(df, pd.Series)
 
     def test_get_latest_bar_value(self, yahoo_data_handler):
@@ -42,9 +41,8 @@ class TestYahooDataHandler(object):
         """
         assert yahoo_data_handler is not None
         # yahoo_data_handler.update_bars()
-        aapl_adj_close = (yahoo_data_handler
-                          .get_latest_bar_value('AAPL',
-                                                pd_utils.ADJ_CLOSE_COL))
+        aapl_adj_close = (yahoo_data_handler.get_latest_bar_value(
+                'AAPL', pd_utils.ADJ_CLOSE_COL))
         aapl_adj_close_expected = 99.07551600000001
         assert aapl_adj_close == approx(aapl_adj_close_expected)
         aapl_open = (yahoo_data_handler
@@ -114,6 +112,3 @@ class TestYahooDataHandler(object):
         bar = yahoo_data_handler.get_latest_bar('AAPL')
         dt = bar[pd_utils.DATE_COL]
         assert dt == '2016-03-11'
-
-
-

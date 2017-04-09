@@ -163,7 +163,7 @@ class Blotter(object):
                 limit=limit_price,
                 qty=qty,
                 created=date_placed,
-                id=order_id,
+                order_id=order_id,
                 max_days_open=max_days_open
         )
 
@@ -248,20 +248,21 @@ class Blotter(object):
         message.
         """
         if order.filled > 0:
-            self.logger.warning('Order for ticker: {ticker} has been '
-                                'partially filled. {amt} shares had already '
-                                'been purchased.'
-                                .format(ticker=order.ticker, amt=order.filled))
+            self.logger.warning(
+                    'Order for ticker: {ticker} has been '
+                    'partially filled. {amt} shares had already '
+                    'been purchased.'
+                    .format(ticker=order.ticker, amt=order.filled))
         elif order.filled < 0:
-            self.logger.warning('Order for ticker: {ticker} '
-                                'has been partially filled.'
-                                '{amt} shares had already been sold.'
-                                .format(ticker=order.ticker, amt=order.filled))
+            self.logger.warning(
+                    'Order for ticker: {ticker} has been partially filled. '
+                    '{amt} shares had already been sold.'
+                    .format(ticker=order.ticker, amt=order.filled))
         else:
             self.logger.info(
                     'Canceled order for ticker: {ticker} '
                     'successfully before it was executed.'
-                        .format(ticker=order.ticker))
+                    .format(ticker=order.ticker))
         order.cancel(reason)
         order.last_updated = self.current_dt
 
@@ -302,8 +303,8 @@ class Blotter(object):
         self.logger.warning(
                 'Order id: {id} for ticker: {ticker} '
                 'was rejected because: {reason}'
-                    .format(id=order_id, ticker=ticker,
-                            reason=reason or 'Unknown'))
+                .format(id=order_id, ticker=ticker,
+                        reason=reason or 'Unknown'))
 
     def check_order_triggers(self):
         """

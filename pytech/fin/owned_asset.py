@@ -19,8 +19,8 @@ class OwnedAsset(object):
     """
 
     def __init__(self, ticker, shares_owned, position,
-                 average_share_price=None, purchase_date=None):
-        self._ticker = ticker
+                 average_share_price, purchase_date=None):
+        self.ticker = ticker
         self.position = Position.check_if_valid(position)
 
         if purchase_date is None:
@@ -28,14 +28,14 @@ class OwnedAsset(object):
         else:
             self.purchase_date = dt_utils.parse_date(purchase_date)
 
-        if average_share_price:
-            self.average_share_price_paid = average_share_price
-            self.latest_price = average_share_price
-            self.latest_price_time = self.purchase_date.time()
+        self.average_share_price_paid = average_share_price
+        self.latest_price = average_share_price
+        self.latest_price_time = self.purchase_date.time()
+        self.total_position_value = 0
+        self.total_position_cost = 0
 
-        self._shares_owned = shares_owned
-        self._set_position_cost_and_value(qty=shares_owned,
-                                          price=self.average_share_price_paid)
+        self.shares_owned = shares_owned
+        self._set_position_cost_and_value(average_share_price)
 
     @property
     def shares_owned(self):
@@ -97,7 +97,7 @@ class OwnedAsset(object):
         :return: self
         """
         self.shares_owned += qty
-        self._set_position_cost_and_value(qty=qty, price=price_per_share)
+        self._set_position_cost_and_value(price_per_share)
 
         try:
             self.average_share_price_paid = (
@@ -107,7 +107,7 @@ class OwnedAsset(object):
         else:
             return self
 
-    def _set_position_cost_and_value(self, qty, price):
+    def _set_position_cost_and_value(self, price):
         """
         Calculate a position's cost and value
 
@@ -119,27 +119,29 @@ class OwnedAsset(object):
         if self.position is Position.SHORT:
             # short positions should have a negative number of shares owned
             # but a positive total cost
-            self.total_position_cost = (price * qty) * -1
+            self.total_position_cost += (price * self.shares_owned) * -1
             # but a negative total value
-            self.total_position_value = price * qty
+            self.total_position_value += price * self.shares_owned
         else:
-            self.total_position_cost = price * qty
-            self.total_position_value = (price * qty) * -1
+            self.total_position_cost += price * self.shares_owned
+            self.total_position_value += (price * self.shares_owned) * -1
 
     def update_total_position_value(self, latest_price, price_date):
         """
         Set the ``latest_price`` and ``latest_price_time`` and 
-        update the total position's value
+        update the total position's value to reflect the latest 
+        market value price.
 
-        :param latest_price:
-        :param price_date:
+        :param float latest_price:
+        :param datetime or str price_date:
         :return:
         """
         self.latest_price = latest_price
         self.latest_price_time = dt_utils.parse_date(price_date)
+
         if self.position is Position.SHORT:
             self.total_position_value = (
-                                            self.latest_price * self.shares_owned) * -1
+                (self.latest_price * self.shares_owned) * -1)
         else:
             self.total_position_value = self.latest_price * self.shares_owned
 

@@ -5,10 +5,12 @@ from datetime import datetime
 import pandas as pd
 
 import pytech.utils.dt_utils as dt_utils
-from pytech.backtest.event import CancelSignalEvent, ExitSignalEvent, \
-    HoldSignalEvent, LongSignalEvent, ShortSignalEvent, SignalEvent, \
-    TradeEvent, TradeSignalEvent
+from pytech.backtest.event import (CancelSignalEvent, ExitSignalEvent,
+                                   HoldSignalEvent, LongSignalEvent,
+                                   ShortSignalEvent, SignalEvent,
+                                   TradeEvent, TradeSignalEvent)
 from pytech.fin.owned_asset import OwnedAsset
+from pytech.trading.order import Order
 from pytech.trading.trade import Trade
 from pytech.utils import pandas_utils as pd_utils
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
@@ -47,7 +49,27 @@ class AbstractPortfolio(metaclass=ABCMeta):
         # positions = qty
         self.all_positions_qty = self._construct_all_positions()
         self.total_commission = 0.0
-        self.total_value = 0.0
+
+    @property
+    def total_value(self):
+        """
+        A read only property to make getting the current total market value
+        easier. 
+        **This includes cash.**
+        """
+        return self.all_holdings_mv[-1]['total']
+
+    @property
+    def total_asset_mv(self):
+        """
+        A read only property to make getting the total market value of the 
+        owned assets easier.
+        :return: The total market value of the owned assets in the portfolio.
+        """
+        mv = 0.0
+        for asset in self.owned_assets.values():
+            mv += asset.total_position_value
+        return mv
 
     @abstractmethod
     def update_signal(self, event):
@@ -126,6 +148,22 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
         return post_trade_cash > 0
 
+    def get_owned_asset_mv(self, ticker):
+        """
+        Return the current market value for an :class:`OwnedAsset`
+        
+        :param str ticker: The ticker of the owned asset.
+        :return: The current market value for the ticker. 
+        :raises: KeyError
+        """
+        try:
+            return self.owned_assets[ticker].total_position_value
+        except KeyError:
+            self.logger.exception(
+                    'Ticker: {ticker} is not currently owned.'
+                    .format(ticker=ticker))
+            raise
+
     def update_timeindex(self, event):
         """
         Adds a new record to the positions matrix for all the current market 
@@ -167,15 +205,20 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
         for ticker in self.ticker_list:
             try:
-                shares_owned = self.owned_assets[ticker].shares_owned
+                owned_asset = self.owned_assets[ticker]
+                shares_owned = owned_asset.shares_owned
             except KeyError:
-                shares_owned = 0
-
-            adj_close = self.bars.get_latest_bar_value(
-                    ticker, pd_utils.ADJ_CLOSE_COL)
+                market_value = 0
+                self.logger.info(
+                        '{ticker} is not currently owned, market value will'
+                        'be set to 0.'.format(ticker=ticker))
+            else:
+                adj_close = self.bars.get_latest_bar_value(
+                        ticker, pd_utils.ADJ_CLOSE_COL)
+                market_value = (shares_owned * adj_close)
+                owned_asset.update_total_position_value(adj_close, latest_dt)
 
             # approximate to real value.
-            market_value = (shares_owned * adj_close)
             dh[ticker] = market_value
             dh['total'] += market_value
 
@@ -187,38 +230,41 @@ class BasicPortfolio(AbstractPortfolio):
 
     def __init__(self, data_handler, events, start_date, blotter,
                  initial_capital=100000):
-        super().__init__(
-                data_handler, events, start_date, blotter, initial_capital)
-
-    def _update_positions_from_trade(self, trade):
-        """
-        Takes a :class:`Trade` and updates the position matrix to reflect new 
-        the position.
-        :param Trade trade:
-        :return:
-        """
-        # todo update this.
-        self.owned_assets[trade.ticker] += trade.qty
-
-    def _update_holdings_from_trade(self, trade):
-        """
-        Update the holdings matrix to reflect the holdings value.
-
-        :param Trade trade:
-        :return:
-        """
-        # todo fix this shit to use owned assets.
-        self.owned_assets[trade.ticker] += trade.trade_value()
-        self.owned_assets['commission'] += trade.commission
-        self.total_commission += trade.commission
-        self.owned_assets['cash'] += trade.trade_cost()
-        self.cash += trade.trade_cost()
-        self.owned_assets['total'] += trade.trade_cost()
-        self.total_value += trade.trade_cost()
+        super().__init__(data_handler, events, start_date, blotter,
+                         initial_capital)
 
     def _update_from_trade(self, trade):
-        self._update_positions_from_trade(trade)
-        self._update_holdings_from_trade(trade)
+        self.cash += trade.trade_cost()
+        self.total_commission += trade.commission
+
+        if trade.ticker in self.owned_assets:
+            self._update_existing_owned_asset_from_trade(trade)
+        else:
+            self._create_new_owned_asset_from_trade(trade)
+
+    def _update_existing_owned_asset_from_trade(self, trade):
+        """
+        Update an existing owned asset or delete it if the trade results 
+        in all shares being sold.
+        """
+        owned_asset = self.owned_assets[trade.ticker]
+        updated_asset = owned_asset.make_trade(
+                trade.qty, trade.avg_price_per_share)
+
+        if updated_asset is None:
+            del self.owned_assets[trade.ticker]
+        else:
+            self.owned_assets[trade.ticker] = updated_asset
+
+    def _create_new_owned_asset_from_trade(self, trade):
+        """Create a new owned asset based on the execution of a trade."""
+        if trade.action is TradeAction.SELL:
+            asset_position = Position.SHORT
+        else:
+            asset_position = Position.LONG
+
+        self.owned_assets[trade.ticker] = OwnedAsset.from_trade(trade,
+                                                                asset_position)
 
     def update_fill(self, event):
         if event.type is EventType.FILL:
@@ -232,35 +278,9 @@ class BasicPortfolio(AbstractPortfolio):
                         'Insufficient funds available to execute trade for '
                         'ticker: {} '.format(order.ticker))
 
-    def generate_naive_order(self, signal):
-        """
-        Transacts an TradeEvent as a constant qty
-
-        :param SignalEvent signal:
-        :return:
-        """
-        # TODO: update this or delete it. probably delete it.
-        mkt_qty = 100
-        cur_qty = self.owned_assets[signal.ticker]
-
-        if signal.signal_type is SignalType.LONG and cur_qty == 0:
-            return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty,
-                              TradeAction.BUY)
-        elif signal.signal_type is SignalType.SHORT and cur_qty == 0:
-            return TradeEvent(signal.ticker, OrderType.MARKET, mkt_qty,
-                              TradeAction.SELL)
-        elif signal.signal_type is SignalType.EXIT and cur_qty > 0:
-            return TradeEvent(signal.ticker, OrderType.MARKET, abs(cur_qty),
-                              TradeAction.SELL)
-        elif signal.signal_type is SignalType.EXIT and cur_qty < 0:
-            return TradeEvent(signal.ticker, OrderType.MARKET, abs(cur_qty),
-                              TradeAction.BUY)
-        else:
-            raise ValueError('Invalid signal. Cannot Create an order.')
-
     def update_signal(self, event):
         if event.type is EventType.SIGNAL:
-            self.process_signal(event)
+            self._process_signal(event)
             self.blotter.check_order_triggers()
             # self.events.put(self.generate_naive_order(event))
         else:
@@ -268,7 +288,7 @@ class BasicPortfolio(AbstractPortfolio):
                     expected=type(EventType.SIGNAL),
                     event_type=type(event.type))
 
-    def process_signal(self, signal):
+    def _process_signal(self, signal):
         """
         Call different methods depending on the type of signal received.
 

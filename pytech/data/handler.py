@@ -90,10 +90,9 @@ class YahooDataHandler(DataHandler):
         comb_index = None
 
         for t in self.ticker_list:
-            self.ticker_data[t] = web.DataReader(t,
-                                                 data_source=self.DATA_SOURCE,
-                                                 start=start_date,
-                                                 end=end_date)
+            self.ticker_data[t] = web.DataReader(
+                    t, data_source=self.DATA_SOURCE, start=start_date,
+                    end=end_date)
             self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(
                     self.ticker_data[t])
 
@@ -115,6 +114,7 @@ class YahooDataHandler(DataHandler):
 
         :return: bar
         """
+        # yield from self.ticker_data[ticker]
         for bar in self.ticker_data[ticker]:
             yield bar
 
@@ -126,11 +126,19 @@ class YahooDataHandler(DataHandler):
             self.logger.exception('{} is not available in the given data set.')
             raise
         else:
-            # bars_list is a tuple and index 1 is the Series we want.
-            return bars_list[-1][1]
+            return bars_list[-1]
 
     def get_latest_bars(self, ticker, n=1):
-
+        """
+        Returns the last ``n`` bars from the latest_ticker_data.
+        If there is less than ``n`` bars available then n-k is returned.
+        
+        :param str ticker: The ticker of the asset for which the bars are 
+        needed.
+        :param int n: The number of bars to return.
+        (default: 1)
+        :return: A list of bars.
+        """
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
@@ -150,9 +158,19 @@ class YahooDataHandler(DataHandler):
                     .format(ticker=ticker))
             raise
         else:
-            return dt_utils.parse_date(bars_list[-1][1][pd_utils.DATE_COL])
+            return dt_utils.parse_date(bars_list[-1][pd_utils.DATE_COL])
 
     def get_latest_bar_value(self, ticker, val_type, n=1):
+        """
+        Get the last ``n`` bars but return a series containing only the 
+        ``val_type`` requested.
+        
+        :param str ticker: The ticker of the asset for which the bars are 
+        needed.
+        :param val_type: 
+        :param n: 
+        :return: 
+        """
         try:
             bars_list = self.get_latest_bars(ticker, n)
         except KeyError:
@@ -161,12 +179,13 @@ class YahooDataHandler(DataHandler):
                     .format(ticker=ticker))
             raise
         else:
-            return np.array([getattr(bar[1], val_type) for bar in bars_list])
+            return np.array([getattr(bar, val_type) for bar in bars_list])
 
     def update_bars(self):
         for ticker in self.ticker_list:
             try:
                 bar = next(self._get_new_bar(ticker))
+                bar = bar[1]
             except StopIteration:
                 self.continue_backtest = False
             else:

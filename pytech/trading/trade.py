@@ -21,8 +21,8 @@ class Trade(object):
     LOGGER_NAME = 'trade'
 
     def __init__(self, qty, price_per_share, action, strategy, order,
-                 avg_price_per_share,
-                 commission=0.0, trade_date=None, ticker=None):
+                 avg_price_per_share, commission=0.0,
+                 trade_date=None, ticker=None):
         """
         :param datetime trade_date: corresponding to the date and time of the 
             trade date
