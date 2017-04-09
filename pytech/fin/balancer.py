@@ -74,7 +74,7 @@ class AlwaysBalancedBalancer(AbstractBalancer):
 
         latest_adj_close = portfolio.bars.get_latest_bar_value(
                 signal.ticker, pd_utils.ADJ_CLOSE_COL)
-        return math.floor((target_pct * total) / latest_adj_close)
+        return int(math.floor((target_pct * total) / latest_adj_close))
 
     def _get_current_asset_weights(self, portfolio: AbstractPortfolio):
         weights = {}
