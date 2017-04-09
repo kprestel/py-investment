@@ -62,14 +62,13 @@ class TestYahooDataHandler(object):
 
         yahoo_data_handler.update_bars()
 
-        aapl_adj_close = (yahoo_data_handler
-                          .get_latest_bar_value('AAPL',
-                                                pd_utils.ADJ_CLOSE_COL))
+        aapl_adj_close = (yahoo_data_handler.get_latest_bar_value(
+                'AAPL', pd_utils.ADJ_CLOSE_COL))
         aapl_adj_close_expected = 100.142954
         assert aapl_adj_close == approx(aapl_adj_close_expected)
 
-        fb_adj_close = (yahoo_data_handler
-                        .get_latest_bar_value('FB', pd_utils.ADJ_CLOSE_COL))
+        fb_adj_close = (yahoo_data_handler.get_latest_bar_value(
+                'FB', pd_utils.ADJ_CLOSE_COL))
         fb_adj_close_expected = 109.410004
         assert fb_adj_close == approx(fb_adj_close_expected)
 

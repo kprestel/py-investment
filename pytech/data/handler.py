@@ -91,8 +91,8 @@ class YahooDataHandler(DataHandler):
 
         for t in self.ticker_list:
             self.ticker_data[t] = web.DataReader(
-                    t, data_source=self.DATA_SOURCE, start=start_date,
-                    end=end_date)
+                    t, data_source=self.DATA_SOURCE,
+                    start=start_date, end=end_date)
             self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(
                     self.ticker_data[t])
 
@@ -185,6 +185,7 @@ class YahooDataHandler(DataHandler):
         for ticker in self.ticker_list:
             try:
                 bar = next(self._get_new_bar(ticker))
+                # bar is a tuple and we only care about the 2nd value in it.
                 bar = bar[1]
             except StopIteration:
                 self.continue_backtest = False

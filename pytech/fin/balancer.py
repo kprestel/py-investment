@@ -1,4 +1,5 @@
 import logging
+import math
 import cvxpy as cvx
 import pytech.utils.pandas_utils as pd_utils
 from abc import ABCMeta, abstractmethod
@@ -62,12 +63,18 @@ class AlwaysBalancedBalancer(AbstractBalancer):
         :return: 
         """
         current_weights = self._get_current_asset_weights(portfolio)
-        last_adj_close = portfolio.bars.get_latest_bar_value(
-                signal.ticker, pd_utils.ADJ_CLOSE_COL)
-        asset_owned = signal.ticker in portfolio.owned_assets
 
-    def _rebalance(self, portfolio, signal):
-        pass
+    def _get_target_qty(self, portfolio: AbstractPortfolio,
+                        signal: TradeSignalEvent):
+        target_pct = 1 / len(portfolio.owned_assets)
+        if self.include_cash:
+            total = portfolio.total_value
+        else:
+            total = portfolio.total_asset_mv
+
+        latest_adj_close = portfolio.bars.get_latest_bar_value(
+                signal.ticker, pd_utils.ADJ_CLOSE_COL)
+        return math.floor((target_pct * total) / latest_adj_close)
 
     def _get_current_asset_weights(self, portfolio: AbstractPortfolio):
         weights = {}
