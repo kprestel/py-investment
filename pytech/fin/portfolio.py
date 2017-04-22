@@ -9,7 +9,9 @@ import pytech.utils.dt_utils as dt_utils
 from pytech.backtest.event import (CancelSignalEvent, ExitSignalEvent,
                                    HoldSignalEvent, LongSignalEvent,
                                    ShortSignalEvent, SignalEvent,
-                                   TradeEvent, TradeSignalEvent, Event)
+                                   TradeEvent, TradeSignalEvent, Event,
+                                   get_trade_signal_types,
+                                   get_signal_event_types)
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.trading.order import Order
 from pytech.trading.trade import Trade
@@ -22,15 +24,8 @@ from pytech.utils.exceptions import InvalidEventTypeError, \
 logger = logging.getLogger(__name__)
 
 # Allowed types
-TradeSignalEventType = TypeVar('A',
-                               TradeSignalEvent,
-                               LongSignalEvent,
-                               ShortSignalEvent)
-SignalEventType = TypeVar('A',
-                          TradeSignalEventType,
-                          HoldSignalEvent,
-                          ExitSignalEvent,
-                          CancelSignalEvent)
+TradeSignalEventType = get_trade_signal_types()
+SignalEventType = get_signal_event_types()
 
 
 class AbstractPortfolio(metaclass=ABCMeta):
@@ -290,7 +285,7 @@ class BasicPortfolio(AbstractPortfolio):
                         'Insufficient funds available to execute trade for '
                         'ticker: {} '.format(order.ticker))
 
-    def update_signal(self, event):
+    def update_signal(self, event: SignalEventType):
         if event.type is EventType.SIGNAL:
             self._process_signal(event)
             self.blotter.check_order_triggers()

@@ -2,10 +2,26 @@ import logging
 from abc import ABCMeta
 
 import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from pytech.utils.enums import EventType, TradeAction, OrderType, Position, \
     SignalType
+
+
+# Allowed types
+def get_trade_signal_types():
+    return TypeVar('A',
+                   TradeSignalEvent,
+                   LongSignalEvent,
+                   ShortSignalEvent)
+
+
+def get_signal_event_types():
+    return TypeVar('A',
+                   get_trade_signal_types(),
+                   HoldSignalEvent,
+                   ExitSignalEvent,
+                   CancelSignalEvent)
 
 
 class Event(metaclass=ABCMeta):
@@ -140,7 +156,8 @@ class TradeSignalEvent(SignalEvent):
     """
     SIGNAL_TYPE = SignalType.TRADE
 
-    def __init__(self, ticker: str, dt: datetime,
+    def __init__(self, ticker: str,
+                 dt: datetime,
                  strength: Any = None,
                  stop_price: float = None,
                  limit_price: float = None,

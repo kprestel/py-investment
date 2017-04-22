@@ -1,9 +1,9 @@
 import logging
-import numpy as np
 import math
+from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from sys import float_info
-from abc import ABCMeta, abstractmethod
+from typing import TypeVar
 
 import numpy as np
 import pandas as pd
@@ -12,14 +12,24 @@ from pandas.tseries.offsets import DateOffset
 
 import pytech.utils.common_utils as utils
 import pytech.utils.dt_utils as dt_utils
+from pytech.backtest.event import (LongSignalEvent, ShortSignalEvent,
+                                   SignalEvent)
 from pytech.fin.asset import Asset
 from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
                                 TradeAction)
-from pytech.backtest.event import (SignalEvent, LongSignalEvent,
-                                   ShortSignalEvent)
 from pytech.utils.exceptions import BadOrderParams
 
 logger = logging.getLogger(__name__)
+
+
+def get_order_types() -> TypeVar:
+    """Return valid order types for type annotations."""
+    return TypeVar('A',
+                   Order,
+                   MarketOrder,
+                   StopOrder,
+                   LimitOrder,
+                   StopLimitOrder)
 
 
 class Order(metaclass=ABCMeta):
@@ -27,9 +37,14 @@ class Order(metaclass=ABCMeta):
 
     LOGGER_NAME = 'order'
 
-    def __init__(self, ticker: str, action: TradeAction, qty: int,
-                 order_subtype: OrderSubType = None, created: datetime = None,
-                 max_days_open: int = None, order_id: str = None,
+    def __init__(self,
+                 ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 order_subtype: OrderSubType = None,
+                 created: datetime = None,
+                 max_days_open: int = None,
+                 order_id: str = None,
                  *args, **kwargs):
         """
         Order constructor
@@ -69,7 +84,7 @@ class Order(metaclass=ABCMeta):
         self.id = order_id or utils.make_id()
         self.ticker = ticker
         self.logger = logging.getLogger(
-                '{}_ticker_{}'.format(self.__name__, self.ticker))
+                '{}_ticker_{}'.format(self.__class__.__name__, self.ticker))
 
         # TODO: validate that all of these inputs make sense together.
         # e.g. if its a stop order stop shouldn't be none
@@ -161,6 +176,11 @@ class Order(metaclass=ABCMeta):
         For a stop order, True IF stop_reached.
         For a limit order, True IF limit_reached.
         """
+
+    # @property
+    # @abstractmethod
+    # def order_type(self) -> OrderType:
+    #     """Must return the OrderType"""
 
     @property
     def open(self):
@@ -278,25 +298,34 @@ class MarketOrder(Order):
     def triggered(self) -> bool:
         return True
 
+    @property
+    def order_type(self) -> OrderType:
+        return OrderType.MARKET
+
 
 class LimitOrder(Order):
     """Limit order. Update this."""
 
-    def __init__(self, ticker: str, action: TradeAction, qty: int,
-                 limit_price: float, order_subtype: OrderSubType = None,
-                 created: datetime = None, max_days_open: int = None,
-                 order_id: str = None, *args, **kwargs):
-        super().__init__(ticker, action, qty, order_subtype, created,
-                         max_days_open, order_id, *args, **kwargs)
+    def __init__(self,
+                 ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 limit_price: float,
+                 order_subtype: OrderSubType = None,
+                 created: datetime = None,
+                 max_days_open: int = None,
+                 order_id: str = None,
+                 *args, **kwargs):
+        super().__init__(ticker, action, qty, *args, **kwargs)
         self.limit_reached = False
         self.limit_price = limit_price
 
     @property
-    def limit_price(self):
+    def limit_price(self) -> float:
         return self._limit_price
 
     @limit_price.setter
-    def limit_price(self, limit_price):
+    def limit_price(self, limit_price: float) -> None:
         """
         Convert from a float to a 2 decimal point number that rounds 
         favorably based on the trade_action
@@ -313,6 +342,10 @@ class LimitOrder(Order):
     @property
     def triggered(self) -> bool:
         return self.limit_reached
+
+    @property
+    def order_type(self) -> OrderType:
+        return OrderType.LIMIT
 
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         """
@@ -341,12 +374,17 @@ class LimitOrder(Order):
 class StopOrder(Order):
     """Stop orders."""
 
-    def __init__(self, ticker: str, action: TradeAction, qty: int,
-                 stop_price: float, order_subtype: OrderSubType = None,
-                 created: datetime = None, max_days_open: int = None,
-                 order_id: str = None, *args, **kwargs):
-        super().__init__(ticker, action, qty, order_subtype, created,
-                         max_days_open, order_id, *args, **kwargs)
+    def __init__(self,
+                 ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 stop_price: float,
+                 order_subtype: OrderSubType = None,
+                 created: datetime = None,
+                 max_days_open: int = None,
+                 order_id: str = None,
+                 *args, **kwargs):
+        super().__init__(ticker, action, qty, *args, **kwargs)
         self.stop_price = stop_price
         self.stop_reached = False
 
@@ -388,13 +426,22 @@ class StopOrder(Order):
 class StopLimitOrder(StopOrder, LimitOrder):
     """Stop limit"""
 
-    def __init__(self, ticker: str, action: TradeAction, qty: int,
-                 stop_price: float, limit_price: float,
+    def __init__(self,
+                 ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 stop_price: float,
+                 limit_price: float,
                  order_subtype: OrderSubType = None,
-                 created: datetime = None, max_days_open: int = None,
-                 order_id: str = None, *args, **kwargs):
-        super().__init__(ticker=ticker, action=action, qty=qty,
-                         stop_price=stop_price, limit_price=limit_price,
+                 created: datetime = None,
+                 max_days_open: int = None,
+                 order_id: str = None,
+                 *args, **kwargs):
+        # # stop_price = kwargs.pop('stop_price')
+        # limit_price = kwargs.pop('limit_price')
+        super().__init__(ticker, action, qty,
+                         stop_price=stop_price,
+                         limit_price=limit_price,
                          order_subtype=order_subtype, created=created,
                          max_days_open=max_days_open, order_id=order_id,
                          *args, **kwargs)

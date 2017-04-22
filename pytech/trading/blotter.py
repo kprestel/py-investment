@@ -1,35 +1,24 @@
+import collections
 import logging
 import queue
 from datetime import datetime
-from typing import Dict, TypeVar
+from typing import Dict
 
-import pandas as pd
-
-import collections
-
-import pytech.db.db_utils as db
 import pytech.utils.pandas_utils as pd_utils
-from pytech.backtest.event import FillEvent, TradeEvent
-from pytech.data.handler import DataHandler, YahooDataHandler
+from pytech.backtest.event import TradeEvent
+from pytech.data.handler import DataHandler
 from pytech.db.finders import AssetFinder
-from pytech.fin.owned_asset import OwnedAsset
 from pytech.fin.asset import Asset
-from pytech.fin.portfolio import Portfolio
-from pytech.trading.order import Order, MarketOrder, StopOrder, LimitOrder, \
-    StopLimitOrder
+from pytech.trading.commission import (AbstractCommissionModel,
+                                       PerOrderCommissionModel)
+from pytech.trading.order import (LimitOrder, MarketOrder, Order,
+                                  StopLimitOrder, StopOrder, get_order_types)
 from pytech.trading.trade import Trade
-from pytech.utils.enums import Position, TradeAction, OrderStatus, OrderType, \
-    OrderSubType
-from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
-from pytech.trading.commission import PerOrderCommissionModel, \
-    AbstractCommissionModel
+from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
+                                TradeAction)
+from pytech.utils.exceptions import NotAFinderError
 
-AnyOrder = TypeVar('A',
-                   Order,
-                   MarketOrder,
-                   StopOrder,
-                   LimitOrder,
-                   StopLimitOrder)
+AnyOrder = get_order_types()
 
 
 class Blotter(object):
@@ -199,17 +188,39 @@ class Blotter(object):
                       action: TradeAction,
                       qty: int,
                       order_type: OrderType = None,
-                      stop_price: float = None,
-                      limit_price: float = None,
-                      date_placed: datetime = None,
-                      max_days_open: int = 90,
-                      order_subtype: OrderSubType = None,
-                      order_id: str = None):
+                      *args,
+                      **kwargs) -> AnyOrder:
         """
         Figure out what type of order to create based on given parameters.
         
         This is meant to be somewhat of an order factory.
         """
+        if order_type is not None:
+            return self._make_order(ticker, action, qty, order_type, **kwargs)
+
+    def _make_order(self,
+                    ticker: str,
+                    action: TradeAction,
+                    qty: int,
+                    order_type: OrderType,
+                    *args, **kwargs) -> AnyOrder:
+        if order_type is OrderType.MARKET:
+            return MarketOrder(ticker, action, qty)
+
+        if order_type is OrderType.STOP:
+            # TODO: should this handle error checking? or just let it raise.
+            # stop_price = kwargs.pop('stop_price')
+            return StopOrder(ticker, action, qty, **kwargs)
+
+        if order_type is OrderType.LIMIT:
+            # limit_price = kwargs.pop('limit_price')
+            return LimitOrder(ticker, action, qty, **kwargs)
+
+        if order_type is OrderType.STOP_LIMIT:
+            # stop_price = kwargs.pop('stop_price')
+            # limit_price = kwargs.pop('limit_price')
+            return StopLimitOrder(
+                    ticker, action, qty, **kwargs)
 
     def _find_order(self, order_id, ticker):
         if ticker is None:
