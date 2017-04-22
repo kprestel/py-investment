@@ -1,4 +1,5 @@
 import logging
+from typing import TypeVar
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
 
@@ -8,9 +9,9 @@ import pytech.utils.dt_utils as dt_utils
 from pytech.backtest.event import (CancelSignalEvent, ExitSignalEvent,
                                    HoldSignalEvent, LongSignalEvent,
                                    ShortSignalEvent, SignalEvent,
-                                   TradeEvent, TradeSignalEvent)
+                                   TradeEvent, TradeSignalEvent, Event)
 from pytech.fin.owned_asset import OwnedAsset
-from pytech.trading.order import AbstractOrder
+from pytech.trading.order import Order
 from pytech.trading.trade import Trade
 from pytech.utils import pandas_utils as pd_utils
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
@@ -19,6 +20,17 @@ from pytech.utils.exceptions import InvalidEventTypeError, \
     InvalidPositionError, InvalidSignalTypeError
 
 logger = logging.getLogger(__name__)
+
+# Allowed types
+TradeSignalEventType = TypeVar('A',
+                               TradeSignalEvent,
+                               LongSignalEvent,
+                               ShortSignalEvent)
+SignalEventType = TypeVar('A',
+                          TradeSignalEventType,
+                          HoldSignalEvent,
+                          ExitSignalEvent,
+                          CancelSignalEvent)
 
 
 class AbstractPortfolio(metaclass=ABCMeta):
@@ -161,7 +173,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         except KeyError:
             self.logger.exception(
                     'Ticker: {ticker} is not currently owned.'
-                    .format(ticker=ticker))
+                        .format(ticker=ticker))
             raise
 
     def update_timeindex(self, event):
@@ -288,11 +300,11 @@ class BasicPortfolio(AbstractPortfolio):
                     expected=type(EventType.SIGNAL),
                     event_type=type(event.type))
 
-    def _process_signal(self, signal):
+    def _process_signal(self, signal: SignalEventType):
         """
         Call different methods depending on the type of signal received.
 
-        :param SignalEvent signal:
+        :param signal:
         :return:
         """
         if signal.signal_type is SignalType.EXIT:
@@ -303,32 +315,31 @@ class BasicPortfolio(AbstractPortfolio):
             self._handle_hold_signal(signal)
         elif signal.signal_type is SignalType.TRADE:
             self._handle_trade_signal(signal)
-        elif signal.signal_type is SignalType.LONG:
-            self._handle_long_signal(signal)
-        elif signal.signal_type is SignalType.SHORT:
-            self._handle_short_signal(signal)
         else:
             raise InvalidSignalTypeError(signal_type=type(signal.signal_type))
 
-    def _handle_trade_signal(self, signal):
+    def _handle_trade_signal(self, signal: TradeSignalEventType):
         """
-        Create a new order based on the trade signal received
+        Process a new trade signal and take the appropriate action.
         
-        :param TradeSignalEvent or SignalEvent signal: The trade signal.
+        This could include opening a new order or taking no action at all.
+        
+        :param signal: The trade signal.
         :return: 
         """
-        if signal.position is SignalType.LONG:
-            self._handle_long_signal(signal)
-        elif signal.position is SignalType.SHORT:
-            self._handle_short_signal(signal)
-        else:
-            raise InvalidPositionError(position=signal.position)
+        try:
+            if signal.position is SignalType.LONG:
+                self._handle_long_signal(signal)
+            elif signal.position is SignalType.SHORT:
+                self._handle_short_signal(signal)
+        except AttributeError:
+            self._handle_general_trade_signal(signal)
 
-    def _handle_exit_signal(self, signal):
+    def _handle_exit_signal(self, signal: ExitSignalEvent):
         """
         Create an order that will close out the position in the signal.
         
-        :param ExitSignalEvent or SignalEvent signal:
+        :param signal:
         :return:
         """
         qty = self.owned_assets[signal.ticker].shares_owned
@@ -345,11 +356,11 @@ class BasicPortfolio(AbstractPortfolio):
         self.blotter.place_order(signal.ticker, action, signal.order_type,
                                  qty, signal.stop_price, signal.limit_price)
 
-    def _handle_cancel_signal(self, signal):
+    def _handle_cancel_signal(self, signal: CancelSignalEvent):
         """
         Cancel all open orders for the asset in the signal.
 
-        :param CancelSignalEvent or SignalEvent signal:
+        :param signal:
         """
         self.blotter.cancel_all_orders_for_asset(
                 signal.ticker, upper_price=signal.upper_price,
@@ -378,6 +389,14 @@ class BasicPortfolio(AbstractPortfolio):
         
         :param ShortSignalEvent or SignalEvent signal: 
         :return: 
+        """
+
+    def _handle_general_trade_signal(self, signal: TradeSignalEvent):
+        """
+        Handle an ambiguous trade signal, meaning a trade signal that is
+        not explicitly defined as **LONG** or **SHORT**.  This most often means
+        defaulting to whatever :class:``Balancer`` the portfolio has 
+        implemented.
         """
 
 

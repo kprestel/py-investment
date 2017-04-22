@@ -21,7 +21,7 @@ class TestBlotter(object):
                 order_id='four')
 
         for k, v in blotter:
-            assert isinstance(v, ord.AbstractOrder)
+            assert isinstance(v, ord.Order)
 
     def test_cancel_order(self, populated_blotter):
         """

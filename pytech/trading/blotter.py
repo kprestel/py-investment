@@ -1,5 +1,8 @@
 import logging
+import queue
 from datetime import datetime
+from typing import Dict, TypeVar
+
 import pandas as pd
 
 import collections
@@ -12,18 +15,31 @@ from pytech.db.finders import AssetFinder
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.fin.asset import Asset
 from pytech.fin.portfolio import Portfolio
-from pytech.trading.order import AbstractOrder
+from pytech.trading.order import Order, MarketOrder, StopOrder, LimitOrder, \
+    StopLimitOrder
 from pytech.trading.trade import Trade
-from pytech.utils.enums import Position, TradeAction, OrderStatus
+from pytech.utils.enums import Position, TradeAction, OrderStatus, OrderType, \
+    OrderSubType
 from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
 from pytech.trading.commission import PerOrderCommissionModel, \
     AbstractCommissionModel
+
+AnyOrder = TypeVar('A',
+                   Order,
+                   MarketOrder,
+                   StopOrder,
+                   LimitOrder,
+                   StopLimitOrder)
 
 
 class Blotter(object):
     """Holds and interacts with all orders."""
 
     LOGGER_NAME = 'blotter'
+    asset_finder: AssetFinder
+    orders: Dict[str, AnyOrder]
+    events: queue.Queue
+    current_dt = datetime
 
     def __init__(self, events, asset_finder=None, commission_model=None):
 
@@ -91,7 +107,7 @@ class Blotter(object):
         :param key: The key to dictionary, will always be the ticker of the ``Asset`` the order is for but an instance
         of :class:`~ticker.Asset` will also work as long as the ticker is set.
         :type key: Asset or str
-        :param AbstractOrder value: The order.
+        :param Order value: The order.
         """
         if issubclass(key.__class__, Asset):
             self.orders[key.ticker] = value
@@ -120,9 +136,11 @@ class Blotter(object):
 
         return do_iter(self.orders)
 
-    def place_order(self, ticker, action, order_type, qty, stop_price=None,
-                    limit_price=None, date_placed=None, order_subtype=None,
-                    order_id=None, max_days_open=90):
+    def place_order(self, ticker: str, action: TradeAction,
+                    order_type: OrderType, qty: int, stop_price: float = None,
+                    limit_price: float = None, date_placed: datetime = None,
+                    order_subtype: OrderSubType = None, order_id: str = None,
+                    max_days_open: int = 90):
         """
         Open a new order.  If an open order for the given ``ticker`` already 
         exists placing a new order will **NOT** change the existing order, 
@@ -154,7 +172,7 @@ class Blotter(object):
         if date_placed is None:
             date_placed = self.current_dt
 
-        order = AbstractOrder(
+        order = Order(
                 ticker=ticker,
                 action=action,
                 order_type=order_type,
@@ -175,6 +193,23 @@ class Blotter(object):
             self.orders[ticker] = {
                 order.id: order
             }
+
+    def _create_order(self,
+                      ticker: str,
+                      action: TradeAction,
+                      qty: int,
+                      order_type: OrderType = None,
+                      stop_price: float = None,
+                      limit_price: float = None,
+                      date_placed: datetime = None,
+                      max_days_open: int = 90,
+                      order_subtype: OrderSubType = None,
+                      order_id: str = None):
+        """
+        Figure out what type of order to create based on given parameters.
+        
+        This is meant to be somewhat of an order factory.
+        """
 
     def _find_order(self, order_id, ticker):
         if ticker is None:
@@ -252,17 +287,17 @@ class Blotter(object):
                     'Order for ticker: {ticker} has been '
                     'partially filled. {amt} shares had already '
                     'been purchased.'
-                    .format(ticker=order.ticker, amt=order.filled))
+                        .format(ticker=order.ticker, amt=order.filled))
         elif order.filled < 0:
             self.logger.warning(
                     'Order for ticker: {ticker} has been partially filled. '
                     '{amt} shares had already been sold.'
-                    .format(ticker=order.ticker, amt=order.filled))
+                        .format(ticker=order.ticker, amt=order.filled))
         else:
             self.logger.info(
                     'Canceled order for ticker: {ticker} '
                     'successfully before it was executed.'
-                    .format(ticker=order.ticker))
+                        .format(ticker=order.ticker))
         order.cancel(reason)
         order.last_updated = self.current_dt
 
@@ -303,8 +338,8 @@ class Blotter(object):
         self.logger.warning(
                 'Order id: {id} for ticker: {ticker} '
                 'was rejected because: {reason}'
-                .format(id=order_id, ticker=ticker,
-                        reason=reason or 'Unknown'))
+                    .format(id=order_id, ticker=ticker,
+                            reason=reason or 'Unknown'))
 
     def check_order_triggers(self):
         """
@@ -336,7 +371,7 @@ class Blotter(object):
         :return: ``order`` if the order is no longer open so it can be removed 
             from the ``portfolio`` order dict 
             and ``None`` if the order is still open
-        :rtype: AbstractOrder or None
+        :rtype: Order or None
 
         This method will add the ticker to the :py:class:``Portfolio`` ticker 
         dict and update the db to reflect the trade.

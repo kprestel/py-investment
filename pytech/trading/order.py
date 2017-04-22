@@ -22,7 +22,7 @@ from pytech.utils.exceptions import BadOrderParams
 logger = logging.getLogger(__name__)
 
 
-class AbstractOrder(metaclass=ABCMeta):
+class Order(metaclass=ABCMeta):
     """Hold open orders"""
 
     LOGGER_NAME = 'order'
@@ -40,23 +40,12 @@ class AbstractOrder(metaclass=ABCMeta):
             of the ticker. If an ticker is passed in the ticker
             will be taken from it.
         :type ticker: Asset or str
-        :param Portfolio blot: The :py:class:`pytech.blot.Blotter` 
-            that the ticker is associated with
         :param TradeAction action: Either BUY or SELL
-        :param OrderType or str order_type: The type of order to create.
         :param OrderSubType order_subtype: The order subtype to create
         default: :py:class:`pytech.enums.OrderSubType.DAY`
-        :param float stop: The price at which to execute a stop order. 
-        If this is not a stop order then leave as None.
-        :param float limit: The price at which to execute a limit order. 
-        If this is not a limit order then leave as None.
         :param int qty: The amount of shares the order is for.
         This should be negative if it is a sell order and positive if it is 
         a buy order.
-        :param int filled: How many shares of the order have already been 
-        filled, if any.
-        :param float commission: The amount of commission that has already been 
-        charged on the order.
         :param datetime created: The date and time that the order was created
         :param int max_days_open: The max calendar days that an order can stay 
             open without being cancelled.
@@ -78,8 +67,9 @@ class AbstractOrder(metaclass=ABCMeta):
         """
         super().__init__()
         self.id = order_id or utils.make_id()
+        self.ticker = ticker
         self.logger = logging.getLogger(
-                '{}_id_{}'.format(self.LOGGER_NAME, self.id))
+                '{}_ticker_{}'.format(self.__name__, self.ticker))
 
         # TODO: validate that all of these inputs make sense together.
         # e.g. if its a stop order stop shouldn't be none
@@ -89,8 +79,6 @@ class AbstractOrder(metaclass=ABCMeta):
             self.order_subtype = OrderSubType.check_if_valid(order_subtype)
         else:
             self.order_subtype = OrderSubType.DAY
-
-        self.ticker = ticker
 
         if self.order_subtype is OrderSubType.DAY:
             self.max_days_open = 1
@@ -102,8 +90,6 @@ class AbstractOrder(metaclass=ABCMeta):
         self.qty = qty
         # How much commission has already been charged on the order.
         self.commission = 0.0
-        self.stop_reached = False
-        self.limit_reached = False
         self.filled = 0
         self._status = OrderStatus.OPEN
         self.reason = None
@@ -271,13 +257,13 @@ class AbstractOrder(metaclass=ABCMeta):
         The signal event that triggered the order to be created.
         :param TradeAction action: The TradeAction that the order is for. 
         :return: A new order
-        :rtype: AbstractOrder
+        :rtype: Order
         """
         return cls(signal.ticker, action, signal.order_type,
                    stop=signal.stop_price, limit=signal.limit_price)
 
 
-class MarketOrder(AbstractOrder):
+class MarketOrder(Order):
     """Orders that will be executed at whatever the latest market price is"""
 
     def __init__(self, ticker, action, qty, created=None, order_id=None,
@@ -293,7 +279,7 @@ class MarketOrder(AbstractOrder):
         return True
 
 
-class LimitOrder(AbstractOrder):
+class LimitOrder(Order):
     """Limit order. Update this."""
 
     def __init__(self, ticker: str, action: TradeAction, qty: int,
@@ -352,7 +338,7 @@ class LimitOrder(AbstractOrder):
         return self.triggered
 
 
-class StopOrder(AbstractOrder):
+class StopOrder(Order):
     """Stop orders."""
 
     def __init__(self, ticker: str, action: TradeAction, qty: int,
