@@ -10,7 +10,7 @@ from pytech.backtest.event import (CancelSignalEvent, ExitSignalEvent,
                                    ShortSignalEvent, SignalEvent,
                                    TradeEvent, TradeSignalEvent)
 from pytech.fin.owned_asset import OwnedAsset
-from pytech.trading.order import Order
+from pytech.trading.order import AbstractOrder
 from pytech.trading.trade import Trade
 from pytech.utils import pandas_utils as pd_utils
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,

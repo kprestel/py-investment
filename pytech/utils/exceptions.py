@@ -128,3 +128,8 @@ class InvalidSignalTypeError(TypeError, PyInvestmentError):
     """Raised when a signal type is not right."""
     msg = ('Invalid SignalType. Must be in the SignalType enum. '
            '{signal_type} was provided.')
+
+
+class BadOrderParams(TypeError, PyInvestmentError):
+    """Raised when an order is placed that is illegal."""
+    msg = 'Attempted to place an order with a {order_type} of {price}'

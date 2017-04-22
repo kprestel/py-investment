@@ -1,13 +1,15 @@
 import logging
+import numpy as np
+import math
 from datetime import datetime
 from sys import float_info
+from abc import ABCMeta, abstractmethod
 
 import numpy as np
 import pandas as pd
 import pandas_market_calendars as mcal
 from pandas.tseries.offsets import DateOffset
 
-import pytech
 import pytech.utils.common_utils as utils
 import pytech.utils.dt_utils as dt_utils
 from pytech.fin.asset import Asset
@@ -15,18 +17,20 @@ from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
                                 TradeAction)
 from pytech.backtest.event import (SignalEvent, LongSignalEvent,
                                    ShortSignalEvent)
+from pytech.utils.exceptions import BadOrderParams
 
 logger = logging.getLogger(__name__)
 
 
-class Order(object):
+class AbstractOrder(metaclass=ABCMeta):
     """Hold open orders"""
 
     LOGGER_NAME = 'order'
 
-    def __init__(self, ticker, action, order_type, order_subtype=None,
-                 stop=None, limit=None, qty=0, filled=0,
-                 created=None, max_days_open=None, order_id=None):
+    def __init__(self, ticker: str, action: TradeAction, qty: int,
+                 order_subtype: OrderSubType = None, created: datetime = None,
+                 max_days_open: int = None, order_id: str = None,
+                 *args, **kwargs):
         """
         Order constructor
 
@@ -72,6 +76,7 @@ class Order(object):
         See :py:func:`asymmetric_round_price_to_penny` for more information on how
             `stop_price` and `limit_price` will get rounded.
         """
+        super().__init__()
         self.id = order_id or utils.make_id()
         self.logger = logging.getLogger(
                 '{}_id_{}'.format(self.LOGGER_NAME, self.id))
@@ -79,7 +84,6 @@ class Order(object):
         # TODO: validate that all of these inputs make sense together.
         # e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)
-        self.order_type = OrderType.check_if_valid(order_type)
 
         if order_subtype is not None:
             self.order_subtype = OrderSubType.check_if_valid(order_subtype)
@@ -93,16 +97,14 @@ class Order(object):
         elif max_days_open is None:
             self.max_days_open = 90
         else:
-            self.max_days_open = int(max_days_open)
+            self.max_days_open = math.floor(max_days_open)
 
         self.qty = qty
         # How much commission has already been charged on the order.
         self.commission = 0.0
-        self.stop_price = stop
-        self.limit_price = limit
         self.stop_reached = False
         self.limit_reached = False
-        self.filled = filled
+        self.filled = 0
         self._status = OrderStatus.OPEN
         self.reason = None
 
@@ -114,18 +116,6 @@ class Order(object):
         # the last time the order changed
         self.last_updated = self.created
         self.close_date = None
-
-        if (self.stop_price is None
-            and self.limit_price is None
-            and self.order_type is not OrderType.MARKET):
-            self.logger.warning(
-                    'stop_price and limit_price were both None and OrderType '
-                    'was not MARKET. Changing order_type to a MARKET order')
-            self.order_type = OrderType.MARKET
-
-    # @property
-    # def position(self):
-    #     if self.a
 
     @property
     def status(self):
@@ -139,40 +129,6 @@ class Order(object):
     @status.setter
     def status(self, status):
         self._status = OrderStatus.check_if_valid(status)
-
-    @property
-    def stop_price(self):
-        return self._stop_price
-
-    @stop_price.setter
-    def stop_price(self, stop_price):
-        """
-        Convert from a float to a 2 decimal point number that rounds 
-        favorably based on the trade_action
-        """
-        if stop_price is not None:
-            pref_round_down = self.action is not TradeAction.BUY
-            self._stop_price = asymmetric_round_price_to_penny(stop_price,
-                                                               pref_round_down)
-        else:
-            self._stop_price = None
-
-    @property
-    def limit_price(self):
-        return self._limit_price
-
-    @limit_price.setter
-    def limit_price(self, limit_price):
-        """
-        Convert from a float to a 2 decimal point number that rounds 
-        favorably based on the trade_action
-        """
-        if limit_price is not None:
-            pref_round_down = self.action is TradeAction.BUY
-            self._limit_price = asymmetric_round_price_to_penny(limit_price,
-                                                                pref_round_down)
-        else:
-            self._limit_price = None
 
     @property
     def ticker(self):
@@ -212,22 +168,13 @@ class Order(object):
             self._qty = int(qty)
 
     @property
-    def triggered(self):
+    @abstractmethod
+    def triggered(self) -> bool:
         """
         For a market order, True.
         For a stop order, True IF stop_reached.
         For a limit order, True IF limit_reached.
         """
-        if self.order_type is OrderType.MARKET:
-            return True
-
-        if self.stop_price is not None and not self.stop_reached:
-            return False
-
-        if self.limit_price is not None and not self.limit_reached:
-            return False
-
-        return True
 
     @property
     def open(self):
@@ -249,7 +196,8 @@ class Order(object):
         self.status = OrderStatus.HELD
         self.reason = reason
 
-    def check_triggers(self, current_price, dt):
+    @abstractmethod
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
         """
         Check if any of the ``order``'s limits have been broken in a way that 
         would trigger the ``order``.
@@ -260,45 +208,6 @@ class Order(object):
         :return: True if the order is triggered otherwise False
         :rtype: bool
         """
-
-        if self.order_type is OrderType.MARKET or self.triggered:
-            return True
-
-        if self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.BUY:
-            if current_price >= self.stop_price:
-                self.stop_reached = True
-                self.last_updated = dt
-                if current_price >= self.limit_price:
-                    self.limit_reached = True
-        elif self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.SELL:
-            if current_price <= self.stop_price:
-                self.stop_reached = True
-                self.last_updated = dt
-                if current_price >= self.limit_price:
-                    self.limit_reached = True
-        elif self.order_type is OrderType.STOP and self.action is TradeAction.BUY:
-            if current_price >= self.stop_price:
-                self.stop_reached = True
-                self.last_updated = dt
-        elif self.order_type is OrderType.STOP and self.action is TradeAction.SELL:
-            if current_price <= self.stop_price:
-                self.stop_reached = True
-                self.last_updated = dt
-        elif self.order_type is OrderType.LIMIT and self.action is TradeAction.BUY:
-            if current_price >= self.limit_price:
-                self.limit_reached = True
-                self.last_updated = dt
-        elif self.order_type is OrderType.LIMIT and self.action is TradeAction.SELL:
-            if current_price <= self.limit_price:
-                self.limit_reached = True
-                self.last_updated = dt
-
-        if self.stop_reached and self.order_type is OrderType.STOP_LIMIT:
-            # change the STOP_LIMIT order to a LIMIT order
-            self.stop_price = None
-            self.order_type = OrderType.LIMIT
-
-        return self.triggered
 
     def check_order_expiration(self, current_date=datetime.now()):
         """
@@ -362,10 +271,168 @@ class Order(object):
         The signal event that triggered the order to be created.
         :param TradeAction action: The TradeAction that the order is for. 
         :return: A new order
-        :rtype: Order
+        :rtype: AbstractOrder
         """
         return cls(signal.ticker, action, signal.order_type,
                    stop=signal.stop_price, limit=signal.limit_price)
+
+
+class MarketOrder(AbstractOrder):
+    """Orders that will be executed at whatever the latest market price is"""
+
+    def __init__(self, ticker, action, qty, created=None, order_id=None,
+                 *args, **kwargs):
+        super().__init__(ticker, action, qty, created=created,
+                         order_id=order_id, *args, **kwargs)
+
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
+        return True
+
+    @property
+    def triggered(self) -> bool:
+        return True
+
+
+class LimitOrder(AbstractOrder):
+    """Limit order. Update this."""
+
+    def __init__(self, ticker: str, action: TradeAction, qty: int,
+                 limit_price: float, order_subtype: OrderSubType = None,
+                 created: datetime = None, max_days_open: int = None,
+                 order_id: str = None, *args, **kwargs):
+        super().__init__(ticker, action, qty, order_subtype, created,
+                         max_days_open, order_id, *args, **kwargs)
+        self.limit_reached = False
+        self.limit_price = limit_price
+
+    @property
+    def limit_price(self):
+        return self._limit_price
+
+    @limit_price.setter
+    def limit_price(self, limit_price):
+        """
+        Convert from a float to a 2 decimal point number that rounds 
+        favorably based on the trade_action
+        """
+        pref_round_down = self.action is TradeAction.BUY
+
+        try:
+            if np.isfinite(limit_price):
+                self._limit_price = asymmetric_round_price_to_penny(
+                        limit_price, pref_round_down)
+        except TypeError:
+            raise BadOrderParams(order_type='limit', price=limit_price)
+
+    @property
+    def triggered(self) -> bool:
+        return self.limit_reached
+
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
+        """
+        Check if the ``order``'s limit price has been broken.
+         
+        Update the state of the order if it has.
+        
+        :param current_price: 
+        :param dt: 
+        :return: 
+        """
+        if self.action is TradeAction.BUY and current_price <= self.limit_price:
+            self.limit_reached = True
+            self.last_updated = dt
+        elif current_price >= self.limit_price:
+            # The only other actions are SELL and EXIT which are both sell.
+            self.limit_reached = True
+            self.last_updated = dt
+        else:
+            # Update the updated date to show the last time it was checked.
+            self.last_updated = dt
+
+        return self.triggered
+
+
+class StopOrder(AbstractOrder):
+    """Stop orders."""
+
+    def __init__(self, ticker: str, action: TradeAction, qty: int,
+                 stop_price: float, order_subtype: OrderSubType = None,
+                 created: datetime = None, max_days_open: int = None,
+                 order_id: str = None, *args, **kwargs):
+        super().__init__(ticker, action, qty, order_subtype, created,
+                         max_days_open, order_id, *args, **kwargs)
+        self.stop_price = stop_price
+        self.stop_reached = False
+
+    @property
+    def stop_price(self):
+        return self._stop_price
+
+    @stop_price.setter
+    def stop_price(self, stop_price):
+        """
+        Convert from a float to a 2 decimal point number that rounds 
+        favorably based on the trade_action
+        """
+        pref_round_down = self.action is not TradeAction.BUY
+        try:
+            if np.isfinite(stop_price):
+                self._stop_price = asymmetric_round_price_to_penny(
+                        stop_price, pref_round_down)
+        except TypeError:
+            raise BadOrderParams(order_type='stop', price=stop_price)
+
+    @property
+    def triggered(self) -> bool:
+        return self.stop_reached
+
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
+        if self.action is TradeAction.BUY and current_price >= self.stop_price:
+            self.stop_reached = True
+            self.last_updated = dt
+        elif current_price <= self.stop_price:
+            self.stop_reached = True
+            self.last_updated = dt
+        else:
+            self.last_updated = dt
+
+        return self.triggered
+
+
+class StopLimitOrder(StopOrder, LimitOrder):
+    """Stop limit"""
+
+    def __init__(self, ticker: str, action: TradeAction, qty: int,
+                 stop_price: float, limit_price: float,
+                 order_subtype: OrderSubType = None,
+                 created: datetime = None, max_days_open: int = None,
+                 order_id: str = None, *args, **kwargs):
+        super().__init__(ticker=ticker, action=action, qty=qty,
+                         stop_price=stop_price, limit_price=limit_price,
+                         order_subtype=order_subtype, created=created,
+                         max_days_open=max_days_open, order_id=order_id,
+                         *args, **kwargs)
+
+    @property
+    def triggered(self) -> bool:
+        return self.stop_reached and self.limit_reached
+
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
+        """
+        Call both the :class:``StopOrder`` and the :class:``LimitOrder``
+        :func:``check_triggers`` in order to check if both the stop trigger
+        and the limit trigger have been met.
+        
+        :param current_price: 
+        :param dt: 
+        :return: 
+        """
+        if not self.stop_reached:
+            StopOrder.check_triggers(self, current_price, dt)
+        if not self.limit_reached:
+            LimitOrder.check_triggers(self, current_price, dt)
+
+        return self.triggered
 
 
 def asymmetric_round_price_to_penny(price, prefer_round_down,

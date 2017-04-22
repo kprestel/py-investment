@@ -12,7 +12,7 @@ from pytech.db.finders import AssetFinder
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.fin.asset import Asset
 from pytech.fin.portfolio import Portfolio
-from pytech.trading.order import Order
+from pytech.trading.order import AbstractOrder
 from pytech.trading.trade import Trade
 from pytech.utils.enums import Position, TradeAction, OrderStatus
 from pytech.utils.exceptions import NotAFinderError, NotAPortfolioError
@@ -91,7 +91,7 @@ class Blotter(object):
         :param key: The key to dictionary, will always be the ticker of the ``Asset`` the order is for but an instance
         of :class:`~ticker.Asset` will also work as long as the ticker is set.
         :type key: Asset or str
-        :param Order value: The order.
+        :param AbstractOrder value: The order.
         """
         if issubclass(key.__class__, Asset):
             self.orders[key.ticker] = value
@@ -154,7 +154,7 @@ class Blotter(object):
         if date_placed is None:
             date_placed = self.current_dt
 
-        order = Order(
+        order = AbstractOrder(
                 ticker=ticker,
                 action=action,
                 order_type=order_type,
@@ -336,7 +336,7 @@ class Blotter(object):
         :return: ``order`` if the order is no longer open so it can be removed 
             from the ``portfolio`` order dict 
             and ``None`` if the order is still open
-        :rtype: Order or None
+        :rtype: AbstractOrder or None
 
         This method will add the ticker to the :py:class:``Portfolio`` ticker 
         dict and update the db to reflect the trade.

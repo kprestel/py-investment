@@ -25,11 +25,11 @@ class AbstractBalancer(metaclass=ABCMeta):
         raise NotImplementedError('Must implement __call__.')
 
     @abstractmethod
-    def balance(self, portfolio):
+    def balance(self, portfolio: AbstractPortfolio):
         """
         Balance the portfolio based on whatever methodology chosen.
         
-        :param Portfolio portfolio: 
+        :param AbstractPortfolio portfolio: 
         :return: 
         """
         raise NotImplementedError('Must implement balance(portfolio)')
