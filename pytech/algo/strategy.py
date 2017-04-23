@@ -1,13 +1,11 @@
-import datetime
 import logging
 from abc import ABCMeta, abstractmethod
-from typing import Any
 
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import (MarketEvent, SignalEvent)
 from pytech.data.handler import DataHandler
 from pytech.trading.order import get_order_types
-from pytech.utils.enums import EventType, SignalType
+from pytech.utils.enums import EventType
 
 OrderTypes = get_order_types()
 
@@ -50,7 +48,7 @@ class BuyAndHold(Strategy):
 
         return bought
 
-    def generate_signals(self, event):
+    def generate_signals(self, event: MarketEvent):
         """
         For buy and hold we generate a single single per symbol and then 
         no more signals. Meaning we are always long the market 
@@ -63,10 +61,10 @@ class BuyAndHold(Strategy):
         if event.event_type is EventType.MARKET:
 
             for ticker in self.ticker_list:
-                self.logger.debug('Processing ticker: {ticker}'
-                                  .format(ticker=ticker))
-                bars = self.bars.get_latest_bar_value(ticker,
-                                                      pd_utils.ADJ_CLOSE_COL)
+                self.logger.debug(
+                        'Processing ticker: {ticker}'.format(ticker=ticker))
+                bars = self.bars.get_latest_bar_value(
+                        ticker, pd_utils.ADJ_CLOSE_COL)
                 self.logger.debug('bars: {}'.format(bars))
 
                 if bars is not None:

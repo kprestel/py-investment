@@ -3,6 +3,7 @@ import logging
 from abc import ABCMeta, abstractmethod
 from typing import Dict
 
+import pytech.utils.dt_utils as dt_utils
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
                                 TradeAction)
 
@@ -13,7 +14,6 @@ class Event(metaclass=ABCMeta):
 
     Provides an interface for which all events are handled.
     """
-
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -36,8 +36,6 @@ class Event(metaclass=ABCMeta):
 class MarketEvent(Event):
     """Handles the event of receiving new market data."""
 
-    LOGGER_NAME = EventType.MARKET.name
-
     def __init__(self):
         super().__init__()
 
@@ -52,7 +50,9 @@ class SignalEvent(Event):
     Which is received by a :class:`Portfolio` and acted upon.
     """
 
-    def __init__(self, ticker: str, dt: datetime,
+    def __init__(self,
+                 ticker: str,
+                 dt: datetime or str,
                  signal_type: SignalType or str,
                  limit_price: float = None,
                  stop_price: float = None,
@@ -95,13 +95,12 @@ class SignalEvent(Event):
         super().__init__()
 
         self.ticker = ticker
-        self.dt = dt
+        self.dt = dt_utils.parse_date(dt)
         self.signal_type = SignalType.check_if_valid(signal_type)
         self.limit_price = limit_price
         self.stop_price = stop_price
         self.target_price = target_price
         self.strength = strength
-        self.order_type = order_type
         self.upper_price = upper_price
         self.lower_price = lower_price
 
@@ -114,6 +113,11 @@ class SignalEvent(Event):
             self.position = Position.check_if_valid(position)
         else:
             self.position = None
+
+        if order_type is not None:
+            self.order_type = OrderType.check_if_valid(order_type)
+        else:
+            self.order_type = None
 
     @property
     def event_type(self) -> EventType:
@@ -129,12 +133,16 @@ class TradeEvent(Event):
     is triggered.
     """
 
-    def __init__(self, order_id, price, qty, dt):
+    def __init__(self,
+                 order_id: str,
+                 price: float,
+                 qty: int,
+                 dt: datetime or str):
         super().__init__()
         self.order_id = order_id
         self.price = price
         self.qty = qty
-        self.dt = dt
+        self.dt = dt_utils.parse_date(dt)
 
     @property
     def event_type(self):
@@ -147,12 +155,16 @@ class FillEvent(Event):
     either cash or the asset.
     """
 
-    def __init__(self, order_id, price, available_volume, dt):
+    def __init__(self,
+                 order_id: str,
+                 price: float,
+                 available_volume: int,
+                 dt: datetime or str):
         super().__init__()
         self.order_id = order_id
         self.price = price
         self.available_volume = available_volume
-        self.dt = dt
+        self.dt = dt_utils.parse_date(dt)
 
     @property
     def event_type(self):
