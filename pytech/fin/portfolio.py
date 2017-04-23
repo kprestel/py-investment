@@ -177,9 +177,9 @@ class AbstractPortfolio(metaclass=ABCMeta):
         :raises InvalidEventTypeError: When the event type passed in is not
         a :class:`MarketEvent`
         """
-        if event.type is not EventType.MARKET:
+        if event.event_type is not EventType.MARKET:
             raise InvalidEventTypeError(
-                    expected=EventType.MARKET, event_type=event.type)
+                    expected=EventType.MARKET, event_type=event.event_type)
 
         self.blotter.check_order_triggers()
 
@@ -282,14 +282,14 @@ class BasicPortfolio(AbstractPortfolio):
                         'ticker: {} '.format(order.ticker))
 
     def update_signal(self, event: SignalEvent):
-        if event.type is EventType.SIGNAL:
+        if event.event_type is EventType.SIGNAL:
             self._process_signal(event)
             self.blotter.check_order_triggers()
             # self.events.put(self.generate_naive_order(event))
         else:
             raise InvalidEventTypeError(
                     expected=type(EventType.SIGNAL),
-                    event_type=type(event.type))
+                    event_type=type(event.event_type))
 
     def _process_signal(self, signal: SignalEvent):
         """

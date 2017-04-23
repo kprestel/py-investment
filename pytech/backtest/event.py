@@ -1,27 +1,10 @@
 import datetime
 import logging
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
+from typing import Dict
 
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
                                 TradeAction)
-
-
-# Allowed types
-# def get_trade_signal_types():
-#     return TypeVar('A',
-#                    TradeSignalEvent,
-#                    LongSignalEvent,
-#                    ShortSignalEvent,
-#                    str)
-#
-#
-# def get_signal_event_types():
-#     return TypeVar('A',
-#                    get_trade_signal_types(),
-#                    HoldSignalEvent,
-#                    ExitSignalEvent,
-#                    CancelSignalEvent,
-#                    str)
 
 
 class Event(metaclass=ABCMeta):
@@ -31,10 +14,18 @@ class Event(metaclass=ABCMeta):
     Provides an interface for which all events are handled.
     """
 
-    LOGGER_NAME = 'EVENT'
 
     def __init__(self):
-        self.logger = logging.getLogger(self.LOGGER_NAME)
+        self.logger = logging.getLogger(__name__)
+
+    @property
+    @abstractmethod
+    def event_type(self) -> EventType:
+        """Must return the classes :class:``EventType``"""
+
+    @classmethod
+    def from_dict(cls, event_dict: Dict):
+        return cls(**{k: v for k, v in event_dict.items()})
 
     @classmethod
     def get_subclasses(cls):
@@ -49,7 +40,10 @@ class MarketEvent(Event):
 
     def __init__(self):
         super().__init__()
-        self.type = EventType.MARKET
+
+    @property
+    def event_type(self) -> EventType:
+        return EventType.MARKET
 
 
 class SignalEvent(Event):
@@ -57,8 +51,6 @@ class SignalEvent(Event):
     Handles the event of sending a Signal from a :class:`Strategy`.
     Which is received by a :class:`Portfolio` and acted upon.
     """
-
-    LOGGER_NAME = EventType.SIGNAL.name
 
     def __init__(self, ticker: str, dt: datetime,
                  signal_type: SignalType or str,
@@ -70,7 +62,9 @@ class SignalEvent(Event):
                  action: TradeAction = None,
                  position: Position = None,
                  upper_price: float = None,
-                 lower_price: float = None):
+                 lower_price: float = None,
+                 *args,
+                 **kwargs):
         """
         Base SignalEvent constructor.
         
@@ -100,7 +94,6 @@ class SignalEvent(Event):
 
         super().__init__()
 
-        self.type = EventType.SIGNAL
         self.ticker = ticker
         self.dt = dt
         self.signal_type = SignalType.check_if_valid(signal_type)
@@ -122,6 +115,10 @@ class SignalEvent(Event):
         else:
             self.position = None
 
+    @property
+    def event_type(self) -> EventType:
+        return EventType.SIGNAL
+
 
 class TradeEvent(Event):
     """
@@ -131,18 +128,17 @@ class TradeEvent(Event):
     This event should only be created in the event that an :class:`Order` 
     is triggered.
     """
-    LOGGER_NAME = EventType.TRADE.name
 
     def __init__(self, order_id, price, qty, dt):
         super().__init__()
-        self.type = EventType.TRADE
         self.order_id = order_id
         self.price = price
         self.qty = qty
         self.dt = dt
 
-    def log_order(self):
-        self.logger.info('Order: ')
+    @property
+    def event_type(self):
+        return EventType.TRADE
 
 
 class FillEvent(Event):
@@ -150,12 +146,14 @@ class FillEvent(Event):
     Handles the event of a broker actually filling the order and returning 
     either cash or the asset.
     """
-    LOGGER_NAME = EventType.FILL.name
 
     def __init__(self, order_id, price, available_volume, dt):
         super().__init__()
-        self.type = EventType.FILL
         self.order_id = order_id
         self.price = price
         self.available_volume = available_volume
         self.dt = dt
+
+    @property
+    def event_type(self):
+        return EventType.FILL

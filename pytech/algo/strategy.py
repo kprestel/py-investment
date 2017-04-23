@@ -22,28 +22,6 @@ class Strategy(metaclass=ABCMeta):
 
         raise NotImplementedError('Must implement generate_signals()')
 
-    def _make_signal_event(self,
-                           ticker: str,
-                           dt: datetime,
-                           signal_type: SignalType or str,
-                           *,
-                           stop_price: float,
-                           limit_price: float,
-                           order_type: OrderTypes,
-                           upper_price: float,
-                           lower_price: float,
-                           target_price: float,
-                           strength: Any,
-                           **kwargs):
-        if isinstance(signal_type, str):
-            signal_type = SignalType.check_if_valid(signal_type)
-
-        if signal_type is SignalType.EXIT:
-            pass
-
-
-
-
 
 class BuyAndHold(Strategy):
     def __init__(self, data_handler, events):
@@ -82,7 +60,7 @@ class BuyAndHold(Strategy):
         """
         self.logger.info('Generating signals')
 
-        if event.type is EventType.MARKET:
+        if event.event_type is EventType.MARKET:
 
             for ticker in self.ticker_list:
                 self.logger.debug('Processing ticker: {ticker}'

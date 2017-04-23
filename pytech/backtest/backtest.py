@@ -109,18 +109,18 @@ class Backtest(object):
 
     def _process_event(self, event):
         self.logger.info(
-                'Processing {event_type}'.format(event_type=event.type))
+                'Processing {event_type}'.format(event_type=event.event_type))
 
-        if event.type is EventType.MARKET:
+        if event.event_type is EventType.MARKET:
             self.strategy.generate_signals(event)
             self.portfolio.update_timeindex(event)
-        elif event.type is EventType.SIGNAL:
+        elif event.event_type is EventType.SIGNAL:
             self.signals += 1
             self.portfolio.update_signal(event)
-        elif event.type is EventType.TRADE:
+        elif event.event_type is EventType.TRADE:
             self.orders += 1
             self.execution_handler.execute_order(event)
-        elif event.type is EventType.FILL:
+        elif event.event_type is EventType.FILL:
             self.fills += 1
             self.portfolio.update_fill(event)
         else:
