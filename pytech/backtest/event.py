@@ -1,27 +1,27 @@
+import datetime
 import logging
 from abc import ABCMeta
 
-import datetime
-from typing import Any, TypeVar
-
-from pytech.utils.enums import EventType, TradeAction, OrderType, Position, \
-    SignalType
+from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
+                                TradeAction)
 
 
 # Allowed types
-def get_trade_signal_types():
-    return TypeVar('A',
-                   TradeSignalEvent,
-                   LongSignalEvent,
-                   ShortSignalEvent)
-
-
-def get_signal_event_types():
-    return TypeVar('A',
-                   get_trade_signal_types(),
-                   HoldSignalEvent,
-                   ExitSignalEvent,
-                   CancelSignalEvent)
+# def get_trade_signal_types():
+#     return TypeVar('A',
+#                    TradeSignalEvent,
+#                    LongSignalEvent,
+#                    ShortSignalEvent,
+#                    str)
+#
+#
+# def get_signal_event_types():
+#     return TypeVar('A',
+#                    get_trade_signal_types(),
+#                    HoldSignalEvent,
+#                    ExitSignalEvent,
+#                    CancelSignalEvent,
+#                    str)
 
 
 class Event(metaclass=ABCMeta):
@@ -35,6 +35,11 @@ class Event(metaclass=ABCMeta):
 
     def __init__(self):
         self.logger = logging.getLogger(self.LOGGER_NAME)
+
+    @classmethod
+    def get_subclasses(cls):
+        yield cls.__subclasses__() + [y for x in cls.__subclasses__()
+                                      for y in x.get_subclasses()]
 
 
 class MarketEvent(Event):
@@ -55,13 +60,39 @@ class SignalEvent(Event):
 
     LOGGER_NAME = EventType.SIGNAL.name
 
-    def __init__(self,
-                 ticker: str,
-                 dt: datetime,
-                 signal_type: SignalType):
+    def __init__(self, ticker: str, dt: datetime,
+                 signal_type: SignalType or str,
+                 limit_price: float = None,
+                 stop_price: float = None,
+                 target_price: float = None,
+                 strength: float = None,
+                 order_type: OrderType = None,
+                 action: TradeAction = None,
+                 position: Position = None,
+                 upper_price: float = None,
+                 lower_price: float = None):
         """
         Base SignalEvent constructor.
         
+        Basic rules:
+            - If stop and limit price are ``None`` a :class:``MarketOrder``
+            will be created.
+            - If only stop price is provided a :class:``StopOrder`` would be
+            created.
+            - If only limit price is provided a :class:``LimitPrice`` would be
+            created.
+            - If both stop and limit price are provided a 
+        :param upper_price: 
+        :param lower_price: 
+        :param position: 
+        :param action: 
+        :param limit_price: 
+        :param stop_price: 
+        :param target_price: 
+        :param strength: 
+        :param order_type: 
+        :class:``StopLimitOrder`` would be created.
+        - ``target_price`` and ``strength`` **DO NOT** have any sort of
         :param ticker: The ticker to create the signal for.
         :param dt: The date the signal is being created. 
         :param signal_type: The type of signal being created.
@@ -73,166 +104,23 @@ class SignalEvent(Event):
         self.ticker = ticker
         self.dt = dt
         self.signal_type = SignalType.check_if_valid(signal_type)
-
-
-class HoldSignalEvent(SignalEvent):
-    """Indicates a hold signal."""
-    SIGNAL_TYPE = SignalType.HOLD
-
-    def __init__(self, ticker, dt):
-        super().__init__(ticker, dt, self.SIGNAL_TYPE)
-
-
-class ExitSignalEvent(SignalEvent):
-    """
-    Signal indicating to close all positions for an Asset.
-    
-    An :class:`OrderType` as well as a stop and/or limit price may be specified 
-    otherwise a MarketOrder will be created.
-    """
-    SIGNAL_TYPE = SignalType.EXIT
-
-    def __init__(self, ticker: str,
-                 dt: datetime,
-                 order_type: OrderType = OrderType.MARKET,
-                 stop_price: float = None,
-                 limit_price: float = None):
-        """
-        Constructor for ExitSignal.
-        
-        :param order_type: (optional) The :class:`OrderType` to create to 
-        exit the position.
-        (default: ``OrderType.MARKET``)
-        :param stop_price: (optional) The stop price for the order.
-        If the order type is not ``OrderType.STOP`` or ``OrderType.STOP_LIMIT``
-        then this value is ignored.
-        :param limit_price: (optional) The limit price for the order.
-        If the order type is not ``OrderType.LIMIT`` 
-        or ``OrderType.STOP_LIMIT`` then this value is ignored. 
-        """
-        super().__init__(ticker, dt, self.SIGNAL_TYPE)
-        self.order_type = OrderType.check_if_valid(order_type)
-        self.stop_price = stop_price
         self.limit_price = limit_price
-
-
-class CancelSignalEvent(SignalEvent):
-    """
-    Signal indicating that all open orders for a given asset should be 
-    canceled.
-    """
-    SIGNAL_TYPE = SignalType.CANCEL
-
-    def __init__(self, ticker, dt, trade_action=None, upper_price=None,
-                 lower_price=None, order_type=None):
-        """
-        Constructor for CancelSignal.
-        
-        :param TradeAction trade_action: (optional) Type of open orders to 
-        cancel. If None, then all orders will be canceled.
-        :param float upper_price: (optional) Only cancel orders that are for 
-        more than this amount.
-        :param float lower_price: (optional) Only cancel orders that are below
-        this this amount
-        :param OrderType order_type: (optional) Only cancel orders that are of 
-        the provided the order_type. e.g. Only cancel stop orders.
-        """
-        super().__init__(ticker, dt, self.SIGNAL_TYPE)
-        self.trade_action = TradeAction.check_if_valid(trade_action)
+        self.stop_price = stop_price
+        self.target_price = target_price
+        self.strength = strength
+        self.order_type = order_type
         self.upper_price = upper_price
         self.lower_price = lower_price
-        self.order_type = OrderType.check_if_valid(order_type)
 
+        if action is not None:
+            self.action = TradeAction.check_if_valid(action)
+        else:
+            self.action = action
 
-class TradeSignalEvent(SignalEvent):
-    """
-    Signal indicating a possible trade opportunity. Either long or short.
-    
-    These events will **ALWAYS** generate a new order and will not affect any 
-    other order that already exists.
-    
-    Most of the attributes are optional because it is up to the portfolio to 
-    determine how to interpret them.
-    """
-    SIGNAL_TYPE = SignalType.TRADE
-
-    def __init__(self, ticker: str,
-                 dt: datetime,
-                 strength: Any = None,
-                 stop_price: float = None,
-                 limit_price: float = None,
-                 target_price: float = None):
-        """
-        Constructor for TradeSignalEvent.
-        
-        The type of order that will be created will be based on the attributes
-        of the ``TradeSignalEvent``.
-        
-        Basic rules:
-            - If stop and limit price are ``None`` a :class:``MarketOrder``
-            will be created.
-            - If only stop price is provided a :class:``StopOrder`` would be
-            created.
-            - If only limit price is provided a :class:``LimitPrice`` would be
-            created.
-            - If both stop and limit price are provided a 
-            :class:``StopLimitOrder`` would be created.
-            - ``target_price`` and ``strength`` **DO NOT** have any sort of
-            direct impact on what kind of order is created. They are only 
-            intended to provide more context and data to the 
-            :class:``Portfolio`` that will ultimately process it.
-            It could (and probably will) impact whether or not an order of 
-            any type is created.
-        
-        :param Any strength: An indicator about confidence in the signal.
-        :param stop_price: The stop price.
-        :param limit_price: The limit price. 
-        :param target_price: The ideal price to buy at.
-        """
-        super().__init__(ticker, dt, self.SIGNAL_TYPE)
-
-        self.strength = strength
-        self.stop_price = stop_price
-        self.limit_price = limit_price
-        self.target_price = target_price
-
-
-class LongSignalEvent(TradeSignalEvent):
-    """
-    Signal indicating a possible long trade opportunity.
-    
-    Short cut to creating a Long :class:`TradeEventSignal`
-    """
-    SIGNAL_TYPE = SignalType.LONG
-
-    def __init__(self, ticker: str,
-                 dt: datetime,
-                 strength: Any = None,
-                 stop_price: float = None,
-                 limit_price: float = None,
-                 target_price: float = None):
-        super().__init__(ticker, dt, strength,
-                         stop_price, limit_price, target_price)
-        self.position = Position.LONG
-
-
-class ShortSignalEvent(TradeSignalEvent):
-    """
-    Signal indicating a possible short trade opportunity.
-    
-    Short cut to creating a Short :class:`TradeEventSignal`
-    """
-    SIGNAL_TYPE = SignalType.SHORT
-
-    def __init__(self, ticker: str,
-                 dt: datetime,
-                 strength: Any = None,
-                 stop_price: float = None,
-                 limit_price: float = None,
-                 target_price: float = None):
-        super().__init__(ticker, dt, strength,
-                         stop_price, limit_price, target_price)
-        self.position = Position.SHORT
+        if position is not None:
+            self.position = Position.check_if_valid(position)
+        else:
+            self.position = None
 
 
 class TradeEvent(Event):

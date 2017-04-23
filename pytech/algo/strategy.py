@@ -1,12 +1,15 @@
-from abc import ABCMeta, abstractmethod
+import datetime
 import logging
-import numpy as np
-import pandas as pd
-from queue import Queue
-from pytech.backtest.event import SignalEvent, MarketEvent
-from pytech.utils.enums import EventType
-from pytech.data.handler import YahooDataHandler, DataHandler
+from abc import ABCMeta, abstractmethod
+from typing import Any
+
 import pytech.utils.pandas_utils as pd_utils
+from pytech.backtest.event import (MarketEvent, SignalEvent)
+from pytech.data.handler import DataHandler
+from pytech.trading.order import get_order_types
+from pytech.utils.enums import EventType, SignalType
+
+OrderTypes = get_order_types()
 
 
 class Strategy(metaclass=ABCMeta):
@@ -19,18 +22,42 @@ class Strategy(metaclass=ABCMeta):
 
         raise NotImplementedError('Must implement generate_signals()')
 
+    def _make_signal_event(self,
+                           ticker: str,
+                           dt: datetime,
+                           signal_type: SignalType or str,
+                           *,
+                           stop_price: float,
+                           limit_price: float,
+                           order_type: OrderTypes,
+                           upper_price: float,
+                           lower_price: float,
+                           target_price: float,
+                           strength: Any,
+                           **kwargs):
+        if isinstance(signal_type, str):
+            signal_type = SignalType.check_if_valid(signal_type)
+
+        if signal_type is SignalType.EXIT:
+            pass
+
+
+
+
 
 class BuyAndHold(Strategy):
     def __init__(self, data_handler, events):
         super().__init__()
 
         if not issubclass(data_handler.__class__, DataHandler):
-            raise TypeError('bars must be a subclass of DataHandler. '
-                            '{} was provided'.format(type(data_handler)))
+            raise TypeError(
+                    'bars must be a subclass of DataHandler. '
+                    '{} was provided'.format(type(data_handler))
+            )
         else:
             self.bars = data_handler
 
-        self.ticker_list = self.bars.ticker_list
+        self.ticker_list = self.bars.tickers
         self.events = events
         self.bought = self._calculate_initial_bought()
 

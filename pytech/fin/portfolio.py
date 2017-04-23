@@ -6,11 +6,7 @@ from datetime import datetime
 import pandas as pd
 
 import pytech.utils.dt_utils as dt_utils
-from pytech.backtest.event import (CancelSignalEvent, ExitSignalEvent,
-                                   HoldSignalEvent, LongSignalEvent,
-                                   ShortSignalEvent, SignalEvent,
-                                   TradeSignalEvent, get_signal_event_types,
-                                   get_trade_signal_types)
+from pytech.backtest.event import SignalEvent
 from pytech.data.handler import DataHandler
 from pytech.fin.owned_asset import OwnedAsset
 from pytech.trading.blotter import Blotter
@@ -22,10 +18,6 @@ from pytech.utils.exceptions import (InvalidEventTypeError,
                                      InvalidSignalTypeError)
 
 logger = logging.getLogger(__name__)
-
-# Allowed types
-TradeSignalEventType = get_trade_signal_types()
-SignalEventType = get_signal_event_types()
 
 
 class AbstractPortfolio(metaclass=ABCMeta):
@@ -244,7 +236,7 @@ class BasicPortfolio(AbstractPortfolio):
         super().__init__(data_handler, events, start_date, blotter,
                          initial_capital)
 
-    def _update_from_trade(self, trade):
+    def _update_from_trade(self, trade: Trade):
         self.cash += trade.trade_cost()
         self.total_commission += trade.commission
 
@@ -289,7 +281,7 @@ class BasicPortfolio(AbstractPortfolio):
                         'Insufficient funds available to execute trade for '
                         'ticker: {} '.format(order.ticker))
 
-    def update_signal(self, event: SignalEventType):
+    def update_signal(self, event: SignalEvent):
         if event.type is EventType.SIGNAL:
             self._process_signal(event)
             self.blotter.check_order_triggers()
@@ -299,7 +291,7 @@ class BasicPortfolio(AbstractPortfolio):
                     expected=type(EventType.SIGNAL),
                     event_type=type(event.type))
 
-    def _process_signal(self, signal: SignalEventType):
+    def _process_signal(self, signal: SignalEvent):
         """
         Call different methods depending on the type of signal received.
 
@@ -321,7 +313,7 @@ class BasicPortfolio(AbstractPortfolio):
         else:
             raise InvalidSignalTypeError(signal_type=type(signal.signal_type))
 
-    def _handle_trade_signal(self, signal: TradeSignalEventType):
+    def _handle_trade_signal(self, signal: SignalEvent):
         """
         Process a new trade signal and take the appropriate action.
         
@@ -338,7 +330,7 @@ class BasicPortfolio(AbstractPortfolio):
         except AttributeError:
             self._handle_general_trade_signal(signal)
 
-    def _handle_exit_signal(self, signal: ExitSignalEvent):
+    def _handle_exit_signal(self, signal: SignalEvent):
         """
         Create an order that will close out the position in the signal.
         
@@ -359,7 +351,7 @@ class BasicPortfolio(AbstractPortfolio):
         self.blotter.place_order(signal.ticker, action, signal.order_type,
                                  qty, signal.stop_price, signal.limit_price)
 
-    def _handle_cancel_signal(self, signal: CancelSignalEvent):
+    def _handle_cancel_signal(self, signal: SignalEvent):
         """
         Cancel all open orders for the asset in the signal.
 
@@ -369,7 +361,7 @@ class BasicPortfolio(AbstractPortfolio):
                 signal.ticker, upper_price=signal.upper_price,
                 lower_price=signal.lower_price, order_type=signal.order_type)
 
-    def _handle_hold_signal(self, signal: HoldSignalEvent):
+    def _handle_hold_signal(self, signal: SignalEvent):
         """
         Place all open orders for the asset in the signal on hold.
 
@@ -394,7 +386,7 @@ class BasicPortfolio(AbstractPortfolio):
         :return: 
         """
 
-    def _handle_general_trade_signal(self, signal: TradeSignalEvent):
+    def _handle_general_trade_signal(self, signal: SignalEvent):
         """
         Handle an ambiguous trade signal, meaning a trade signal that is
         not explicitly defined as **LONG** or **SHORT**.  This most often means

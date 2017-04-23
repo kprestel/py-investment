@@ -12,8 +12,7 @@ from pandas.tseries.offsets import DateOffset
 
 import pytech.utils.common_utils as utils
 import pytech.utils.dt_utils as dt_utils
-from pytech.backtest.event import (LongSignalEvent, ShortSignalEvent,
-                                   SignalEvent)
+from pytech.backtest.event import SignalEvent
 from pytech.fin.asset import Asset
 from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
                                 TradeAction)

@@ -1,8 +1,9 @@
 import datetime as dt
+import pandas as pd
 import logging
 import queue
 from abc import ABCMeta, abstractmethod
-from typing import Iterable
+from typing import Iterable, Dict
 
 import numpy as np
 import pandas_datareader.data as web
@@ -13,6 +14,13 @@ from pytech.backtest.event import MarketEvent
 
 
 class DataHandler(metaclass=ABCMeta):
+    # Type hints
+    events: queue.Queue
+    tickers: Iterable
+    start_date: dt.datetime
+    end_date: dt.datetime
+    ticker_data: Dict[str, pd.DataFrame]
+
     def __init__(self,
                  events: queue.Queue,
                  tickers: Iterable,

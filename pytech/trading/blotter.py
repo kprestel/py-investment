@@ -24,17 +24,22 @@ AnyOrder = get_order_types()
 class Blotter(object):
     """Holds and interacts with all orders."""
 
-    LOGGER_NAME = 'blotter'
+    # Type hints
     asset_finder: AssetFinder
     orders: Dict[str, AnyOrder]
     events: queue.Queue
     current_dt = datetime
+    commission_model: AbstractCommissionModel.__subclasses__()
 
-    def __init__(self, events, asset_finder=None, commission_model=None):
+    def __init__(self,
+                 events,
+                 asset_finder=None,
+                 commission_model=None,
+                 max_shares=None):
 
-        self.logger = logging.getLogger(self.LOGGER_NAME)
+        self.logger = logging.getLogger(__name__)
         self.asset_finder = asset_finder
-        # dict of all orders. key=ticker of the asset, value=the asset.
+        # dict of all orders. key=ticker of the asset, value=the order.
         self.orders = {}
         # keep a record of all past trades.
         self.trades = []
@@ -42,6 +47,7 @@ class Blotter(object):
         # events queue
         self.events = events
         self.bars = None
+        self.max_shares = max_shares or int(1e+11)
 
         if commission_model is None:
             self.commission_model = PerOrderCommissionModel()
@@ -165,7 +171,14 @@ class Blotter(object):
         if qty == 0:
             # No point in making an order for 0 shares.
             return None
-        elif action is None and qty < 0:
+        elif qty > self.max_shares:
+            raise OverflowError(
+                    'Cannot place an order for {shares}. Max shares is set'
+                    'to {max_shares}'
+                        .format(shares=qty, max_shares=self.max_shares)
+            )
+
+        if action is None and qty < 0:
             action = TradeAction.SELL
         elif action is None and qty > 0:
             action = TradeAction.BUY
@@ -173,7 +186,10 @@ class Blotter(object):
         if date_placed is None:
             date_placed = self.current_dt
 
-        order = self._create_order(ticker, action, qty, order_type,
+        order = self._create_order(ticker,
+                                   action,
+                                   qty,
+                                   order_type,
                                    stop_price=stop_price,
                                    limit_price=limit_price,
                                    date_placed=date_placed,
@@ -195,23 +211,15 @@ class Blotter(object):
                       ticker: str,
                       action: TradeAction,
                       qty: int,
-                      order_type: OrderType or str = None,
+                      order_type: OrderType or str,
                       **kwargs) -> AnyOrder:
         """
         Figure out what type of order to create based on given parameters.
         
         This is meant to be somewhat of an order factory.
         """
-        if order_type is not None:
-            order_type = OrderType.check_if_valid(order_type)
-            return self._make_order(ticker, action, qty, order_type, **kwargs)
+        order_type = OrderType.check_if_valid(order_type)
 
-    def _make_order(self,
-                    ticker: str,
-                    action: TradeAction,
-                    qty: int,
-                    order_type: OrderType,
-                    **kwargs) -> AnyOrder:
         if order_type is OrderType.MARKET:
             return MarketOrder(ticker, action, qty)
 
@@ -223,6 +231,14 @@ class Blotter(object):
 
         if order_type is OrderType.STOP_LIMIT:
             return StopLimitOrder(ticker, action, qty, **kwargs)
+
+    def _make_order(self,
+                    ticker: str,
+                    action: TradeAction,
+                    qty: int,
+                    order_type: OrderType,
+                    **kwargs) -> AnyOrder:
+        pass
 
     def _find_order(self, order_id, ticker):
         if ticker is None:
@@ -371,13 +387,16 @@ class Blotter(object):
                         TradeEvent(order_id, current_price, order.qty, dt)
                 )
 
-    def make_trade(self, order, price_per_share, trade_date, volume):
+    def make_trade(self,
+                   order: AnyOrder,
+                   price_per_share: float,
+                   trade_date: datetime,
+                   volume: int) -> Trade:
         """
         Buy or sell an ticker from the ticker universe.
 
-        :param str ticker: The ticker of the :class:``Asset`` to trade.
-        :param TradeAction or str action: :py:class:``enum.TradeAction`` 
-            see comments below.
+        :param volume: 
+        :param order: 
         :param float price_per_share: the cost per share in the trade
         :param datetime trade_date: The date and time that the trade is 
             taking place.
