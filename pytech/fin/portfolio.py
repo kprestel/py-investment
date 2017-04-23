@@ -1,5 +1,5 @@
 import logging
-from typing import TypeVar
+import queue
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
 
@@ -9,17 +9,17 @@ import pytech.utils.dt_utils as dt_utils
 from pytech.backtest.event import (CancelSignalEvent, ExitSignalEvent,
                                    HoldSignalEvent, LongSignalEvent,
                                    ShortSignalEvent, SignalEvent,
-                                   TradeEvent, TradeSignalEvent, Event,
-                                   get_trade_signal_types,
-                                   get_signal_event_types)
+                                   TradeSignalEvent, get_signal_event_types,
+                                   get_trade_signal_types)
+from pytech.data.handler import DataHandler
 from pytech.fin.owned_asset import OwnedAsset
-from pytech.trading.order import Order
+from pytech.trading.blotter import Blotter
 from pytech.trading.trade import Trade
 from pytech.utils import pandas_utils as pd_utils
-from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
+from pytech.utils.enums import (EventType, Position, SignalType,
                                 TradeAction)
-from pytech.utils.exceptions import InvalidEventTypeError, \
-    InvalidPositionError, InvalidSignalTypeError
+from pytech.utils.exceptions import (InvalidEventTypeError,
+                                     InvalidSignalTypeError)
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,12 @@ class AbstractPortfolio(metaclass=ABCMeta):
     the class up correctly.
     """
 
-    def __init__(self, data_handler, events, start_date, blotter,
-                 initial_capital=100000.00):
+    def __init__(self,
+                 data_handler: DataHandler,
+                 events: queue.Queue,
+                 start_date: datetime,
+                 blotter: Blotter,
+                 initial_capital: float = 100000.00):
         self.logger = logging.getLogger(__name__)
         self.bars = data_handler
         self.events = events
@@ -49,7 +53,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.start_date = dt_utils.parse_date(start_date)
         self.initial_capital = initial_capital
         self.cash = initial_capital
-        self.ticker_list = self.bars.ticker_list
+        self.ticker_list = self.bars.tickers
         self.owned_assets = {}
         # holdings = mv
         self.all_holdings_mv = self._construct_all_holdings()
@@ -310,6 +314,10 @@ class BasicPortfolio(AbstractPortfolio):
             self._handle_hold_signal(signal)
         elif signal.signal_type is SignalType.TRADE:
             self._handle_trade_signal(signal)
+        elif signal.signal_type is SignalType.LONG:
+            self._handle_long_signal(signal)
+        elif signal.signal_type is SignalType.SHORT:
+            self._handle_short_signal(signal)
         else:
             raise InvalidSignalTypeError(signal_type=type(signal.signal_type))
 
@@ -361,11 +369,11 @@ class BasicPortfolio(AbstractPortfolio):
                 signal.ticker, upper_price=signal.upper_price,
                 lower_price=signal.lower_price, order_type=signal.order_type)
 
-    def _handle_hold_signal(self, signal):
+    def _handle_hold_signal(self, signal: HoldSignalEvent):
         """
         Place all open orders for the asset in the signal on hold.
 
-        :param HoldSignalEvent or SignalEvent signal:
+        :param signal:
         :return:
         """
         self.blotter.hold_all_orders_for_asset(signal.ticker)

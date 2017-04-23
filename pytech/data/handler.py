@@ -1,6 +1,8 @@
 import datetime as dt
 import logging
+import queue
 from abc import ABCMeta, abstractmethod
+from typing import Iterable
 
 import numpy as np
 import pandas_datareader.data as web
@@ -11,21 +13,42 @@ from pytech.backtest.event import MarketEvent
 
 
 class DataHandler(metaclass=ABCMeta):
-    def __init__(self):
+    def __init__(self,
+                 events: queue.Queue,
+                 tickers: Iterable,
+                 start_date: dt.datetime,
+                 end_date: dt.datetime):
+        """
+        All child classes MUST call this constructor.
+        
+        :param events: The universal queue.
+        :param tickers: An iterable of tickers. This will create the asset
+        universe or all the assets that will available to be traded.
+        :param start_date: The start of the sim.
+        :param end_date: The end of the sim.
+        """
         self.logger = logging.getLogger(__name__)
+        self.events = events
+        self.tickers = tickers
+        self.ticker_data = {}
+        self.latest_ticker_data = {}
+        self.continue_backtest = True
+        self.start_date = dt_utils.parse_date(start_date)
+        self.end_date = dt_utils.parse_date(end_date)
+        self._populate_ticker_data()
 
     @abstractmethod
-    def get_latest_bar(self, ticker):
+    def get_latest_bar(self, ticker: str):
         """
         Return the latest bar updated.
+        
         :param str ticker: The ticker to retrieve the bar for.
         :return: The latest update bar for the given ticker.
         """
-
         raise NotImplementedError('Must implement get_latest_bar()')
 
     @abstractmethod
-    def get_latest_bars(self, ticker, n=1):
+    def get_latest_bars(self, ticker: str, n: int = 1):
         """
         Returns the last **n** bars from the latest_symbol list, 
         or fewer if less bars available.
@@ -36,7 +59,7 @@ class DataHandler(metaclass=ABCMeta):
         raise NotImplementedError('Must implement get_latest_bars()')
 
     @abstractmethod
-    def get_latest_bar_dt(self, ticker):
+    def get_latest_bar_dt(self, ticker: str):
         """
         Return the datetime for the last bar for the given ticker.
 
@@ -47,7 +70,7 @@ class DataHandler(metaclass=ABCMeta):
         raise NotImplementedError('Must implement get_latest_bar_dt()')
 
     @abstractmethod
-    def get_latest_bar_value(self, ticker, val_type, n=1):
+    def get_latest_bar_value(self, ticker: str, val_type, n=1):
         """
         Return the last **n** bars from the latest_symbol list.
 
@@ -66,33 +89,39 @@ class DataHandler(metaclass=ABCMeta):
         """
         raise NotImplementedError('Must implement update_bars()')
 
+    @abstractmethod
+    def _populate_ticker_data(self):
+        """
+        Populate the ticker_data dict with a pandas OHLCV 
+        df as the value and the ticker as the key.
+        
+        This will get called on ``__init__`` and is **NOT** intended to ever
+        be called directly by child classes.
+        """
+        raise NotImplementedError('Must implement _populate_ticker_data()')
+
 
 class YahooDataHandler(DataHandler):
     DATA_SOURCE = 'yahoo'
 
-    def __init__(self, events, ticker_list, start_date, end_date):
+    def __init__(self,
+                 events: queue.Queue,
+                 tickers: Iterable,
+                 start_date: dt.datetime,
+                 end_date: dt.datetime):
+        super().__init__(events, tickers, start_date, end_date)
 
-        super().__init__()
-        self.events = events
-        self.ticker_list = ticker_list
-        self.ticker_data = {}
-        self.latest_ticker_data = {}
-        self.continue_backtest = True
-        self.start_date = dt_utils.parse_date(start_date)
-        self.end_date = dt_utils.parse_date(end_date)
-        self._get_ohlcvs(self.start_date, self.end_date)
-
-    def _get_ohlcvs(self, start_date, end_date):
+    def _populate_ticker_data(self):
         """
         Populate the ticker_data dict with a pandas OHLCV 
         df as the value and the ticker as the key.
         """
         comb_index = None
 
-        for t in self.ticker_list:
+        for t in self.tickers:
             self.ticker_data[t] = web.DataReader(
                     t, data_source=self.DATA_SOURCE,
-                    start=start_date, end=end_date)
+                    start=self.start_date, end=self.end_date)
             self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(
                     self.ticker_data[t])
 
@@ -103,7 +132,7 @@ class YahooDataHandler(DataHandler):
 
             self.latest_ticker_data[t] = []
 
-        for t in self.ticker_list:
+        for t in self.tickers:
             self.ticker_data[t] = (self.ticker_data[t]
                                    .reindex(index=comb_index, method='pad')
                                    .iterrows())
@@ -144,7 +173,7 @@ class YahooDataHandler(DataHandler):
         except KeyError:
             self.logger.exception(
                     'Could not find {ticker} in latest_ticker_data'
-                    .format(ticker=ticker))
+                        .format(ticker=ticker))
             raise
         else:
             return bars_list[-n:]
@@ -155,7 +184,7 @@ class YahooDataHandler(DataHandler):
         except KeyError:
             self.logger.exception(
                     'Could not find {ticker} in latest_ticker_data'
-                    .format(ticker=ticker))
+                        .format(ticker=ticker))
             raise
         else:
             return dt_utils.parse_date(bars_list[-1][pd_utils.DATE_COL])
@@ -176,13 +205,13 @@ class YahooDataHandler(DataHandler):
         except KeyError:
             self.logger.exception(
                     'Could not find {ticker} in latest_ticker_data'
-                    .format(ticker=ticker))
+                        .format(ticker=ticker))
             raise
         else:
             return np.array([getattr(bar, val_type) for bar in bars_list])
 
     def update_bars(self):
-        for ticker in self.ticker_list:
+        for ticker in self.tickers:
             try:
                 bar = next(self._get_new_bar(ticker))
                 # bar is a tuple and we only care about the 2nd value in it.

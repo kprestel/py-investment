@@ -14,6 +14,7 @@ class TestBacktest(object):
                             start_date=start_date,
                             strategy=BuyAndHold)
 
+
         assert isinstance(backtest, Backtest)
         backtest._run()
 

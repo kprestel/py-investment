@@ -125,11 +125,18 @@ class Blotter(object):
 
         return do_iter(self.orders)
 
-    def place_order(self, ticker: str, action: TradeAction,
-                    order_type: OrderType, qty: int, stop_price: float = None,
-                    limit_price: float = None, date_placed: datetime = None,
-                    order_subtype: OrderSubType = None, order_id: str = None,
-                    max_days_open: int = 90):
+    def place_order(self,
+                    ticker: str,
+                    action: TradeAction,
+                    order_type: OrderType,
+                    qty: int,
+                    stop_price: float = None,
+                    limit_price: float = None,
+                    date_placed: datetime = None,
+                    order_subtype: OrderSubType = None,
+                    order_id: str = None,
+                    max_days_open: int = 90,
+                    **kwargs):
         """
         Open a new order.  If an open order for the given ``ticker`` already 
         exists placing a new order will **NOT** change the existing order, 
@@ -138,7 +145,8 @@ class Blotter(object):
         :param ticker: The ticker of the :py:class:`~ticker.Asset` to place an 
         order for or the ticker of an ticker.
         :type ticker: Asset or str
-        :param TradeAction or str action: **BUY** or **SELL**
+        :param TradeAction or str action: **BUY** or **SELL**. If this is not
+        provided it will be determined based on if ``qty`` is > 0.
         :param OrderType order_type: the type of order
         :param float stop_price: If creating a stop order this is the 
         stop price that will trigger the ``order``.
@@ -157,22 +165,22 @@ class Blotter(object):
         if qty == 0:
             # No point in making an order for 0 shares.
             return None
+        elif action is None and qty < 0:
+            action = TradeAction.SELL
+        elif action is None and qty > 0:
+            action = TradeAction.BUY
 
         if date_placed is None:
             date_placed = self.current_dt
 
-        order = Order(
-                ticker=ticker,
-                action=action,
-                order_type=order_type,
-                order_subtype=order_subtype,
-                stop=stop_price,
-                limit=limit_price,
-                qty=qty,
-                created=date_placed,
-                order_id=order_id,
-                max_days_open=max_days_open
-        )
+        order = self._create_order(ticker, action, qty, order_type,
+                                   stop_price=stop_price,
+                                   limit_price=limit_price,
+                                   date_placed=date_placed,
+                                   order_subtype=order_subtype,
+                                   order_id=order_id,
+                                   max_days_open=max_days_open,
+                                   **kwargs)
 
         if ticker in self.orders:
             self.orders[ticker].update({
@@ -187,8 +195,7 @@ class Blotter(object):
                       ticker: str,
                       action: TradeAction,
                       qty: int,
-                      order_type: OrderType = None,
-                      *args,
+                      order_type: OrderType or str = None,
                       **kwargs) -> AnyOrder:
         """
         Figure out what type of order to create based on given parameters.
@@ -196,6 +203,7 @@ class Blotter(object):
         This is meant to be somewhat of an order factory.
         """
         if order_type is not None:
+            order_type = OrderType.check_if_valid(order_type)
             return self._make_order(ticker, action, qty, order_type, **kwargs)
 
     def _make_order(self,
@@ -203,24 +211,18 @@ class Blotter(object):
                     action: TradeAction,
                     qty: int,
                     order_type: OrderType,
-                    *args, **kwargs) -> AnyOrder:
+                    **kwargs) -> AnyOrder:
         if order_type is OrderType.MARKET:
             return MarketOrder(ticker, action, qty)
 
         if order_type is OrderType.STOP:
-            # TODO: should this handle error checking? or just let it raise.
-            # stop_price = kwargs.pop('stop_price')
             return StopOrder(ticker, action, qty, **kwargs)
 
         if order_type is OrderType.LIMIT:
-            # limit_price = kwargs.pop('limit_price')
             return LimitOrder(ticker, action, qty, **kwargs)
 
         if order_type is OrderType.STOP_LIMIT:
-            # stop_price = kwargs.pop('stop_price')
-            # limit_price = kwargs.pop('limit_price')
-            return StopLimitOrder(
-                    ticker, action, qty, **kwargs)
+            return StopLimitOrder(ticker, action, qty, **kwargs)
 
     def _find_order(self, order_id, ticker):
         if ticker is None:

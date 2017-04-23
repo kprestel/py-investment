@@ -177,10 +177,10 @@ class Order(metaclass=ABCMeta):
         For a limit order, True IF limit_reached.
         """
 
-    # @property
-    # @abstractmethod
-    # def order_type(self) -> OrderType:
-    #     """Must return the OrderType"""
+    @property
+    @abstractmethod
+    def order_type(self) -> OrderType:
+        """Must return the OrderType"""
 
     @property
     def open(self):
@@ -310,13 +310,15 @@ class LimitOrder(Order):
                  ticker: str,
                  action: TradeAction,
                  qty: int,
-                 limit_price: float,
                  order_subtype: OrderSubType = None,
                  created: datetime = None,
                  max_days_open: int = None,
                  order_id: str = None,
-                 *args, **kwargs):
-        super().__init__(ticker, action, qty, *args, **kwargs)
+                 *,
+                 limit_price: float,
+                 **kwargs):
+        super().__init__(ticker, action, qty, order_subtype, created,
+                         max_days_open, order_id, **kwargs)
         self.limit_reached = False
         self.limit_price = limit_price
 
@@ -378,13 +380,15 @@ class StopOrder(Order):
                  ticker: str,
                  action: TradeAction,
                  qty: int,
-                 stop_price: float,
                  order_subtype: OrderSubType = None,
                  created: datetime = None,
                  max_days_open: int = None,
                  order_id: str = None,
-                 *args, **kwargs):
-        super().__init__(ticker, action, qty, *args, **kwargs)
+                 *,
+                 stop_price: float,
+                 **kwargs):
+        super().__init__(ticker, action, qty, order_subtype, created,
+                         max_days_open, order_id, **kwargs)
         self.stop_price = stop_price
         self.stop_reached = False
 
@@ -409,6 +413,10 @@ class StopOrder(Order):
     @property
     def triggered(self) -> bool:
         return self.stop_reached
+
+    @property
+    def order_type(self) -> OrderType:
+        return OrderType.STOP
 
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         if self.action is TradeAction.BUY and current_price >= self.stop_price:
@@ -436,7 +444,7 @@ class StopLimitOrder(StopOrder, LimitOrder):
                  created: datetime = None,
                  max_days_open: int = None,
                  order_id: str = None,
-                 *args, **kwargs):
+                 **kwargs):
         # # stop_price = kwargs.pop('stop_price')
         # limit_price = kwargs.pop('limit_price')
         super().__init__(ticker, action, qty,
@@ -444,11 +452,15 @@ class StopLimitOrder(StopOrder, LimitOrder):
                          limit_price=limit_price,
                          order_subtype=order_subtype, created=created,
                          max_days_open=max_days_open, order_id=order_id,
-                         *args, **kwargs)
+                         **kwargs)
 
     @property
     def triggered(self) -> bool:
         return self.stop_reached and self.limit_reached
+
+    @property
+    def order_type(self) -> OrderType:
+        return OrderType.STOP_LIMIT
 
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         """

@@ -203,6 +203,7 @@ class LongSignalEvent(TradeSignalEvent):
     
     Short cut to creating a Long :class:`TradeEventSignal`
     """
+    SIGNAL_TYPE = SignalType.LONG
 
     def __init__(self, ticker: str,
                  dt: datetime,
@@ -221,6 +222,7 @@ class ShortSignalEvent(TradeSignalEvent):
     
     Short cut to creating a Short :class:`TradeEventSignal`
     """
+    SIGNAL_TYPE = SignalType.SHORT
 
     def __init__(self, ticker: str,
                  dt: datetime,
