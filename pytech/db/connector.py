@@ -15,7 +15,6 @@ from pytech.db.pytech_db_schema import (
 
 class DBConnector(object):
     """Handles creating the DB Connection and Creating the DB."""
-
     def __init__(self, engine, **kwargs):
 
         if engine is None:
@@ -23,10 +22,10 @@ class DBConnector(object):
         elif isinstance(engine, Engine):
             self.engine = engine
         else:
-            raise TypeError('Engine must be a URI to a database or a SQLAlchemy Engine.')
+            raise TypeError(
+                'Engine must be a URI to a database or a SQLAlchemy Engine.')
 
         self.init_db()
 
     def init_db(self):
         metadata.create_all(self.engine, checkfirst=True)
-

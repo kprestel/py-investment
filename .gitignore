@@ -19,17 +19,14 @@ __pycache__/
 *$py.class
 
 # C extensions
-*.so
-.idea/*
 .idea
 *.sqlite
 test/sample_data/*
-.idea/dictionaries/*
 #pytech/pytech.sqlite
 
 # Distribution / packaging
-.Python
 env/
+pyenv/
 build/
 develop-eggs/
 dist/
@@ -117,3 +114,5 @@ pytech/Q3_20160625_10Q_AAPL.json
 test/sample_data/
 /resources/
 /tests/sample_data/
+pytech/resources/
+pyenv_3.6/

@@ -28,16 +28,20 @@ class Asset(metaclass=ABCMeta):
     """
     This is the base class that all Asset classes should inherit from.
 
-    Inheriting from it will provide a table name and the proper mapper args required for the db.  It will also allow it
-    to have a relationship with the :class:``OwnedAsset``.
+    Inheriting from it will provide a table name and the proper mapper args 
+    required for the db.  It will also allow it to have a relationship 
+    with the :class:``OwnedAsset``.
 
     The child class is responsible for giving each instance a ticker to identify it.
 
-    If the child class needs any more fields it is responsible for creating them at the class level as well as
-    populating them via the child's constructor, in addition to calling the ``Asset`` constructor.
+    If the child class needs any more fields it is responsible for creating 
+    them at the class level as well as populating them via the child's constructor, 
+    in addition to calling the ``Asset`` constructor.
 
-    Any child class instance of this base class is considered to be a part of the **Asset Universe** or the assets that
-    are eligible to be traded.  If a child instance of an Asset does not yet exist in the universe and the
+    Any child class instance of this base class is considered to be a part of 
+    the **Asset Universe** or the assets that
+    are eligible to be traded.  If a child instance of an Asset does not yet 
+    exist in the universe and the
     :class:``~pytech.portfolio.Portfolio`` tries to trade it an exception will occur.
     """
 
@@ -51,11 +55,12 @@ class Asset(metaclass=ABCMeta):
         self._start_date = start_date
         self._end_date = end_date
 
-
         if self.start_date >= self.end_date:
             raise ValueError(
-                    'start_date must be older than end_date. start_date: {} end_date: {}'.format(str(start_date),
-                                                                                                 str(end_date)))
+                    'start_date must be older than end_date. '
+                    'start_date: {} end_date: {}'.format(
+                            str(start_date),
+                            str(end_date)))
 
         if ohlcv is None:
             self._ohlcv = self.get_ohlcv_series()
@@ -68,8 +73,11 @@ class Asset(metaclass=ABCMeta):
 
     @ohlcv.setter
     def ohlcv(self, ohlcv):
-        if not isinstance(ohlcv, pd.DataFrame) or not isinstance(ohlcv, pd.TimeSeries):
-            raise TypeError('ohlcv must be a pandas DataFrame or TimeSeries. {} was provided'.format(type(ohlcv)))
+        if not (isinstance(ohlcv, pd.DataFrame) or
+                    not isinstance(ohlcv, pd.TimeSeries)):
+            raise TypeError(
+                    'ohlcv must be a pandas DataFrame or TimeSeries. '
+                    '{} was provided'.format(type(ohlcv)))
 
         self._ohlcv = ohlcv
         db.ohlcv_to_sql(self)
@@ -85,7 +93,6 @@ class Asset(metaclass=ABCMeta):
 
         :param datetime start_date:
         """
-
         if start_date is None:
             start_date = datetime.now() - timedelta(days=365)
 
@@ -102,7 +109,6 @@ class Asset(metaclass=ABCMeta):
 
         :param datetime end_date:
         """
-
         if end_date is None:
             end_date = datetime.utcnow()
 
@@ -130,18 +136,8 @@ class Asset(metaclass=ABCMeta):
             price = self.ohlcv.ix[d][column][0]
             return quote(price=price, time=d)
 
-    def get_volume(self, dt):
-        """
-        Get the current volume traded for the ``Asset``
-
-        :param datetime dt: The datetime to get the volume for.
-        :return: The volume for the ``Asset``
-        :rtype: int
-        """
-
-        return self.ohlcv.ix[dt]['Volume'][0]
-
-    def get_ohlcv_series(self, data_source='yahoo', start_date=None, end_date=None):
+    def get_ohlcv_series(self, data_source='yahoo', start_date=None,
+                         end_date=None):
         """
         Load the ohlcv_to_sql timeseries.
 
@@ -172,15 +168,17 @@ class Asset(metaclass=ABCMeta):
             end_date = self.end_date
 
         try:
-            temp_ohlcv = web.DataReader(self.ticker, data_source=data_source, start=start_date, end=end_date)
+            temp_ohlcv = web.DataReader(self.ticker, data_source=data_source,
+                                        start=start_date, end=end_date)
             temp_ohlcv.reset_index(inplace=True, drop=False)
-
         except:
-            logger.exception('Could not create series for ticker: {}. Unknown error occurred.'.format(self.ticker))
+            logger.exception(
+                    'Could not create series for ticker: {}. Unknown error occurred.'.format(
+                            self.ticker))
             return None
 
         # rename the columns to what the DB expects
-        self.ohlcv = pd_utils.rename_yahoo_ohlcv_cols(temp_ohlcv)
+        return pd_utils.rename_yahoo_ohlcv_cols(temp_ohlcv)
 
     @classmethod
     def get_subclass_dict(cls, subclass_dict=None):
@@ -219,7 +217,8 @@ class Stock(Asset):
     be in the *universe* of owned_assets the portfolio owner is willing to own/trade
     """
 
-    def __init__(self, ticker, start_date=None, end_date=None, get_fundamentals=False, beta=None):
+    def __init__(self, ticker, start_date=None, end_date=None,
+                 get_fundamentals=False, beta=None):
 
         super().__init__(ticker, start_date=start_date, end_date=end_date)
 
@@ -228,7 +227,8 @@ class Stock(Asset):
         else:
             self.beta = beta
 
-        self.start_price = self.ohlcv[['adj_close']].head(1).iloc[0]['adj_close']
+        self.start_price = self.ohlcv[['adj_close']].head(1).iloc[0][
+            'adj_close']
         self.end_price = self.ohlcv[['adj_close']].tail(1).iloc[0]['adj_close']
 
         self.fundamentals = {}
@@ -256,13 +256,16 @@ class Stock(Asset):
             # fundamentals will be returned but for now this should work
             # it will require some sort of date guessing based on the periods and the end dates or something so yeah
             # that is a problem for another day
-            result = session.query(Fundamental).filter(Fundamental.ticker == self.ticker).all()
+            result = session.query(Fundamental).filter(
+                    Fundamental.ticker == self.ticker).all()
             if result:
                 for row in result:
                     self.fundamentals[row.access_key] = row
             else:
-                self._init_spiders([self.ticker], end_date=self.end_date, start_date=self.start_date)
-                result = session.query(Fundamental).filter(Fundamental.stock_id == self.id).all()
+                self._init_spiders([self.ticker], end_date=self.end_date,
+                                   start_date=self.start_date)
+                result = session.query(Fundamental).filter(
+                        Fundamental.stock_id == self.id).all()
                 for row in result:
                     self.fundamentals[row.access_key] = row
 
@@ -283,7 +286,8 @@ class Stock(Asset):
         except OperationalError:
             logger.exception('error in query')
             sma_ts = pd.Series(
-                    self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean()).dropna()
+                    self.ohlcv[column].rolling(center=False, window=period,
+                                               min_periods=period - 1).mean()).dropna()
             db.ohlcv_to_sql(sma_ts, ticker=self.ticker)
             print('creating')
             print(sma_ts)
@@ -303,10 +307,13 @@ class Stock(Asset):
 
         compute the simple moving median over a given period and return it in timeseries
         """
-        return pd.Series(self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).median(),
-                         name='{} day SMM Ticker: {}'.format(period, self.ticker))
+        return pd.Series(
+                self.ohlcv[column].rolling(center=False, window=period,
+                                           min_periods=period - 1).median(),
+                name='{} day SMM Ticker: {}'.format(period, self.ticker))
 
-    def exponential_weighted_moving_average(self, period=50, column='adj_close'):
+    def exponential_weighted_moving_average(self, period=50,
+                                            column='adj_close'):
         """
         :param ohlc: dict
         :param period: int, the number of days to use
@@ -315,8 +322,10 @@ class Stock(Asset):
 
         compute the exponential weighted moving average (ewma) over a given period and return it in timeseries
         """
-        return pd.Series(self.ohlcv[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean(),
-                         name='{} day EWMA Ticker: {}'.format(period, self.ticker))
+        return pd.Series(
+                self.ohlcv[column].ewm(ignore_na=False, min_periods=period - 1,
+                                       span=period).mean(),
+                name='{} day EWMA Ticker: {}'.format(period, self.ticker))
 
     def double_ewma(self, period=50, column='adj_close'):
         """
@@ -329,9 +338,11 @@ class Stock(Asset):
         double exponential moving average
         """
         ewma = self._ewma_computation(period=period, column=column)
-        ewma_mean = ewma.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
+        ewma_mean = ewma.ewm(ignore_na=False, min_periods=period - 1,
+                             span=period).mean()
         dema = 2 * ewma - ewma_mean
-        yield pd.Series(dema, name='{} day DEMA Ticker: {}'.format(period, self.ticker))
+        yield pd.Series(dema, name='{} day DEMA Ticker: {}'.format(period,
+                                                                   self.ticker))
 
     def triple_ewma(self, period=50, column='adj_close'):
         """
@@ -344,9 +355,13 @@ class Stock(Asset):
         """
         ewma = self._ewma_computation(period=period, column=column)
         triple_ema = 3 * ewma
-        ema_ema_ema = ewma.ewm(ignore_na=False, span=period).mean().ewm(ignore_na=False, span=period).mean()
-        tema = triple_ema - 3 * ewma.ewm(ignore_na=False, min_periods=period - 1, span=period).mean() + ema_ema_ema
-        return pd.Series(tema, name='{} day TEMA Ticker: {}'.format(period, self.ticker))
+        ema_ema_ema = ewma.ewm(ignore_na=False, span=period).mean().ewm(
+                ignore_na=False, span=period).mean()
+        tema = triple_ema - 3 * ewma.ewm(ignore_na=False,
+                                         min_periods=period - 1,
+                                         span=period).mean() + ema_ema_ema
+        return pd.Series(tema, name='{} day TEMA Ticker: {}'.format(period,
+                                                                    self.ticker))
 
     def triangle_moving_average(self, period=50, column='adj_close'):
         """
@@ -360,8 +375,10 @@ class Stock(Asset):
         SMA of the SMA
         """
         sma = self._sma_computation(period=period, column=column) \
-            .rolling(center=False, window=period, min_periods=period - 1).mean()
-        return pd.Series(sma, name='{} day TRIMA Ticker: {}'.format(period, self.ticker))
+            .rolling(center=False, window=period,
+                     min_periods=period - 1).mean()
+        return pd.Series(sma, name='{} day TRIMA Ticker: {}'.format(period,
+                                                                    self.ticker))
 
     def triple_ema_oscillator(self, period=15, column='adj_close'):
         """
@@ -377,10 +394,13 @@ class Stock(Asset):
         oscillates around 0. positive numbers indicate a bullish indicator
         """
         emwa_one = self._ewma_computation(period=period, column=column)
-        emwa_two = emwa_one.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
-        emwa_three = emwa_two.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
+        emwa_two = emwa_one.ewm(ignore_na=False, min_periods=period - 1,
+                                span=period).mean()
+        emwa_three = emwa_two.ewm(ignore_na=False, min_periods=period - 1,
+                                  span=period).mean()
         trix = emwa_three.pct_change(periods=1)
-        return pd.Series(trix, name='{} days TRIX Ticker: {}'.format(period, self.ticker))
+        return pd.Series(trix, name='{} days TRIX Ticker: {}'.format(period,
+                                                                     self.ticker))
 
     def efficiency_ratio(self, period=10, column='adj_close'):
         """
@@ -395,7 +415,9 @@ class Stock(Asset):
         """
         change = self.ohlcv[column].diff(periods=period).abs()
         vol = self.ohlcv[column].diff().abs().rolling(window=period).sum()
-        return pd.Series(change / vol, name='{} days Efficiency Indicator Ticker: {}'.format(period, self.ticker))
+        return pd.Series(change / vol,
+                         name='{} days Efficiency Indicator Ticker: {}'.format(
+                                 period, self.ticker))
 
     def _efficiency_ratio_computation(self, period=10, column='adj_close'):
         """
@@ -413,14 +435,19 @@ class Stock(Asset):
         vol = self.ohlcv[column].diff().abs().rolling(window=period).sum()
         return pd.Series(change / vol)
 
-    def kama(self, efficiency_ratio_periods=10, ema_fast=2, ema_slow=30, period=20, column='adj_close'):
-        er = self._efficiency_ratio_computation(period=efficiency_ratio_periods, column=column)
+    def kama(self, efficiency_ratio_periods=10, ema_fast=2, ema_slow=30,
+             period=20, column='adj_close'):
+        er = self._efficiency_ratio_computation(
+                period=efficiency_ratio_periods, column=column)
         fast_alpha = 2 / (ema_fast + 1)
         slow_alpha = 2 / (ema_slow + 1)
-        smoothing_constant = pd.Series((er * (fast_alpha - slow_alpha) + slow_alpha) ** 2, name='smoothing_constant')
+        smoothing_constant = pd.Series(
+                (er * (fast_alpha - slow_alpha) + slow_alpha) ** 2,
+                name='smoothing_constant')
         sma = pd.Series(self.ohlcv[column].rolling(period).mean(), name='SMA')
         kama = []
-        for smooth, ma, price in zip(iter(smoothing_constant.items()), iter(sma.shift(-1).items()),
+        for smooth, ma, price in zip(iter(smoothing_constant.items()),
+                                     iter(sma.shift(-1).items()),
                                      iter(self.ohlcv[column].items())):
             try:
                 kama.append(kama[-1] + smooth[1] * (price[1] - kama[-1]))
@@ -429,7 +456,9 @@ class Stock(Asset):
                     kama.append(ma[1] + smooth[1] * (price[1] - ma[1]))
                 else:
                     kama.append(None)
-        sma['KAMA'] = pd.Series(kama, index=sma.index, name='{} days KAMA Ticker {}'.format(period, self.ticker))
+        sma['KAMA'] = pd.Series(kama, index=sma.index,
+                                name='{} days KAMA Ticker {}'.format(period,
+                                                                     self.ticker))
         yield sma['KAMA']
 
     def zero_lag_ema(self, period=30, column='adj_close'):
@@ -444,7 +473,8 @@ class Stock(Asset):
         """
         lag = (period - 1) / 2
         return pd.Series((self.ohlcv[column] + (self.ohlcv[column].diff(lag))),
-                         name='{} days Zero Lag EMA Ticker: {}'.format(period, self.ticker))
+                         name='{} days Zero Lag EMA Ticker: {}'.format(period,
+                                                                       self.ticker))
 
     def weighted_moving_average(self, period=30, column='adj_close'):
         """
@@ -456,10 +486,12 @@ class Stock(Asset):
         aims to smooth the price curve for better trend identification
         places a higher importance on recent data compared to the EMA
         """
-        wma = self._weighted_moving_average_computation(period=period, column=column)
+        wma = self._weighted_moving_average_computation(period=period,
+                                                        column=column)
         # ts['WMA'] = pd.Series(wma, index=ts.index)
         return pd.Series(pd.Series(wma, index=self.ohlcv.index),
-                         name='{} days WMA Ticker: {}'.format(period, self.ticker))
+                         name='{} days WMA Ticker: {}'.format(period,
+                                                              self.ticker))
         # yield pd.Series(ts['WMA'], name='{} days WMA Ticker: {}'.format(period, ticker))
 
     def hull_moving_average(self, period=30, column='adj_close'):
@@ -476,18 +508,27 @@ class Stock(Asset):
         """
         import math
         wma_one_period = int(period / 2) * 2
-        wma_one = pd.Series(self._weighted_moving_average_computation(period=wma_one_period, column=column),
-                            index=self.ohlcv.index)
+        wma_one = pd.Series(
+                self._weighted_moving_average_computation(
+                        period=wma_one_period,
+                        column=column),
+                index=self.ohlcv.index)
         wma_one *= 2
-        wma_two = pd.Series(self._weighted_moving_average_computation(period=period, column=column),
-                            index=self.ohlcv.index)
+        wma_two = pd.Series(
+                self._weighted_moving_average_computation(period=period,
+                                                          column=column),
+                index=self.ohlcv.index)
         wma_delta = wma_one - wma_two
         sqrt_period = int(math.sqrt(period))
-        wma = self._weighted_moving_average_computation(period=sqrt_period, column=column)
+        wma = self._weighted_moving_average_computation(period=sqrt_period,
+                                                        column=column)
         wma_delta['_WMA'] = pd.Series(wma, index=self.ohlcv.index)
-        yield pd.Series(wma_delta['_WMA'], name='{} day HMA Ticker: {}'.format(period, self.ticker))
+        yield pd.Series(wma_delta['_WMA'],
+                        name='{} day HMA Ticker: {}'.format(period,
+                                                            self.ticker))
 
-    def volume_weighted_moving_average(universe_dict, period=30, column='adj_close'):
+    def volume_weighted_moving_average(universe_dict, period=30,
+                                       column='adj_close'):
         pass
 
     def smoothed_moving_average(self, period=30, column='adj_close'):
@@ -499,10 +540,12 @@ class Stock(Asset):
 
         equal weights given to historic and more current prices
         """
-        return pd.Series(self.ohlcv[column].ewm(alpha=1 / float(period)).mean(),
-                         name='{} days SMMA Ticker: {}'.format(period, self.ticker))
+        return pd.Series(
+                self.ohlcv[column].ewm(alpha=1 / float(period)).mean(),
+                name='{} days SMMA Ticker: {}'.format(period, self.ticker))
 
-    def macd_signal(self, period_fast=12, period_slow=26, signal=9, column='adj_close'):
+    def macd_signal(self, period_fast=12, period_slow=26, signal=9,
+                    column='adj_close'):
         """
         Moving average convergence divergence
 
@@ -526,13 +569,19 @@ class Stock(Asset):
         """
 
         ema_fast = pd.Series(
-                self.ohlcv[column].ewm(ignore_na=False, min_periods=period_fast - 1, span=period_fast).mean(),
+                self.ohlcv[column].ewm(ignore_na=False,
+                                       min_periods=period_fast - 1,
+                                       span=period_fast).mean(),
                 name='EMA_fast')
         ema_slow = pd.Series(
-                self.ohlcv[column].ewm(ignore_na=False, min_periods=period_slow - 1, span=period_slow).mean(),
+                self.ohlcv[column].ewm(ignore_na=False,
+                                       min_periods=period_slow - 1,
+                                       span=period_slow).mean(),
                 name='EMA_slow')
         macd_series = pd.Series(ema_fast - ema_slow, name='MACD')
-        macd_signal_series = pd.Series(macd_series.ewm(ignore_na=False, span=signal).mean(), name='MACD_Signal')
+        macd_signal_series = pd.Series(
+                macd_series.ewm(ignore_na=False, span=signal).mean(),
+                name='MACD_Signal')
         return pd.concat([macd_signal_series, macd_series], axis=1)
 
     def market_momentum(self, period=10, column='adj_close'):
@@ -547,7 +596,9 @@ class Stock(Asset):
         :return: generator
         """
 
-        return pd.Series(self.ohlcv[column].diff(period), name='{} day MOM Ticker: {}'.format(period, self.ticker))
+        return pd.Series(self.ohlcv[column].diff(period),
+                         name='{} day MOM Ticker: {}'.format(period,
+                                                             self.ticker))
 
     def rate_of_change(self, period=1, column='adj_close'):
         """
@@ -558,8 +609,10 @@ class Stock(Asset):
 
         simply calculates the rate of change between two periods
         """
-        return pd.Series((self.ohlcv[column].diff(period) / self.ohlcv[column][-period]) * 100,
-                         name='{} day Rate of Change Ticker: {}'.format(period, self.ticker))
+        return pd.Series((self.ohlcv[column].diff(period) / self.ohlcv[column][
+            -period]) * 100,
+                         name='{} day Rate of Change Ticker: {}'.format(period,
+                                                                        self.ticker))
 
     def relative_strength_indicator(self, period=14, column='adj_close'):
         """
@@ -571,9 +624,11 @@ class Stock(Asset):
         RSI oscillates between 0 and 100 and traditionally +70 is considered overbought and under 30 is oversold
         """
         return pd.Series(self._rsi_computation(period=period, column=column),
-                         name='{} day RSI Ticker: {}'.format(period, self.ticker))
+                         name='{} day RSI Ticker: {}'.format(period,
+                                                             self.ticker))
 
-    def inverse_fisher_transform(self, rsi_period=5, wma_period=9, column='adj_close'):
+    def inverse_fisher_transform(self, rsi_period=5, wma_period=9,
+                                 column='adj_close'):
         """
         Modified Inverse Fisher Transform applied on RSI
 
@@ -590,12 +645,17 @@ class Stock(Asset):
         it signals to sell short when indicators crosses under +0.5 or crosses under -0.5 if it has not previously crossed +.05
         """
         import numpy as np
-        v1 = pd.Series(.1 * (self._rsi_computation(period=rsi_period, column=column) - 50),
+        v1 = pd.Series(.1 * (
+            self._rsi_computation(period=rsi_period, column=column) - 50),
                        name='v1')
-        v2 = pd.Series(self._weighted_moving_average_computation(ts=v1, period=wma_period, column=column),
-                       index=v1.index)
+        v2 = pd.Series(
+                self._weighted_moving_average_computation(ts=v1,
+                                                          period=wma_period,
+                                                          column=column),
+                index=v1.index)
         return pd.Series((np.exp(2 * v2) - 1) / (np.exp(2 * v2) + 1),
-                         name='{} day IFT_RSI Ticker: {}'.format(rsi_period, self.ticker))
+                         name='{} day IFT_RSI Ticker: {}'.format(rsi_period,
+                                                                 self.ticker))
 
     def true_range(self, period=14):
         """
@@ -611,21 +671,31 @@ class Stock(Asset):
         this will give you a dollar amount that the asset's range that it has been trading in
         """
         # TODO: make this method use adjusted close
-        range_one = pd.Series(self.ohlcv['High'].tail(period) - self.ohlcv['Low'].tail(period), name='high_low')
-        range_two = pd.Series(self.ohlcv['High'].tail(period) - self.ohlcv['Close'].shift(-1).abs().tail(period),
-                              name='high_prev_close')
-        range_three = pd.Series(self.ohlcv['Close'].shift(-1).tail(period) - self.ohlcv['Low'].abs().tail(period),
-                                name='prev_close_low')
+        range_one = pd.Series(
+                self.ohlcv['High'].tail(period) - self.ohlcv['Low'].tail(
+                        period),
+                name='high_low')
+        range_two = pd.Series(
+                self.ohlcv['High'].tail(period) - self.ohlcv['Close'].shift(
+                        -1).abs().tail(period),
+                name='high_prev_close')
+        range_three = pd.Series(
+                self.ohlcv['Close'].shift(-1).tail(period) - self.ohlcv[
+                    'Low'].abs().tail(period),
+                name='prev_close_low')
         tr = pd.concat([range_one, range_two, range_three], axis=1)
         true_range_list = []
         for row in tr.itertuples():
             # TODO: fix this so it doesn't throw an exception for weekends
             try:
-                true_range_list.append(max(row.high_low, row.high_prev_close, row.prev_close_low))
+                true_range_list.append(
+                        max(row.high_low, row.high_prev_close,
+                            row.prev_close_low))
             except TypeError:
                 continue
         tr['TA'] = true_range_list
-        return pd.Series(tr['TA'], name='{} day TR Ticker: {}'.format(period, self.ticker))
+        return pd.Series(tr['TA'], name='{} day TR Ticker: {}'.format(period,
+                                                                      self.ticker))
 
     def average_true_range(self, period=14):
         """
@@ -634,23 +704,35 @@ class Stock(Asset):
         :return: generator
         """
         tr = self._true_range_computation(period=period * 2)
-        return pd.Series(tr.rolling(center=False, window=period, min_periods=period - 1).mean(),
-                         name='{} day ATR Ticker: {}'.format(period, self.ticker)).tail(period)
+        return pd.Series(tr.rolling(center=False, window=period,
+                                    min_periods=period - 1).mean(),
+                         name='{} day ATR Ticker: {}'.format(period,
+                                                             self.ticker)).tail(
+                period)
 
-    def bollinger_bands(self, period=30, moving_average=None, column='adj_close'):
+    def bollinger_bands(self, period=30, moving_average=None,
+                        column='adj_close'):
         std_dev = self.ohlcv[column].std()
         if isinstance(moving_average, pd.Series):
-            middle_band = pd.Series(self._sma_computation(period=period, column=column),
-                                    name='middle_bband')
+            middle_band = pd.Series(
+                    self._sma_computation(period=period, column=column),
+                    name='middle_bband')
         else:
             middle_band = pd.Series(moving_average, name='middle_bband')
 
-        upper_bband = pd.Series(middle_band + (2 * std_dev), name='upper_bband')
-        lower_bband = pd.Series(middle_band - (2 * std_dev), name='lower_bband')
+        upper_bband = pd.Series(middle_band + (2 * std_dev),
+                                name='upper_bband')
+        lower_bband = pd.Series(middle_band - (2 * std_dev),
+                                name='lower_bband')
 
-        percent_b = pd.Series((self.ohlcv[column] - lower_bband) / (upper_bband - lower_bband), name='%b')
-        b_bandwidth = pd.Series((upper_bband - lower_bband) / middle_band, name='b_bandwidth')
-        return pd.concat([upper_bband, middle_band, lower_bband, b_bandwidth, percent_b], axis=1)
+        percent_b = pd.Series(
+                (self.ohlcv[column] - lower_bband) / (
+                    upper_bband - lower_bband),
+                name='%b')
+        b_bandwidth = pd.Series((upper_bband - lower_bband) / middle_band,
+                                name='b_bandwidth')
+        return pd.concat([upper_bband, middle_band, lower_bband, b_bandwidth,
+                          percent_b], axis=1)
 
     def _get_pct_change(self, market_ticker='^GSPC'):
         """
@@ -662,14 +744,22 @@ class Stock(Asset):
             Any valid ticker symbol to use as the market.
         :return: namedtuple
         """
-        pct_change = namedtuple('Pct_Change', 'market_pct_change stock_pct_change')
+        pct_change = namedtuple('Pct_Change',
+                                'market_pct_change stock_pct_change')
         try:
-            market_df = web.DataReader(market_ticker, 'yahoo', start=self.start_date, end=self.end_date)
+            market_df = web.DataReader(market_ticker, 'yahoo',
+                                       start=self.start_date,
+                                       end=self.end_date)
         except:
-            raise Exception('Unknown error occurred trying to get a OHLCV for ticker: {}'.format(market_ticker))
-        market_pct_change = pd.Series(market_df['adj_close'].pct_change(periods=1))
-        stock_pct_change = pd.Series(self.ohlcv['adj_close'].pct_change(periods=1))
-        return pct_change(market_pct_change=market_pct_change, stock_pct_change=stock_pct_change)
+            raise Exception(
+                    'Unknown error occurred trying to get a OHLCV for ticker: {}'.format(
+                            market_ticker))
+        market_pct_change = pd.Series(
+                market_df['adj_close'].pct_change(periods=1))
+        stock_pct_change = pd.Series(
+                self.ohlcv['adj_close'].pct_change(periods=1))
+        return pct_change(market_pct_change=market_pct_change,
+                          stock_pct_change=stock_pct_change)
 
     def calculate_beta(self, market_ticker='^GSPC'):
         """
@@ -702,9 +792,13 @@ class Stock(Asset):
         return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
 
     def adj_return(self, risk_free_rate_ticker='TB1YR'):
-        risk_free_rate = web.DataReader(risk_free_rate_ticker, 'fred', start=self.start_date, end=self.end_date) \
-            .tail(1).iloc[0][risk_free_rate_ticker]
-        stock_return = ((self.end_price - self.start_price) / self.start_price) * 100
+        risk_free_rate = \
+            web.DataReader(risk_free_rate_ticker, 'fred',
+                           start=self.start_date,
+                           end=self.end_date) \
+                .tail(1).iloc[0][risk_free_rate_ticker]
+        stock_return = ((
+                            self.end_price - self.start_price) / self.start_price) * 100
         return stock_return - risk_free_rate
 
     def roi(self):
@@ -746,11 +840,16 @@ class Stock(Asset):
                 negative_dm.append(0)
         temp_df['positive_dm'] = positive_dm
         temp_df['negative_dm'] = negative_dm
-        atr = self._average_true_range_computation(ts=self.ohlcv, period=period * 6)
-        diplus = pd.Series(100 * (temp_df['positive_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(),
-                           name='positive_dmi')
-        diminus = pd.Series(100 * (temp_df['negative_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(),
-                            name='negative_dmi')
+        atr = self._average_true_range_computation(ts=self.ohlcv,
+                                                   period=period * 6)
+        diplus = pd.Series(
+                100 * (temp_df['positive_dm'] / atr).ewm(span=period,
+                                                         min_periods=period - 1).mean(),
+                name='positive_dmi')
+        diminus = pd.Series(
+                100 * (temp_df['negative_dm'] / atr).ewm(span=period,
+                                                         min_periods=period - 1).mean(),
+                name='negative_dmi')
         return pd.concat([diplus, diminus])
 
     def sma_crossover_signals(self, slow=200, fast=50, column='adj_close'):
@@ -762,16 +861,19 @@ class Stock(Asset):
         """
         slow_ts = self.simple_moving_average(period=slow, column=column)
         fast_ts = self.simple_moving_average(period=fast, column=column)
-        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.ohlcv.index)
+        crossover_ts = pd.Series(fast_ts - slow_ts, name='test',
+                                 index=self.ohlcv.index)
         # if 50 SMA > 200 SMA set action to 1 which means Buy
         # TODO: figure out a better way to mark buy vs sell
         # also need to make sure this method works right...
         self.ohlcv['Action'] = np.where(crossover_ts > 0, 1, 0)
 
-    def simple_median_crossover_signals(self, slow=200, fast=50, column='adj_close'):
+    def simple_median_crossover_signals(self, slow=200, fast=50,
+                                        column='adj_close'):
         slow_ts = self.simple_moving_median(period=slow, column=column)
         fast_ts = self.simple_moving_median(period=fast, column=column)
-        crossover_ts = pd.Series(fast_ts - slow_ts, name='test', index=self.ohlcv.index)
+        crossover_ts = pd.Series(fast_ts - slow_ts, name='test',
+                                 index=self.ohlcv.index)
         crossover_ts['Action'] = np.where(crossover_ts > 0, 1, 0)
         print(crossover_ts)
 
@@ -804,10 +906,14 @@ class Stock(Asset):
         temp_df['positive_dm'] = positive_dm
         temp_df['negative_dm'] = negative_dm
         atr = self._average_true_range_computation(period=period * 6)
-        diplus = pd.Series(100 * (temp_df['positive_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(),
-                           name='positive_dmi')
-        diminus = pd.Series(100 * (temp_df['negative_dm'] / atr).ewm(span=period, min_periods=period - 1).mean(),
-                            name='negative_dmi')
+        diplus = pd.Series(
+                100 * (temp_df['positive_dm'] / atr).ewm(span=period,
+                                                         min_periods=period - 1).mean(),
+                name='positive_dmi')
+        diminus = pd.Series(
+                100 * (temp_df['negative_dm'] / atr).ewm(span=period,
+                                                         min_periods=period - 1).mean(),
+                name='negative_dmi')
         return pd.concat([diplus, diminus])
 
     def _true_range_computation(self, period):
@@ -819,28 +925,40 @@ class Stock(Asset):
 
         the purpose of having it as separate function is so that external functions can return generators
         """
-        range_one = pd.Series(self.ohlcv['High'].tail(period) - self.ohlcv['Low'].tail(period), name='high_low')
-        range_two = pd.Series(self.ohlcv['High'].tail(period) - self.ohlcv['Close'].shift(-1).abs().tail(period),
-                              name='high_prev_close')
-        range_three = pd.Series(self.ohlcv['Close'].shift(-1).tail(period) - self.ohlcv['Low'].abs().tail(period),
-                                name='prev_close_low')
+        range_one = pd.Series(
+                self.ohlcv['High'].tail(period) - self.ohlcv['Low'].tail(
+                        period),
+                name='high_low')
+        range_two = pd.Series(
+                self.ohlcv['High'].tail(period) - self.ohlcv['Close'].shift(
+                        -1).abs().tail(period),
+                name='high_prev_close')
+        range_three = pd.Series(
+                self.ohlcv['Close'].shift(-1).tail(period) - self.ohlcv[
+                    'Low'].abs().tail(period),
+                name='prev_close_low')
         tr = pd.concat([range_one, range_two, range_three], axis=1)
         true_range_list = []
         for row in tr.itertuples():
             # TODO: fix this so it doesn't throw an exception for weekends
             try:
-                true_range_list.append(max(row.high_low, row.high_prev_close, row.prev_close_low))
+                true_range_list.append(
+                        max(row.high_low, row.high_prev_close,
+                            row.prev_close_low))
             except TypeError:
                 continue
         tr['TA'] = true_range_list
         return pd.Series(tr['TA'])
 
     def _sma_computation(self, period=50, column='adj_close'):
-        return pd.Series(self.ohlcv[column].rolling(center=False, window=period, min_periods=period - 1).mean())
+        return pd.Series(
+                self.ohlcv[column].rolling(center=False, window=period,
+                                           min_periods=period - 1).mean())
 
     def _average_true_range_computation(self, period):
         tr = self._true_range_computation(period=period * 2)
-        return pd.Series(tr.rolling(center=False, window=period, min_periods=period - 1).mean())
+        return pd.Series(tr.rolling(center=False, window=period,
+                                    min_periods=period - 1).mean())
 
     def _rsi_computation(self, period, column):
         """
@@ -854,7 +972,8 @@ class Stock(Asset):
         ts = self.ohlcv
         gain = [0]
         loss = [0]
-        for row, shifted_row in zip(iter(ts[column].items()), iter(ts[column].shift(-1).items())):
+        for row, shifted_row in zip(iter(ts[column].items()),
+                                    iter(ts[column].shift(-1).items())):
             if row[1] - shifted_row[1] > 0:
                 gain.append(row[1] - shifted_row[1])
                 loss.append(0)
@@ -880,7 +999,8 @@ class Stock(Asset):
         for chunk in self._chunks(period=period, column=column, ts=ts):
             # TODO: figure out a better way to handle this. this is better than a catch all except though
             try:
-                wma.append(self.chunked_weighted_moving_average(chunk=chunk, period=period))
+                wma.append(self.chunked_weighted_moving_average(chunk=chunk,
+                                                                period=period))
             except AttributeError:
                 wma.append(None)
         wma.reverse()
@@ -918,7 +1038,8 @@ class Stock(Asset):
         """
         denominator = (period * (period + 1)) / 2
         ma = []
-        for price, i in zip(chunk.iloc[::-1].tolist(), list(range(period + 1))[1:]):
+        for price, i in zip(chunk.iloc[::-1].tolist(),
+                            list(range(period + 1))[1:]):
             ma.append(price * (i / float(denominator)))
         return sum(ma)
 
@@ -931,7 +1052,9 @@ class Stock(Asset):
         :param column: string
         :return: Timeseries
         """
-        return pd.Series(self.ohlcv[column].ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
+        return pd.Series(
+                self.ohlcv[column].ewm(ignore_na=False, min_periods=period - 1,
+                                       span=period).mean())
 
     @staticmethod
     def _init_spiders(ticker_list, start_date, end_date):
@@ -948,7 +1071,8 @@ class Stock(Asset):
         The main reason behind  this method is to work around the fact that ``~twisted.reactor`` cannot be restarted
         so we start it in a subprocess that can be killed off.
         """
-        p = Process(target=Stock._run_spiders, args=(ticker_list, start_date, end_date))
+        p = Process(target=Stock._run_spiders,
+                    args=(ticker_list, start_date, end_date))
         p.start()
         p.join()
 
@@ -972,7 +1096,8 @@ class Stock(Asset):
     """
 
     @classmethod
-    def from_list(cls, ticker_list, start, end, get_ohlcv=False, get_fundamentals=False):
+    def from_list(cls, ticker_list, start, end, get_ohlcv=False,
+                  get_fundamentals=False):
         """
         Create a dict of stocks for a given time period based on the list of ticker symbols passed in
 
@@ -989,16 +1114,21 @@ class Stock(Asset):
         """
 
         if get_fundamentals:
-            cls._init_spiders(ticker_list=ticker_list, start_date=start, end_date=end)
+            cls._init_spiders(ticker_list=ticker_list, start_date=start,
+                              end_date=end)
 
         with db.transactional_session() as session:
             for ticker in ticker_list:
-                session.add(cls(ticker=ticker, start_date=start, end_date=end, get_ohlcv=get_ohlcv,
+                session.add(cls(ticker=ticker, start_date=start, end_date=end,
+                                get_ohlcv=get_ohlcv,
                                 get_fundamentals=get_fundamentals))
 
     @classmethod
-    def create_stocks_dict_from_list_and_write_to_db(cls, ticker_list, start, end, session=None, get_fundamentals=False,
-                                                     get_ohlc=False, close_session=True):
+    def create_stocks_dict_from_list_and_write_to_db(cls, ticker_list, start,
+                                                     end, session=None,
+                                                     get_fundamentals=False,
+                                                     get_ohlc=False,
+                                                     close_session=True):
         """
         :param ticker_list: list of str objects, they must correspond to a valid ticker symbol
         :param start: datetime, start date
@@ -1016,12 +1146,14 @@ class Stock(Asset):
             from pytech import Session
             session = Session()
         if get_fundamentals:
-            return cls.create_stocks_dict_with_fundamentals_from_list(ticker_list=ticker_list, start=start, end=end,
-                                                                      session=session, get_ohlc=get_ohlc,
-                                                                      close_session=close_session)
+            return cls.create_stocks_dict_with_fundamentals_from_list(
+                    ticker_list=ticker_list, start=start, end=end,
+                    session=session, get_ohlc=get_ohlc,
+                    close_session=close_session)
         stock_dict = {}
         for ticker in ticker_list:
-            temp_stock = cls(ticker=ticker, start_date=start, end_date=end, get_ohlc=get_ohlc)
+            temp_stock = cls(ticker=ticker, start_date=start, end_date=end,
+                             get_ohlc=get_ohlc)
             stock_dict[ticker] = temp_stock
             session.add(temp_stock)
         session.commit()
@@ -1030,7 +1162,8 @@ class Stock(Asset):
         return stock_dict
 
     @classmethod
-    def create_stocks_dict_from_list(cls, ticker_list, start, end, get_fundamentals=False, get_ohlc=False,
+    def create_stocks_dict_from_list(cls, ticker_list, start, end,
+                                     get_fundamentals=False, get_ohlc=False,
                                      session=None):
         """
         :param session: sqlalchemy session, if None is provided then the stocks will not be written to the DB
@@ -1045,15 +1178,18 @@ class Stock(Asset):
         NOTE: if get_fundamentals is True then stocks have to be written to the DB
         """
         if get_fundamentals:
-            return cls.create_stocks_dict_with_fundamentals_from_list(ticker_list=ticker_list, start=start, end=end,
-                                                                      get_ohlc=get_ohlc, session=session)
+            return cls.create_stocks_dict_with_fundamentals_from_list(
+                    ticker_list=ticker_list, start=start, end=end,
+                    get_ohlc=get_ohlc, session=session)
         elif session is not None:
-            return cls.create_stocks_dict_from_list_and_write_to_db(ticker_list=ticker_list, start=start, end=end,
-                                                                    session=session, get_fundamentals=get_fundamentals,
-                                                                    get_ohlc=get_ohlc)
+            return cls.create_stocks_dict_from_list_and_write_to_db(
+                    ticker_list=ticker_list, start=start, end=end,
+                    session=session, get_fundamentals=get_fundamentals,
+                    get_ohlc=get_ohlc)
         stock_dict = {}
         for ticker in ticker_list:
-            stock_dict[ticker] = cls(ticker=ticker, start_date=start, end_date=end, get_ohlc=get_ohlc)
+            stock_dict[ticker] = cls(ticker=ticker, start_date=start,
+                                     end_date=end, get_ohlc=get_ohlc)
         return stock_dict
 
 
@@ -1067,13 +1203,20 @@ class Fundamental(object):
     measures like accounts pay, balance sheet stuff?
     """
 
-    def __init__(self, amended, assets, current_assets, current_liabilities, cash, dividend, end_date, eps, eps_diluted,
-                 equity, net_income, operating_income, revenues, investment_revenues, fin_cash_flow, inv_cash_flow,
-                 ops_cash_flow, year, property_plant_equipment, gross_profit, tax_expense, net_taxes_paid,
-                 acts_pay_current, acts_receive_current, acts_receive_noncurrent, accrued_liabilities_current,
-                 period_focus, inventory_net, interest_expense, total_liabilities, total_liabilities_equity,
-                 shares_outstanding, shares_outstanding_diluted, common_stock_outstanding, depreciation_amortization,
-                 cogs, comprehensive_income_net_of_tax, research_and_dev_expense, warranty_accrual,
+    def __init__(self, amended, assets, current_assets, current_liabilities,
+                 cash, dividend, end_date, eps, eps_diluted,
+                 equity, net_income, operating_income, revenues,
+                 investment_revenues, fin_cash_flow, inv_cash_flow,
+                 ops_cash_flow, year, property_plant_equipment, gross_profit,
+                 tax_expense, net_taxes_paid,
+                 acts_pay_current, acts_receive_current,
+                 acts_receive_noncurrent, accrued_liabilities_current,
+                 period_focus, inventory_net, interest_expense,
+                 total_liabilities, total_liabilities_equity,
+                 shares_outstanding, shares_outstanding_diluted,
+                 common_stock_outstanding, depreciation_amortization,
+                 cogs, comprehensive_income_net_of_tax,
+                 research_and_dev_expense, warranty_accrual,
                  warranty_accrual_payments, ticker):
         """
         This :class: should never really be instantiated directly.  It is intended to be instantiated by the
@@ -1187,7 +1330,8 @@ class Fundamental(object):
         Liquidity ratio. Current ratio - inventory
         :return: float
         """
-        return (self.current_assets - self.inventory_net) / self.current_liabilities
+        return (
+                   self.current_assets - self.inventory_net) / self.current_liabilities
 
     def cash_ratio(self):
         """
@@ -1208,9 +1352,11 @@ class Fundamental(object):
         try:
             return self.net_income + self.tax_expense + self.interest_expense + self.depreciation_amortization
         except TypeError:
-            logger.exception('net_income: {}, tax_expense: {}, interest_expense: {}, depreciation_amortization: {}'
-                             .format(self.net_income, self.tax_expense, self.interest_expense,
-                                     self.depreciation_amortization))
+            logger.exception(
+                    'net_income: {}, tax_expense: {}, interest_expense: {}, depreciation_amortization: {}'
+                        .format(self.net_income, self.tax_expense,
+                                self.interest_expense,
+                                self.depreciation_amortization))
 
     def _ebit(self):
         """
@@ -1231,17 +1377,25 @@ class Fundamental(object):
         """
         import json
         if not isinstance(stock, Stock):
-            raise TypeError('asset must be an instance of a asset object. {} was provided'.format(type(stock)))
+            raise TypeError(
+                    'asset must be an instance of a asset object. {} was provided'.format(
+                            type(stock)))
         logger.info('Getting {} fundamental data'.format(stock.ticker))
         if period_focus is None:
             file_name = 'FY_{}.json'.format(stock.ticker)
         else:
             file_name = '{}_{}.json'.format(period_focus, stock.ticker)
-        if not os.path.isdir(os.path.join(os.path.dirname(__file__), '..', 'financials', stock.ticker.upper())):
-            os.mkdir(os.path.join(os.path.dirname(__file__), '..', 'financials', stock.ticker.upper()))
-            base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', stock.ticker.upper())
+        if not os.path.isdir(
+                os.path.join(os.path.dirname(__file__), '..', 'financials',
+                             stock.ticker.upper())):
+            os.mkdir(
+                    os.path.join(os.path.dirname(__file__), '..', 'financials',
+                                 stock.ticker.upper()))
+            base_file_path = os.path.join(os.path.dirname(__file__), '..',
+                                          'financials', stock.ticker.upper())
         else:
-            base_file_path = os.path.join(os.path.dirname(__file__), '..', 'financials', stock.ticker.upper())
+            base_file_path = os.path.join(os.path.dirname(__file__), '..',
+                                          'financials', stock.ticker.upper())
         file_path = os.path.join(base_file_path, year, file_name)
         with open(file_path) as f:
             data = json.load(f)
@@ -1266,12 +1420,17 @@ class Fundamental(object):
         inv_cash_flow = data.cash_flow_inv
         ops_cash_flow = data.cash_flow_op
         ticker = data.symbol
-        return cls(amended=amended, assets=assets, current_assets=current_assets,
+        return cls(amended=amended, assets=assets,
+                   current_assets=current_assets,
                    current_liabilities=current_liabilities,
-                   cash=cash, dividend=dividend, end_date=end_date, eps=eps, eps_diluted=eps_diluted, equity=equity,
-                   net_income=net_income, operating_income=operating_income, revenues=revenues,
-                   investment_revenues=investment_revenues, fin_cash_flow=fin_cash_flow, inv_cash_flow=inv_cash_flow,
-                   ops_cash_flow=ops_cash_flow, year=year, period_focus=period_focus, ticker=ticker)
+                   cash=cash, dividend=dividend, end_date=end_date, eps=eps,
+                   eps_diluted=eps_diluted, equity=equity,
+                   net_income=net_income, operating_income=operating_income,
+                   revenues=revenues,
+                   investment_revenues=investment_revenues,
+                   fin_cash_flow=fin_cash_flow, inv_cash_flow=inv_cash_flow,
+                   ops_cash_flow=ops_cash_flow, year=year,
+                   period_focus=period_focus, ticker=ticker)
 
     @classmethod
     def from_dict(cls, fundamental_dict):

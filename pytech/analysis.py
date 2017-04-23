@@ -81,7 +81,7 @@ def get_stock_universe(start=default_start, end=default_end, **kwargs):
     if 'stock_list' in kwargs:
         stock_list = kwargs['stock_list']
         for stock in stock_list:
-            # df_list.append(web.DataReader(asset, data_source="yahoo", start=start,
+            # df_list.append(web.DataReader(ticker, data_source="yahoo", start=start,
             #                               end=end))
             temp_df = web.DataReader(stock, data_source='yahoo', start=start, end=end)
             temp_df['ticker'] = stock

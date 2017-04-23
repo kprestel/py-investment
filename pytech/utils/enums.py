@@ -16,7 +16,7 @@ class AutoNumber(Enum):
         if value is None:
             return None
         elif isinstance(value, cls):
-            return value.name
+            return value
         for name, member in cls.__members__.items():
             if member.name == value.upper():
                 return member
@@ -24,9 +24,36 @@ class AutoNumber(Enum):
             return None
 
 
+class EventType(AutoNumber):
+    """Different Event types"""
+
+    MARKET = ()
+    SIGNAL = ()
+    TRADE = ()
+    FILL = ()
+
+
+class SignalType(AutoNumber):
+    LONG = ()
+    SHORT = ()
+    EXIT = ()
+    CANCEL = ()
+    HOLD = ()
+    TRADE = ()
+
+    @classmethod
+    def check_if_valid(cls, value):
+        name = super().check_if_valid(value)
+        if name is not None:
+            return name
+        else:
+            raise InvalidActionError(action=value)
+
+
 class TradeAction(AutoNumber):
     BUY = ()
     SELL = ()
+    EXIT = ()
 
     @classmethod
     def check_if_valid(cls, value):
@@ -85,7 +112,7 @@ class OrderSubType(AutoNumber):
             raise InvalidOrderSubTypeError(order_subtype=value)
 
 
-class AssetPosition(AutoNumber):
+class Position(AutoNumber):
     LONG = ()
     SHORT = ()
 

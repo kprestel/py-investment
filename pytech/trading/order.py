@@ -1,54 +1,74 @@
 import logging
+import math
+from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from sys import float_info
+from typing import TypeVar
 
 import numpy as np
 import pandas as pd
 import pandas_market_calendars as mcal
 from pandas.tseries.offsets import DateOffset
 
-import pytech.utils.dt_utils as dt_utils
 import pytech.utils.common_utils as utils
+import pytech.utils.dt_utils as dt_utils
+from pytech.backtest.event import SignalEvent
 from pytech.fin.asset import Asset
-from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
-from pytech.utils.exceptions import UntriggeredTradeError
+from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
+                                TradeAction)
+from pytech.utils.exceptions import BadOrderParams
 
 logger = logging.getLogger(__name__)
 
 
-class Order(object):
+def get_order_types() -> TypeVar:
+    """Return valid order types for type annotations."""
+    return TypeVar('A',
+                   Order,
+                   MarketOrder,
+                   StopOrder,
+                   LimitOrder,
+                   StopLimitOrder)
+
+
+class Order(metaclass=ABCMeta):
     """Hold open orders"""
 
     LOGGER_NAME = 'order'
 
-    def __init__(self, asset, action, order_type, order_subtype=None, stop=None, limit=None, qty=0,
-                 filled=0, created=None, max_days_open=None, id=None):
+    def __init__(self,
+                 ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 order_subtype: OrderSubType = None,
+                 created: datetime = None,
+                 max_days_open: int = None,
+                 order_id: str = None,
+                 *args, **kwargs):
         """
         Order constructor
 
-        :param asset: The asset for which the order is associated with.  This can either be an instance of an
-            :class:`pytech.fin.asset.Asset` or a string with of ticker of the asset. If an asset is passed in the ticker
+        :param ticker: The ticker for which the order is associated with.  
+            This can either be an instance of an
+            :class:`pytech.fin.ticker.Asset` or a string with of ticker 
+            of the ticker. If an ticker is passed in the ticker
             will be taken from it.
-        :type asset: Asset or str
-        :param Portfolio blotter: The :py:class:`pytech.blotter.Blotter` that the asset is associated with
+        :type ticker: Asset or str
         :param TradeAction action: Either BUY or SELL
-        :param OrderType order_type: The type of order to create.
-            Also can be a str.
         :param OrderSubType order_subtype: The order subtype to create
-            default: :py:class:`pytech.enums.OrderSubType.DAY`
-        :param float stop: The price at which to execute a stop order. If this is not a stop order then leave as None
-        :param float limit: The price at which to execute a limit order. If this is not a limit order then leave as None
+        default: :py:class:`pytech.enums.OrderSubType.DAY`
         :param int qty: The amount of shares the order is for.
-            This should be negative if it is a sell order and positive if it is a buy order.
-        :param int filled: How many shares of the order have already been filled, if any.
-        :param float commission: The amount of commission that has already been charged on the order.
+        This should be negative if it is a sell order and positive if it is 
+        a buy order.
         :param datetime created: The date and time that the order was created
-        :param int max_days_open: The max calendar days that an order can stay open without being cancelled.
-            This parameter is not relevant to Day orders since they will be closed at the end of the day regardless.
+        :param int max_days_open: The max calendar days that an order can stay 
+            open without being cancelled.
+            This parameter is not relevant to Day orders since they will be 
+            closed at the end of the day regardless.
             (default: None if the order_type is Day)
             (default: 90 if the order_type is not Day)
-        :param str id: A uuid hex
-        :raises NotAnAssetError: If the asset passed in is not an asset
+        :param str order_id: A uuid hex
+        :raises NotAnAssetError: If the ticker passed in is not an ticker
         :raises InvalidActionError: If the action passed in is not a valid action
         :raises NotAPortfolioError: If the portfolio passed in is not a portfolio
 
@@ -59,36 +79,32 @@ class Order(object):
         See :py:func:`asymmetric_round_price_to_penny` for more information on how
             `stop_price` and `limit_price` will get rounded.
         """
+        super().__init__()
+        self.id = order_id or utils.make_id()
+        self.ticker = ticker
+        self.logger = logging.getLogger(
+                '{}_ticker_{}'.format(self.__class__.__name__, self.ticker))
 
-        self.id = id or utils.make_id()
-        self.logger = logging.getLogger('{}_id_{}'.format(self.LOGGER_NAME, self.id))
-
-        # TODO: validate that all of these inputs make sense together. e.g. if its a stop order stop shouldn't be none
+        # TODO: validate that all of these inputs make sense together.
+        # e.g. if its a stop order stop shouldn't be none
         self.action = TradeAction.check_if_valid(action)
-        self.order_type = OrderType.check_if_valid(order_type)
 
         if order_subtype is not None:
             self.order_subtype = OrderSubType.check_if_valid(order_subtype)
         else:
             self.order_subtype = OrderSubType.DAY
 
-        self.asset = asset
-
         if self.order_subtype is OrderSubType.DAY:
             self.max_days_open = 1
         elif max_days_open is None:
             self.max_days_open = 90
         else:
-            self.max_days_open = int(max_days_open)
+            self.max_days_open = math.floor(max_days_open)
 
         self.qty = qty
         # How much commission has already been charged on the order.
         self.commission = 0.0
-        self.stop_price = stop
-        self.limit_price = limit
-        self.stop_reached = False
-        self.limit_reached = False
-        self.filled = filled
+        self.filled = 0
         self._status = OrderStatus.OPEN
         self.reason = None
 
@@ -100,11 +116,6 @@ class Order(object):
         # the last time the order changed
         self.last_updated = self.created
         self.close_date = None
-
-        if self.stop_price is None and self.limit_price is None and self.order_type is not OrderType.MARKET:
-            self.logger.warning('stop_price and limit_price were both None and OrderType was not MARKET. Changing '
-                                'order_type to a MARKET order')
-            self.order_type = OrderType.MARKET
 
     @property
     def status(self):
@@ -120,46 +131,21 @@ class Order(object):
         self._status = OrderStatus.check_if_valid(status)
 
     @property
-    def stop_price(self):
-        return self._stop_price
-
-    @stop_price.setter
-    def stop_price(self, stop_price):
-        """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
-        if stop_price is not None:
-            pref_round_down = self.action is not TradeAction.BUY
-            self._stop_price = asymmetric_round_price_to_penny(stop_price, prefer_round_down=pref_round_down)
+    def ticker(self):
+        """Make ticker always return the ticker unless directly accessed."""
+        if issubclass(self._ticker.__class__, Asset):
+            return self._ticker.ticker
         else:
-            self._stop_price = None
+            return self._ticker
 
-    @property
-    def limit_price(self):
-        return self._limit_price
+    @ticker.setter
+    def ticker(self, ticker):
+        """
+        If an ticker is passed in then use it otherwise use the 
+        string passed in.
+        """
 
-    @limit_price.setter
-    def limit_price(self, limit_price):
-        """Convert from a float to a 2 decimal point number that rounds favorably based on the trade_action"""
-        if limit_price is not None:
-            pref_round_down = self.action is TradeAction.BUY
-            self._limit_price = asymmetric_round_price_to_penny(limit_price, prefer_round_down=pref_round_down)
-        else:
-            self._limit_price = None
-
-    @property
-    def asset(self):
-        """Make asset always return the ticker unless directly accessed."""
-        if issubclass(self._asset.__class__, Asset):
-            return self._asset.ticker
-        else:
-            return self._asset
-
-    @asset.setter
-    def asset(self, asset):
-        """If an asset is passed in then use it otherwise use the string passed in."""
-        if issubclass(asset.__class__, Asset):
-            self._asset = asset.ticker
-        else:
-            self._asset = asset
+        self._ticker = ticker
 
     @property
     def qty(self):
@@ -167,7 +153,10 @@ class Order(object):
 
     @qty.setter
     def qty(self, qty):
-        """Ensure qty is an integer and if it is a **sell** order qty should be negative."""
+        """
+        Ensure qty is an integer and if it is a **sell** order 
+        qty should be negative.
+        """
 
         if self.action is TradeAction.SELL:
             if int(qty) > 0:
@@ -179,23 +168,18 @@ class Order(object):
             self._qty = int(qty)
 
     @property
-    def triggered(self):
+    @abstractmethod
+    def triggered(self) -> bool:
         """
         For a market order, True.
         For a stop order, True IF stop_reached.
         For a limit order, True IF limit_reached.
         """
 
-        if self.order_type is OrderType.MARKET:
-            return True
-
-        if self.stop_price is not None and not self.stop_reached:
-            return False
-
-        if self.limit_price is not None and not self.limit_reached:
-            return False
-
-        return True
+    @property
+    @abstractmethod
+    def order_type(self) -> OrderType:
+        """Must return the OrderType"""
 
     @property
     def open(self):
@@ -217,186 +201,286 @@ class Order(object):
         self.status = OrderStatus.HELD
         self.reason = reason
 
-    def check_triggers(self, current_price, dt):
+    @abstractmethod
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
         """
-        Check if any of the order's triggers should be pulled and execute a trade and then delete the order.
+        Check if any of the ``order``'s limits have been broken in a way that 
+        would trigger the ``order``.
 
         :param datetime dt: The current datetime.
-            (default: ``datetime.now()``)
-        :param float current_price: The current price to check the triggers against.
-            (default: ``None``)
-            If left at the default then the current price will retrieved.
+        :param float current_price: The current price to check the triggers 
+            against.
         :return: True if the order is triggered otherwise False
         :rtype: bool
         """
 
-        if self.order_type is OrderType.MARKET or self.triggered:
-            return True
-
-        if self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.BUY:
-            if current_price >= self.stop_price:
-                self.stop_reached = True
-                self.last_updated = dt
-                if current_price >= self.limit_price:
-                    self.limit_reached = True
-        elif self.order_type is OrderType.STOP_LIMIT and self.action is TradeAction.SELL:
-            if current_price <= self.stop_price:
-                self.stop_reached = True
-                self.last_updated = dt
-                if current_price >= self.limit_price:
-                    self.limit_reached = True
-        elif self.order_type is OrderType.STOP and self.action is TradeAction.BUY:
-            if current_price >= self.stop_price:
-                self.stop_reached = True
-                self.last_updated = dt
-        elif self.order_type is OrderType.STOP and self.action is TradeAction.SELL:
-            if current_price <= self.stop_price:
-                self.stop_reached = True
-                self.last_updated = dt
-        elif self.order_type is OrderType.LIMIT and self.action is TradeAction.BUY:
-            if current_price >= self.limit_price:
-                self.limit_reached = True
-                self.last_updated = dt
-        elif self.order_type is OrderType.LIMIT and self.action is TradeAction.SELL:
-            if current_price <= self.limit_price:
-                self.limit_reached = True
-                self.last_updated = dt
-
-        if self.stop_reached and self.order_type is OrderType.STOP_LIMIT:
-            # change the STOP_LIMIT order to a LIMIT order
-            self.stop_price = None
-            self.order_type = OrderType.LIMIT
-
-        return self.triggered
-
     def check_order_expiration(self, current_date=datetime.now()):
         """
-        Check if the order should be closed due to passage of time and update the order's status.
+        Check if the order should be closed due to passage of time and update 
+        the order's status.
 
-        :param datetime current_date: This is used to facilitate backtesting, so that the current date can be mocked in order to
-            accurately trigger/cancel orders in the past.
-            (default: datetime.now())
+        :param datetime current_date: This is used to facilitate backtesting, 
+        so that the current date can be mocked in order to accurately 
+        trigger/cancel orders in the past.
+        (default: datetime.now())
         """
-
         trading_cal = mcal.get_calendar(self.portfolio.trading_cal)
-        schedule = trading_cal.schedule(start_date=self.portfolio.start_date, end_date=self.portfolio.end_date)
+        schedule = trading_cal.schedule(start_date=self.portfolio.start_date,
+                                        end_date=self.portfolio.end_date)
 
         if self.order_subtype is OrderSubType.DAY:
-            if not trading_cal.open_at_time(schedule, pd.Timestamp(current_date)):
+            if not trading_cal.open_at_time(schedule,
+                                            pd.Timestamp(current_date)):
                 reason = 'Market closed without executing order.'
-                self.logger.info('Canceling trade for asset: {} due to {}'.format(self.asset.ticker, reason))
+                self.logger.info(
+                        'Canceling trade for ticker: {} due to {}'.format(
+                                self.ticker.ticker, reason))
                 self.cancel(reason=reason)
         elif self.order_subtype is OrderSubType.GOOD_TIL_CANCELED:
             expr_date = self.created + DateOffset(days=self.max_days_open)
             # check if the expiration date is today.
             if current_date.date() == expr_date.date():
-                # if the expiration date is today then check if the market has closed.
-                if not trading_cal.open_at_time(schedule, pd.Timestamp(current_date)):
-                    reason = 'Max days of {} had passed without the underlying order executing.'.format(
-                        self.max_days_open)
-                    self.logger.info('Canceling trade for asset: {} due to {}'.format(self.asset.ticker, reason))
+                # if the expiration date is today then
+                # check if the market has closed.
+                if not trading_cal.open_at_time(schedule,
+                                                pd.Timestamp(current_date)):
+                    reason = ('Max days of {} had passed without the '
+                              'underlying order executing.'
+                              .format(self.max_days_open))
+                    self.logger.info(
+                            'Canceling trade for ticker: {} due to {}'.format(
+                                    self.ticker.ticker, reason))
                     self.cancel(reason=reason)
         else:
             return
 
-    def get_available_volume(self, dt):
+    def get_available_volume(self, available_volume):
         """
-        Get the available volume to trade.  This will the min of open_amount and the assets volume.
+        Get the available volume to trade.  
+        
+        This will the min of open_amount and the assets volume.
 
-        :param datetime dt:
+        :param int available_volume: The amount of shares available to trade 
+            at a given point in time.
         :return: The number of shares available to trade
         :rtype: int
         """
-
-        return int(min(self.asset.get_volume(dt=dt), abs(self.open_amount)))
-
-
-class Trade(object):
-    """
-    This class is used to make trades and keep trade of past trades.
-
-    Trades must be created as a result of an :class:``Order`` executing.
-    """
-
-    LOGGER_NAME = 'trade'
-
-    def __init__(self, qty, price_per_share, action, strategy, order, commission=0.0, trade_date=None, ticker=None):
-        """
-        :param datetime trade_date: corresponding to the date and time of the trade date
-        :param int qty: number of shares traded
-        :param float price_per_share: price per individual share in the trade or the average share price in the trade
-        :param Asset ticker: a :py:class:`~.asset.Asset`, the ``asset`` object that was traded
-        :param Order order: a :py:class:`~.order.Order` that was executed as a result of the order executing
-        :param float commission: the amount of commission paid to execute this trade
-            (default: 0.0)
-        :param TradeAction or str action: :py:class:`~.enum.TradeAction`
-        :param str position: must be *long* or *short*
-
-        .. note::
-
-        Valid **action** parameter values are:
-
-        * TradeAction.BUY
-        * TradeAction.SELL
-        * BUY
-        * SELL
-
-        `commission` is not necessarily the same commission associated with the ``order`` this will depend on the
-        type of :class:``AbstractCommissionModel`` used.
-        """
-
-        if trade_date:
-            self.trade_date = dt_utils.parse_date(trade_date)
-        else:
-            self.trade_date = pd.Timestamp(datetime.now())
-
-        self.action = TradeAction.check_if_valid(action)
-        self.strategy = strategy
-        self.ticker = ticker
-        self.qty = qty
-        self.price_per_share = price_per_share
-        self.order = order
-        self.commission = commission
-        self.logger = logging.getLogger(self.LOGGER_NAME)
-
-    def trade_value(self):
-        """Return the total financial impact of a trade. If this was a buy order then the impact will be negative."""
-
-        return (self.qty * self.price_per_share) + self.commission
+        return int(min(available_volume, abs(self.open_amount)))
 
     @classmethod
-    def from_order(cls, order, trade_date, commission, execution_price, strategy=None):
+    def from_signal_event(cls, signal, action):
         """
-        Make a trade from a triggered order object.
-
-        :param Order order: The ``order`` object creating the trade.
-        :param float execution_price: The price that the trade will be executed at.
-        :raises UntriggeredTradeError: if the order has not been triggered.
-        :return: a new ``trade``
-        :rtype: Trade
+        Create an order from a :class:`pytech.backtest.event.SignalEvent`. 
+        
+        :param SignalEvent or LongSignalEvent or ShortSignalEvent signal:
+        The signal event that triggered the order to be created.
+        :param TradeAction action: The TradeAction that the order is for. 
+        :return: A new order
+        :rtype: Order
         """
-
-        if not order.triggered:
-            raise UntriggeredTradeError(order=order.__dict__.__str__())
-
-        if strategy is None:
-            strategy = order.order_type.name
-
-        trade_dict = {
-            'ticker': order.asset.ticker,
-            'qty': order.get_available_volume(dt=trade_date),
-            'action': order.action,
-            'price_per_share': execution_price,
-            'strategy': strategy,
-            'order': order,
-            'trade_date': trade_date,
-            'commission': commission
-        }
-
-        return cls(**trade_dict)
+        return cls(signal.ticker, action, signal.order_type,
+                   stop=signal.stop_price, limit=signal.limit_price)
 
 
-def asymmetric_round_price_to_penny(price, prefer_round_down, diff=(0.0095 - .005)):
+class MarketOrder(Order):
+    """Orders that will be executed at whatever the latest market price is"""
+
+    def __init__(self, ticker, action, qty, created=None, order_id=None,
+                 *args, **kwargs):
+        super().__init__(ticker, action, qty, created=created,
+                         order_id=order_id, *args, **kwargs)
+
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
+        return True
+
+    @property
+    def triggered(self) -> bool:
+        return True
+
+    @property
+    def order_type(self) -> OrderType:
+        return OrderType.MARKET
+
+
+class LimitOrder(Order):
+    """Limit order. Update this."""
+
+    def __init__(self,
+                 ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 order_subtype: OrderSubType = None,
+                 created: datetime = None,
+                 max_days_open: int = None,
+                 order_id: str = None,
+                 *,
+                 limit_price: float,
+                 **kwargs):
+        super().__init__(ticker, action, qty, order_subtype, created,
+                         max_days_open, order_id, **kwargs)
+        self.limit_reached = False
+        self.limit_price = limit_price
+
+    @property
+    def limit_price(self) -> float:
+        return self._limit_price
+
+    @limit_price.setter
+    def limit_price(self, limit_price: float) -> None:
+        """
+        Convert from a float to a 2 decimal point number that rounds 
+        favorably based on the trade_action
+        """
+        pref_round_down = self.action is TradeAction.BUY
+
+        try:
+            if np.isfinite(limit_price):
+                self._limit_price = asymmetric_round_price_to_penny(
+                        limit_price, pref_round_down)
+        except TypeError:
+            raise BadOrderParams(order_type='limit', price=limit_price)
+
+    @property
+    def triggered(self) -> bool:
+        return self.limit_reached
+
+    @property
+    def order_type(self) -> OrderType:
+        return OrderType.LIMIT
+
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
+        """
+        Check if the ``order``'s limit price has been broken.
+         
+        Update the state of the order if it has.
+        
+        :param current_price: 
+        :param dt: 
+        :return: 
+        """
+        if self.action is TradeAction.BUY and current_price <= self.limit_price:
+            self.limit_reached = True
+            self.last_updated = dt
+        elif current_price >= self.limit_price:
+            # The only other actions are SELL and EXIT which are both sell.
+            self.limit_reached = True
+            self.last_updated = dt
+        else:
+            # Update the updated date to show the last time it was checked.
+            self.last_updated = dt
+
+        return self.triggered
+
+
+class StopOrder(Order):
+    """Stop orders."""
+
+    def __init__(self,
+                 ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 order_subtype: OrderSubType = None,
+                 created: datetime = None,
+                 max_days_open: int = None,
+                 order_id: str = None,
+                 *,
+                 stop_price: float,
+                 **kwargs):
+        super().__init__(ticker, action, qty, order_subtype, created,
+                         max_days_open, order_id, **kwargs)
+        self.stop_price = stop_price
+        self.stop_reached = False
+
+    @property
+    def stop_price(self):
+        return self._stop_price
+
+    @stop_price.setter
+    def stop_price(self, stop_price):
+        """
+        Convert from a float to a 2 decimal point number that rounds 
+        favorably based on the trade_action
+        """
+        pref_round_down = self.action is not TradeAction.BUY
+        try:
+            if np.isfinite(stop_price):
+                self._stop_price = asymmetric_round_price_to_penny(
+                        stop_price, pref_round_down)
+        except TypeError:
+            raise BadOrderParams(order_type='stop', price=stop_price)
+
+    @property
+    def triggered(self) -> bool:
+        return self.stop_reached
+
+    @property
+    def order_type(self) -> OrderType:
+        return OrderType.STOP
+
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
+        if self.action is TradeAction.BUY and current_price >= self.stop_price:
+            self.stop_reached = True
+            self.last_updated = dt
+        elif current_price <= self.stop_price:
+            self.stop_reached = True
+            self.last_updated = dt
+        else:
+            self.last_updated = dt
+
+        return self.triggered
+
+
+class StopLimitOrder(StopOrder, LimitOrder):
+    """Stop limit"""
+
+    def __init__(self,
+                 ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 stop_price: float,
+                 limit_price: float,
+                 order_subtype: OrderSubType = None,
+                 created: datetime = None,
+                 max_days_open: int = None,
+                 order_id: str = None,
+                 **kwargs):
+        # # stop_price = kwargs.pop('stop_price')
+        # limit_price = kwargs.pop('limit_price')
+        super().__init__(ticker, action, qty,
+                         stop_price=stop_price,
+                         limit_price=limit_price,
+                         order_subtype=order_subtype, created=created,
+                         max_days_open=max_days_open, order_id=order_id,
+                         **kwargs)
+
+    @property
+    def triggered(self) -> bool:
+        return self.stop_reached and self.limit_reached
+
+    @property
+    def order_type(self) -> OrderType:
+        return OrderType.STOP_LIMIT
+
+    def check_triggers(self, current_price: float, dt: datetime) -> bool:
+        """
+        Call both the :class:``StopOrder`` and the :class:``LimitOrder``
+        :func:``check_triggers`` in order to check if both the stop trigger
+        and the limit trigger have been met.
+        
+        :param current_price: 
+        :param dt: 
+        :return: 
+        """
+        if not self.stop_reached:
+            StopOrder.check_triggers(self, current_price, dt)
+        if not self.limit_reached:
+            LimitOrder.check_triggers(self, current_price, dt)
+
+        return self.triggered
+
+
+def asymmetric_round_price_to_penny(price, prefer_round_down,
+                                    diff=(0.0095 - .005)):
     """
     This method was taken from the zipline lib.
 

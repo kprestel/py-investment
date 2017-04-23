@@ -9,13 +9,15 @@ class AbstractCommissionModel(metaclass=ABCMeta):
     """
     Abstract Commission Model interface.
 
-    Commission models define how much commission should be charged extra to a portfolio per order or trade.
+    Commission models define how much commission should be charged extra to a 
+    portfolio per order or trade.
     """
 
     @abstractmethod
     def calculate(self, order, execution_price):
         """
-        Calculate the amount of commission to charge to an :class:``Order`` as the result of a :class:``Trade``.
+        Calculate the amount of commission to charge to an :class:``Order`` as 
+        the result of a :class:``Trade``.
 
         :param order: the :py:class:`~order.Order` to charge the commission to.
         :type order: Order
@@ -29,8 +31,9 @@ class AbstractCommissionModel(metaclass=ABCMeta):
 
 class PerOrderCommissionModel(AbstractCommissionModel):
     """
-    Calculates commission for a :py:class:`~order.Trade` on a per order basis, so if there is multiple `trade`s created
-    from one `order` commission will only be charged once.
+    Calculates commission for a :py:class:`~order.Trade` on a per order basis, 
+    so if there is multiple `trade`s created from one `order` commission 
+    will only be charged once.
     """
 
     def __init__(self, cost=DEFAULT_MINIMUM_COST_PER_ORDER):
@@ -41,12 +44,11 @@ class PerOrderCommissionModel(AbstractCommissionModel):
         self.cost = float(cost)
 
     def calculate(self, order, execution_price):
-        """If the order hasn't paid any commission then pay the fixed commission."""
+        """
+        If the order hasn't paid any commission then pay the fixed commission.
+        """
 
         if order.commission == 0.0:
             return self.cost
         else:
             return 0
-
-
-
