@@ -1,7 +1,12 @@
 from enum import Enum
 
-from pytech.utils.exceptions import InvalidActionError, InvalidOrderStatusError, InvalidOrderSubTypeError, \
-    InvalidOrderTypeError, InvalidPositionError
+from pytech.utils.exceptions import (InvalidActionError,
+                                     InvalidOrderStatusError,
+                                     InvalidOrderSubTypeError,
+                                     InvalidOrderTypeError,
+                                     InvalidPositionError,
+                                     InvalidSignalTypeError,
+                                     InvalidEventTypeError)
 
 
 class AutoNumber(Enum):
@@ -26,11 +31,18 @@ class AutoNumber(Enum):
 
 class EventType(AutoNumber):
     """Different Event types"""
-
     MARKET = ()
     SIGNAL = ()
     TRADE = ()
     FILL = ()
+
+    @classmethod
+    def check_if_valid(cls, value):
+        name = super().check_if_valid(value)
+        if name is not None:
+            return name
+        else:
+            raise InvalidEventTypeError(action=value)
 
 
 class SignalType(AutoNumber):
@@ -47,7 +59,7 @@ class SignalType(AutoNumber):
         if name is not None:
             return name
         else:
-            raise InvalidActionError(action=value)
+            raise InvalidSignalTypeError(action=value)
 
 
 class TradeAction(AutoNumber):

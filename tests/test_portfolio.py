@@ -1,14 +1,9 @@
-import pytest
-
-import pytech.data.handler
-from pytech.fin.portfolio import Portfolio, BasicPortfolio
 from pytech.backtest.event import MarketEvent
+from pytech.fin.portfolio import BasicPortfolio, Portfolio
 
 
 class TestPortfolio(object):
-
     def test_check_liquidity(self):
-
         test_portfolio = Portfolio(starting_cash=100)
 
         liquid = test_portfolio.check_liquidity(100.0, 2)
@@ -22,8 +17,8 @@ class TestPortfolio(object):
 
 
 class TestBasicPortfolio(object):
-
-    def test_constructor(self, yahoo_data_handler, events, blotter, start_date):
+    def test_constructor(self, yahoo_data_handler, events, blotter,
+                         start_date):
         test_portfolio = BasicPortfolio(yahoo_data_handler, events,
                                         start_date, blotter)
         assert test_portfolio is not None

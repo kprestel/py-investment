@@ -1,11 +1,11 @@
 import datetime as dt
-import pandas as pd
 import logging
 import queue
 from abc import ABCMeta, abstractmethod
-from typing import Iterable, Dict
+from typing import Dict, Iterable
 
 import numpy as np
+import pandas as pd
 import pandas_datareader.data as web
 
 import pytech.utils.dt_utils as dt_utils
@@ -160,7 +160,8 @@ class YahooDataHandler(DataHandler):
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            self.logger.exception('{} is not available in the given data set.')
+            self.logger.exception(
+                    f'{ticker} is not available in the given data set.')
             raise
         else:
             return bars_list[-1]
@@ -180,8 +181,7 @@ class YahooDataHandler(DataHandler):
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
             self.logger.exception(
-                    'Could not find {ticker} in latest_ticker_data'
-                        .format(ticker=ticker))
+                    f'Could not find {ticker} in latest_ticker_data')
             raise
         else:
             return bars_list[-n:]
@@ -191,8 +191,7 @@ class YahooDataHandler(DataHandler):
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
             self.logger.exception(
-                    'Could not find {ticker} in latest_ticker_data'
-                        .format(ticker=ticker))
+                    f'Could not find {ticker} in latest_ticker_data')
             raise
         else:
             return dt_utils.parse_date(bars_list[-1][pd_utils.DATE_COL])
@@ -212,8 +211,7 @@ class YahooDataHandler(DataHandler):
             bars_list = self.get_latest_bars(ticker, n)
         except KeyError:
             self.logger.exception(
-                    'Could not find {ticker} in latest_ticker_data'
-                        .format(ticker=ticker))
+                    f'Could not find {ticker} in latest_ticker_data')
             raise
         else:
             return np.array([getattr(bar, val_type) for bar in bars_list])
@@ -228,7 +226,7 @@ class YahooDataHandler(DataHandler):
                 self.continue_backtest = False
             else:
                 if bar is not None:
-                    self.logger.debug('Appending bar: {}'.format(bar))
+                    self.logger.debug(f'Appending bar: {bar}')
                     self.latest_ticker_data[ticker].append(bar)
 
         self.events.put(MarketEvent())

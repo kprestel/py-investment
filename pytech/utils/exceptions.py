@@ -59,6 +59,14 @@ class NotAPortfolioError(TypeError, PyInvestmentError):
            '{portfolio} was provided.')
 
 
+class InsufficientFundsError(PyInvestmentError):
+    """
+    Raised when a trade is attempted but there is not sufficient funds to 
+    execute the trade.
+    """
+    msg = 'Insufficient funds to execute trade for ticker: {ticker}'
+
+
 class InvalidPositionError(ValueError, PyInvestmentError):
     """Raised when a position is not either long or short"""
     msg = 'action must either be "LONG" or "SHORT". {position} was provided.'
@@ -133,3 +141,4 @@ class InvalidSignalTypeError(TypeError, PyInvestmentError):
 class BadOrderParams(TypeError, PyInvestmentError):
     """Raised when an order is placed that is illegal."""
     msg = 'Attempted to place an order with a {order_type} of {price}'
+

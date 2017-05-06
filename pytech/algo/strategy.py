@@ -62,13 +62,13 @@ class BuyAndHold(Strategy):
 
             for ticker in self.ticker_list:
                 self.logger.debug(
-                        'Processing ticker: {ticker}'.format(ticker=ticker))
+                        f'Processing ticker: {ticker}')
                 bars = self.bars.get_latest_bar_value(
                         ticker, pd_utils.ADJ_CLOSE_COL)
-                self.logger.debug('bars: {}'.format(bars))
+                self.logger.debug(f'bars: {bars}')
 
                 if bars is not None:
                     if not self.bought[ticker]:
-                        signal = SignalEvent(ticker, bars[0], 'LONG')
+                        signal = SignalEvent(ticker, 'LONG', bars[0])
                         self.events.put(signal)
                         self.bought[ticker] = True

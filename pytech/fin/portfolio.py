@@ -2,6 +2,7 @@ import logging
 import queue
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
+from typing import Dict, List
 
 import pandas as pd
 
@@ -14,7 +15,8 @@ from pytech.trading.trade import Trade
 from pytech.utils import pandas_utils as pd_utils
 from pytech.utils.enums import (EventType, Position, SignalType,
                                 TradeAction)
-from pytech.utils.exceptions import (InvalidEventTypeError,
+from pytech.utils.exceptions import (InsufficientFundsError,
+                                     InvalidEventTypeError,
                                      InvalidSignalTypeError)
 
 logger = logging.getLogger(__name__)
@@ -31,13 +33,21 @@ class AbstractPortfolio(metaclass=ABCMeta):
     Child portfolio classes must also call super().__init__() in order to set 
     the class up correctly.
     """
+    bars: DataHandler
+    events: queue.Queue
+    blotter: Blotter
+    start_date: datetime
+    ticker_list: List[str]
+    owned_assets: Dict[str, OwnedAsset]
 
     def __init__(self,
                  data_handler: DataHandler,
                  events: queue.Queue,
                  start_date: datetime,
                  blotter: Blotter,
-                 initial_capital: float = 100000.00):
+                 balancer,
+                 initial_capital: float = 100000.00,
+                 raise_on_warnings=False):
         self.logger = logging.getLogger(__name__)
         self.bars = data_handler
         self.events = events
@@ -52,6 +62,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
         # positions = qty
         self.all_positions_qty = self._construct_all_positions()
         self.total_commission = 0.0
+        self.raise_on_warnings = raise_on_warnings
+        self.balancer = balancer
 
     @property
     def total_value(self):
@@ -163,8 +175,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
             return self.owned_assets[ticker].total_position_value
         except KeyError:
             self.logger.exception(
-                    'Ticker: {ticker} is not currently owned.'
-                        .format(ticker=ticker))
+                    f'Ticker: {ticker} is not currently owned.')
             raise
 
     def update_timeindex(self, event):
@@ -231,10 +242,21 @@ class AbstractPortfolio(metaclass=ABCMeta):
 class BasicPortfolio(AbstractPortfolio):
     """Here for testing and stuff."""
 
-    def __init__(self, data_handler, events, start_date, blotter,
-                 initial_capital=100000):
-        super().__init__(data_handler, events, start_date, blotter,
-                         initial_capital)
+    def __init__(self,
+                 data_handler: DataHandler,
+                 events: queue.Queue,
+                 start_date: datetime,
+                 blotter: Blotter,
+                 balancer,
+                 initial_capital: float = 100000.00,
+                 raise_on_warnings=False):
+        super().__init__(data_handler,
+                         events,
+                         start_date,
+                         blotter,
+                         balancer,
+                         initial_capital,
+                         raise_on_warnings)
 
     def _update_from_trade(self, trade: Trade):
         self.cash += trade.trade_cost()
@@ -274,16 +296,21 @@ class BasicPortfolio(AbstractPortfolio):
             order = self.blotter[event.order_id]
             if self.check_liquidity(event.price, event.available_volume):
                 trade = self.blotter.make_trade(
-                        order, event.price, event.dt, event.available_volume)
+                        order,
+                        event.price,
+                        event.dt,
+                        event.available_volume)
                 self._update_from_trade(trade)
             else:
                 self.logger.warning(
-                        'Insufficient funds available to execute trade for '
-                        'ticker: {} '.format(order.ticker))
+                        f'Insufficient funds available to execute trade for '
+                        'ticker: {order.ticker}')
+                if self.raise_on_warnings:
+                    raise InsufficientFundsError(ticker=order.ticker)
 
     def update_signal(self, event: SignalEvent):
         if event.event_type is EventType.SIGNAL:
-            self._process_signal(event)
+            self.balancer(self, event)
             self.blotter.check_order_triggers()
             # self.events.put(self.generate_naive_order(event))
         else:
@@ -327,6 +354,9 @@ class BasicPortfolio(AbstractPortfolio):
                 self._handle_long_signal(signal)
             elif signal.position is SignalType.SHORT:
                 self._handle_short_signal(signal)
+            else:
+                # default always to general trade signals.
+                self._handle_general_trade_signal(signal)
         except AttributeError:
             self._handle_general_trade_signal(signal)
 
@@ -344,9 +374,8 @@ class BasicPortfolio(AbstractPortfolio):
         elif qty < 0:
             action = TradeAction.BUY
         else:
-            raise ValueError('Cannot exit from a position that is not owned.'
-                             'Owned qty is 0 for ticker: {ticker}.'.
-                             format(ticker=signal.ticker))
+            raise ValueError(f'Cannot exit from a position that is not owned.'
+                             'Owned qty is 0 for ticker: {signal.ticker}.')
 
         self.blotter.place_order(signal.ticker, action, signal.order_type,
                                  qty, signal.stop_price, signal.limit_price)
@@ -358,8 +387,10 @@ class BasicPortfolio(AbstractPortfolio):
         :param signal:
         """
         self.blotter.cancel_all_orders_for_asset(
-                signal.ticker, upper_price=signal.upper_price,
-                lower_price=signal.lower_price, order_type=signal.order_type)
+                signal.ticker,
+                upper_price=signal.upper_price,
+                lower_price=signal.lower_price,
+                order_type=signal.order_type)
 
     def _handle_hold_signal(self, signal: SignalEvent):
         """

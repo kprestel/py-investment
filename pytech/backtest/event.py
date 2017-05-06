@@ -1,7 +1,7 @@
 import datetime
 import logging
 from abc import ABCMeta, abstractmethod
-from typing import Dict
+from typing import Any, Dict
 
 import pytech.utils.dt_utils as dt_utils
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
@@ -52,13 +52,12 @@ class SignalEvent(Event):
 
     def __init__(self,
                  ticker: str,
-                 dt: datetime or str,
                  signal_type: SignalType or str,
                  limit_price: float = None,
                  stop_price: float = None,
                  target_price: float = None,
                  strength: float = None,
-                 order_type: OrderType = None,
+                 order_type: OrderType = OrderType.MARKET,
                  action: TradeAction = None,
                  position: Position = None,
                  upper_price: float = None,
@@ -69,13 +68,18 @@ class SignalEvent(Event):
         Base SignalEvent constructor.
         
         Basic rules:
-            - If stop and limit price are ``None`` a :class:``MarketOrder``
+            - If stop and limit price are ``None`` a :class:`MarketOrder`
             will be created.
-            - If only stop price is provided a :class:``StopOrder`` would be
+            - If only stop price is provided a :class:`StopOrder` would be
             created.
-            - If only limit price is provided a :class:``LimitPrice`` would be
+            - If only limit price is provided a :class:`LimitOrder` would be
             created.
             - If both stop and limit price are provided a 
+            :class:`StopLimitOrder` will be created
+            - If ``signal_type`` is simply ``TRADE`` then it could be 
+            considered ``LONG`` of ``SHORT`` it is up to the portfolio 
+            to determine this.
+            
         :param upper_price: 
         :param lower_price: 
         :param position: 
@@ -85,17 +89,15 @@ class SignalEvent(Event):
         :param target_price: 
         :param strength: 
         :param order_type: 
-        :class:``StopLimitOrder`` would be created.
+        :class:`StopLimitOrder` would be created.
         - ``target_price`` and ``strength`` **DO NOT** have any sort of
         :param ticker: The ticker to create the signal for.
-        :param dt: The date the signal is being created. 
         :param signal_type: The type of signal being created.
         """
 
         super().__init__()
 
         self.ticker = ticker
-        self.dt = dt_utils.parse_date(dt)
         self.signal_type = SignalType.check_if_valid(signal_type)
         self.limit_price = limit_price
         self.stop_price = stop_price
@@ -114,14 +116,46 @@ class SignalEvent(Event):
         else:
             self.position = None
 
-        if order_type is not None:
-            self.order_type = OrderType.check_if_valid(order_type)
-        else:
-            self.order_type = None
+        if order_type is OrderType.MARKET:
+            # Typically a Market order is not desirable so we warn on it.
+            self.logger.warning(
+                    'Creating a SignalEvent with a Market order type.')
+
+        self.order_type = OrderType.check_if_valid(order_type)
 
     @property
     def event_type(self) -> EventType:
         return EventType.SIGNAL
+
+
+class TradeSignalEvent(SignalEvent):
+    """A SignalEvent that is specifically for ``LONG`` or ``SHORT`` trades."""
+
+    def __init__(self,
+                 ticker: str,
+                 signal_type: SignalType or str,
+                 limit_price: float = None,
+                 stop_price: float = None,
+                 target_price: float = None,
+                 strength: Any = None,
+                 order_type: OrderType = None,
+                 action: TradeAction = None,
+                 position: Position = None,
+                 upper_price: float = None,
+                 lower_price: float = None,
+                 *args, **kwargs):
+        super().__init__(ticker,
+                         signal_type,
+                         limit_price,
+                         stop_price,
+                         target_price,
+                         strength,
+                         order_type,
+                         action,
+                         position,
+                         upper_price,
+                         lower_price,
+                         *args, **kwargs)
 
 
 class TradeEvent(Event):
@@ -167,5 +201,5 @@ class FillEvent(Event):
         self.dt = dt_utils.parse_date(dt)
 
     @property
-    def event_type(self):
+    def event_type(self) -> EventType:
         return EventType.FILL

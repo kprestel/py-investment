@@ -1,7 +1,7 @@
 import pytest
 from pytech.backtest.event import (Event, MarketEvent, SignalEvent, TradeEvent,
                                    FillEvent)
-from pytech.utils.enums import EventType, SignalType
+from pytech.utils.enums import EventType, SignalType, OrderType
 
 
 class TestMarketEvent(object):
@@ -12,13 +12,13 @@ class TestMarketEvent(object):
         assert issubclass(market_event.__class__, Event)
 
     def test_signal_event(self):
-        signal_event = SignalEvent('AAPL', '2017-03-18', SignalType.LONG,
+        signal_event = SignalEvent('AAPL', SignalType.LONG,
                                    target_price=101.22)
         assert signal_event.event_type is EventType.SIGNAL
         assert signal_event.signal_type is SignalType.LONG
         assert signal_event.ticker == 'AAPL'
         assert signal_event.target_price == 101.22
-        assert signal_event.order_type is None
+        assert signal_event.order_type is OrderType.MARKET
         assert isinstance(signal_event, SignalEvent)
         assert issubclass(signal_event.__class__, Event)
 

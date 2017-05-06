@@ -1,13 +1,13 @@
 import datetime as dt
 import logging
 import queue
-import pytech.utils.dt_utils as dt_utils
-import pytech.utils.common_utils as com_utils
 
+import pytech.utils.common_utils as com_utils
+import pytech.utils.dt_utils as dt_utils
 from pytech.data.handler import YahooDataHandler
+from pytech.fin.portfolio import BasicPortfolio
 from pytech.trading.blotter import Blotter
 from pytech.trading.execution import SimpleExecutionHandler
-from pytech.fin.portfolio import BasicPortfolio
 from pytech.utils.enums import EventType
 
 
@@ -76,8 +76,10 @@ class Backtest(object):
                                                   self.end_date)
         self.blotter.bars = self.data_handler
         self.strategy = self.strategy_cls(self.data_handler, self.events)
-        self.portfolio = self.portfolio_cls(self.data_handler, self.events,
-                                            self.start_date, self.blotter,
+        self.portfolio = self.portfolio_cls(self.data_handler,
+                                            self.events,
+                                            self.start_date,
+                                            self.blotter,
                                             self.initial_capital)
         self.execution_handler = self.execution_handler_cls(self.events)
 
@@ -86,7 +88,7 @@ class Backtest(object):
 
         while True:
             iterations += 1
-            self.logger.info('Iteration #{}'.format(iterations))
+            self.logger.info(f'Iteration #{iterations}')
 
             if self.data_handler.continue_backtest:
                 self.logger.debug('Updating bars.')
@@ -109,7 +111,7 @@ class Backtest(object):
 
     def _process_event(self, event):
         self.logger.info(
-                'Processing {event_type}'.format(event_type=event.event_type))
+                f'Processing {event.event_type}')
 
         if event.event_type is EventType.MARKET:
             self.strategy.generate_signals(event)

@@ -36,7 +36,6 @@ class Blotter(object):
                  asset_finder=None,
                  commission_model=None,
                  max_shares=None):
-
         self.logger = logging.getLogger(__name__)
         self.asset_finder = asset_finder
         # dict of all orders. key=ticker of the asset, value=the order.
@@ -90,7 +89,7 @@ class Blotter(object):
         else:
             raise NotAFinderError(finder=type(asset_finder))
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> Order:
         """Get an order from the orders dict."""
         return self.orders[key]
 
@@ -282,13 +281,17 @@ class Blotter(object):
         :param OrderType order_type: (optional) Only cancel orders of the given
         order type.
         :param TradeAction trade_action: (optional) Only cancel orders that are
-        either BUY or SELL.
+        either ``BUY`` or ``SELL``.
         """
         for order in self.orders[ticker].values():
             self._do_order_cancel(order, reason)
 
-    def _filter_orders(self, ticker, upper_price, lower_price, order_type,
-                       trade_action):
+    def _filter_orders(self,
+                       ticker: str,
+                       upper_price: float,
+                       lower_price: float,
+                       order_type: OrderType,
+                       trade_action: TradeAction):
         """
         Return an iterable of orders that meet the provided criteria.
         

@@ -5,7 +5,6 @@ import queue
 import pytest
 import queuelib.queue
 
-import pytech.fin.portfolio
 from pytech import TEST_DATA_DIR
 import pytech.trading.blotter as b
 from pytech.data.handler import YahooDataHandler
