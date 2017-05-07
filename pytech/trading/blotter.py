@@ -327,22 +327,38 @@ class Blotter(object):
     def _filter_on_price(self,
                          order: AnyOrder,
                          upper_price: float,
-                         lower_price: float):
+                         lower_price: float) -> bool:
+        """
+        Filter based on an upper and lower price and return ``True`` if the 
+        order should be filtered. Meaning that it should be excluded
+        from whatever action is being taken on orders that match the given
+        criteria.
+        
+        :param order: The order that is being checked if it should be filtered
+        or not.
+        :param upper_price: The price that sets the upper limit for the 
+        filtering. Any order with a ``stop_price`` or ``limit_price`` above 
+        this amount **WILL** be filtered out. 
+        :param lower_price: Same as ``upper_price`` but any order with a 
+        ``stop_price`` or ``limit_price`` below this amount will be 
+        filtered out.
+        :return: True if the 
+        """
         if upper_price is None and lower_price is None:
             self.logger.warning('upper and lower price were both None.')
-            return False
+            return True
 
         if lower_price is None:
-            return self._do_price_filter(order, upper_price, operator.gt)
+            return self._do_price_filter(order, upper_price, operator.lt)
 
         if upper_price is None:
-            return self._do_price_filter(order, lower_price, operator.lt)
+            return self._do_price_filter(order, lower_price, operator.gt)
 
         lower_price_broken = self._do_price_filter(order, lower_price,
-                                                   operator.lt)
+                                                   operator.gt)
 
         upper_price_broken = self._do_price_filter(order, upper_price,
-                                                   operator.gt)
+                                                   operator.lt)
 
         return lower_price_broken or upper_price_broken
 
