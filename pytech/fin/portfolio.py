@@ -45,7 +45,6 @@ class AbstractPortfolio(metaclass=ABCMeta):
                  events: queue.Queue,
                  start_date: datetime,
                  blotter: Blotter,
-                 balancer,
                  initial_capital: float = 100000.00,
                  raise_on_warnings=False):
         self.logger = logging.getLogger(__name__)
@@ -63,7 +62,6 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.all_positions_qty = self._construct_all_positions()
         self.total_commission = 0.0
         self.raise_on_warnings = raise_on_warnings
-        self.balancer = balancer
 
     @property
     def total_value(self):
@@ -247,14 +245,12 @@ class BasicPortfolio(AbstractPortfolio):
                  events: queue.Queue,
                  start_date: datetime,
                  blotter: Blotter,
-                 balancer,
                  initial_capital: float = 100000.00,
                  raise_on_warnings=False):
         super().__init__(data_handler,
                          events,
                          start_date,
                          blotter,
-                         balancer,
                          initial_capital,
                          raise_on_warnings)
 
@@ -310,7 +306,8 @@ class BasicPortfolio(AbstractPortfolio):
 
     def update_signal(self, event: SignalEvent):
         if event.event_type is EventType.SIGNAL:
-            self.balancer(self, event)
+            self._process_signal(event)
+            # self.balancer(self, event)
             self.blotter.check_order_triggers()
             # self.events.put(self.generate_naive_order(event))
         else:

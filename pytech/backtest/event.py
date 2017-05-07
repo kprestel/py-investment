@@ -56,7 +56,7 @@ class SignalEvent(Event):
                  limit_price: float = None,
                  stop_price: float = None,
                  target_price: float = None,
-                 strength: float = None,
+                 strength: Any = None,
                  order_type: OrderType = OrderType.MARKET,
                  action: TradeAction = None,
                  position: Position = None,

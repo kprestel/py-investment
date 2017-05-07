@@ -71,22 +71,19 @@ class TestBlotter(object):
                                       limit_price=100.00, order_id='one')
         upper_filter = blotter._filter_on_price(order, upper_price=110.00,
                                                 lower_price=None)
-        assert upper_filter is True
+        assert upper_filter is False
 
         lower_filter = blotter._filter_on_price(order, upper_price=None,
                                                 lower_price=110)
-        assert lower_filter is False
+        assert lower_filter is True
 
         both_filters = blotter._filter_on_price(order, upper_price=99,
                                                 lower_price=111)
-
-        assert both_filters is False
+        assert both_filters is True
 
         dont_filter_both = blotter._filter_on_price(order, upper_price=111,
                                                     lower_price=99)
-
-        assert dont_filter_both is True
+        assert dont_filter_both is False
 
         both_none = blotter._filter_on_price(order, None, None)
-
-        assert both_none is True
+        assert both_none is False

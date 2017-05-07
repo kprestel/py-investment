@@ -15,6 +15,7 @@ class AbstractBalancer(metaclass=ABCMeta):
 
     def __init__(self,
                  allow_market_orders=True,
+                 price_col=pd_utils.ADJ_CLOSE_COL,
                  *args, **kwargs):
         """
         Constructor for :class:`AbstractBalancer`.
@@ -26,6 +27,7 @@ class AbstractBalancer(metaclass=ABCMeta):
         """
         self.logger = logging.getLogger(__name__)
         self.allow_market_orders = allow_market_orders
+        self.price_col = price_col
 
     @abstractmethod
     def __call__(self,
@@ -188,9 +190,14 @@ class ClassicalBalancer(AbstractBalancer):
 class AlwaysBalancedBalancer(AbstractBalancer):
     """Portfolio weights are always equal."""
 
-    def __init__(self, include_cash=False, *args, **kwargs):
+    def __init__(self,
+                 include_cash=False,
+                 cash_reserves: float = .1,
+                 *args,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.include_cash = include_cash
+        self.cash_reserves = cash_reserves
 
     def _handle_trade_signal(self, portfolio: AbstractPortfolio,
                              signal: SignalEvent):
@@ -214,33 +221,63 @@ class AlwaysBalancedBalancer(AbstractBalancer):
 
     def _handle_long_signal(self, signal: SignalEvent,
                             portfolio: AbstractPortfolio):
-        pass
+        if self.include_cash:
+            total_mv = portfolio.total_value
+        else:
+            total_mv = portfolio.total_asset_mv
+
+        weights = self._get_current_weights(portfolio)
+
+        # add 1 because we will be buying another asset.
+        target_pct = 1 / (len(portfolio.owned_assets) + 1)
+
+        target_shares = {}
+        for ticker in portfolio.owned_assets.keys():
+            target_shares[ticker] = self._get_target_qty(ticker, portfolio,
+                                                         target_pct, total_mv)
+
+            # target_qty, target_mv, target_pct = self._get_targets(portfolio,
+            #                                                       signal.ticker)
 
     def _handle_short_signal(self, signal: SignalEvent,
                              portfolio: AbstractPortfolio):
         pass
 
     def _get_target_qty(self,
+                        ticker: str,
                         portfolio: AbstractPortfolio,
-                        signal: SignalEvent) -> int:
+                        target_pct: float,
+                        total_mv: float):
+        price = portfolio.bars.get_latest_bar_value(
+                ticker, self.price_col)
+
+        return int(math.floor((target_pct * total_mv) / price))
+
+    def _get_targets(self,
+                     portfolio: AbstractPortfolio,
+                     ticker: str) -> (int, float, float):
         """Return the target share quantity for a given event."""
-        target_pct = 1 / len(portfolio.owned_assets)
+        target_pct = 1 / (len(portfolio.owned_assets) + 1)
+
         if self.include_cash:
-            total = portfolio.total_value
+            total_mv = portfolio.total_value
         else:
-            total = portfolio.total_asset_mv
+            total_mv = portfolio.total_asset_mv
 
         latest_adj_close = portfolio.bars.get_latest_bar_value(
-                signal.ticker, pd_utils.ADJ_CLOSE_COL)
-        target_qty = int(math.floor((target_pct * total) / latest_adj_close))
+                ticker, pd_utils.ADJ_CLOSE_COL)
+
+        target_qty = int(
+                math.floor((target_pct * total_mv) / latest_adj_close))
+
+        target_mv = target_qty * latest_adj_close
 
         self.logger.debug(f'target_qty: {target_qty}')
 
-        return target_qty
+        return target_qty, target_mv, target_pct
 
-    def _get_current_asset_weights(self,
-                                   portfolio: AbstractPortfolio) \
-            -> Dict[str, float]:
+    def _get_current_weights(self,
+                             portfolio: AbstractPortfolio) -> Dict[str, float]:
         weights = {}
         if self.include_cash:
             total_mv = portfolio.total_value
