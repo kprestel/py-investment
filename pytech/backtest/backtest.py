@@ -18,9 +18,16 @@ class Backtest(object):
     update me. plz upd8 me.
     """
 
-    def __init__(self, ticker_list, initial_capital, start_date, strategy,
-                 end_date=None, data_handler=None, execution_handler=None,
-                 portfolio=None):
+    def __init__(self,
+                 ticker_list,
+                 initial_capital,
+                 start_date,
+                 strategy,
+                 end_date=None,
+                 data_handler=None,
+                 execution_handler=None,
+                 portfolio=None,
+                 balancer=None):
         """
         Initialize the backtest.
 

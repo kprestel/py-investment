@@ -1,5 +1,6 @@
 import collections
 import logging
+import operator
 import queue
 from datetime import datetime
 from typing import Dict
@@ -9,13 +10,19 @@ from pytech.backtest.event import TradeEvent
 from pytech.data.handler import DataHandler
 from pytech.db.finders import AssetFinder
 from pytech.fin.asset import Asset
-from pytech.trading.commission import (AbstractCommissionModel,
-                                       PerOrderCommissionModel)
-from pytech.trading.order import (LimitOrder, MarketOrder, Order,
-                                  StopLimitOrder, StopOrder, get_order_types)
+from pytech.trading.commission import (
+    AbstractCommissionModel,
+    PerOrderCommissionModel
+)
+from pytech.trading.order import (
+    LimitOrder, MarketOrder, Order,
+    StopLimitOrder, StopOrder, get_order_types
+)
 from pytech.trading.trade import Trade
-from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
-                                TradeAction)
+from pytech.utils.enums import (
+    OrderStatus, OrderSubType, OrderType,
+    TradeAction
+)
 from pytech.utils.exceptions import NotAFinderError
 
 AnyOrder = get_order_types()
@@ -309,27 +316,84 @@ class Blotter(object):
             elif trade_action is not None and order.action is not trade_action:
                 continue
 
-    def _do_order_cancel(self, order, reason):
+    @staticmethod
+    def _filter_on_order_type(order: AnyOrder,
+                              order_type: OrderType):
+        if order_type is None:
+            return False
+        else:
+            return order.order_type is order_type
+
+    def _filter_on_price(self,
+                         order: AnyOrder,
+                         upper_price: float,
+                         lower_price: float):
+        if upper_price is None and lower_price is None:
+            self.logger.warning('upper and lower price were both None.')
+            return False
+
+        if lower_price is None:
+            return self._do_price_filter(order, upper_price, operator.gt)
+
+        if upper_price is None:
+            return self._do_price_filter(order, lower_price, operator.lt)
+
+        lower_price_broken = self._do_price_filter(order, lower_price,
+                                                   operator.lt)
+
+        upper_price_broken = self._do_price_filter(order, upper_price,
+                                                   operator.gt)
+
+        return lower_price_broken or upper_price_broken
+
+    def _do_price_filter(self,
+                         order: AnyOrder,
+                         price: float,
+                         operator: operator) -> bool:
+        """
+        Filter based on stop and limit price. 
+        
+        If either stop or limit price is broken then the order will not be 
+        filtered.
+        
+        :param order: 
+        :param price: 
+        :return: 
+        """
+        try:
+            stop_price = order.stop_price
+        except AttributeError:
+            self.logger.debug('Order is not a stop order.')
+            stop_broken = False
+        else:
+            stop_broken = operator(stop_price, price)
+
+        try:
+            limit_price = order.limit_price
+        except AttributeError:
+            self.logger.debug('Order is not a limit order.')
+            limit_broken = False
+        else:
+            limit_broken = operator(limit_price, price)
+
+        return limit_broken or stop_broken
+
+    def _do_order_cancel(self, order: AnyOrder, reason: str):
         """
         Cancel any order that is passed to this method and log the appropriate 
         message.
         """
         if order.filled > 0:
-            self.logger.warning(
-                    'Order for ticker: {ticker} has been '
-                    'partially filled. {amt} shares had already '
-                    'been purchased.'
-                        .format(ticker=order.ticker, amt=order.filled))
+            self.logger.warning(f'Order for ticker: {order.ticker} has been '
+                                f'partially filled. {order.filled} shares '
+                                f'had already been purchased.')
         elif order.filled < 0:
-            self.logger.warning(
-                    'Order for ticker: {ticker} has been partially filled. '
-                    '{amt} shares had already been sold.'
-                        .format(ticker=order.ticker, amt=order.filled))
+            self.logger.warning(f'Order for ticker: {order.ticker} has been '
+                                f'partially filled. {order.filled} shares '
+                                'had already been sold.')
         else:
-            self.logger.info(
-                    'Canceled order for ticker: {ticker} '
-                    'successfully before it was executed.'
-                        .format(ticker=order.ticker))
+            self.logger.info(f'Canceled order for ticker: {order.ticker} '
+                             'successfully before it was executed.')
         order.cancel(reason)
         order.last_updated = self.current_dt
 
@@ -445,3 +509,21 @@ class Blotter(object):
                     open_orders[ticker] = order
 
         self.orders = open_orders
+
+
+class OrderFilter(object):
+    """Filters  orders for the blotter"""
+
+    def __init__(self,
+                 upper_price: float,
+                 lower_price: float,
+                 order_type: OrderType,
+                 trade_action: TradeAction):
+        """Constructor for OrderFilter"""
+        self.upper_price = upper_price
+        self.lower_price = lower_price
+        self.order_type = order_type
+        self.trade_action = trade_action
+
+    def __call__(self, *args, **kwargs):
+        pass

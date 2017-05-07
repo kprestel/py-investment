@@ -1,13 +1,13 @@
 import logging
 import math
 from abc import ABCMeta, abstractmethod
-from typing import Dict, TYPE_CHECKING
+from typing import Dict
 
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import SignalEvent
+from pytech.fin.portfolio import AbstractPortfolio
 from pytech.utils.enums import SignalType, TradeAction
 from pytech.utils.exceptions import InvalidSignalTypeError
-from pytech.fin.portfolio import AbstractPortfolio
 
 
 class AbstractBalancer(metaclass=ABCMeta):
@@ -192,20 +192,33 @@ class AlwaysBalancedBalancer(AbstractBalancer):
         super().__init__(*args, **kwargs)
         self.include_cash = include_cash
 
-    def __call__(self,
-                 portfolio: AbstractPortfolio,
-                 signal: SignalEvent,
-                 *args, **kwargs):
-        """
-        Balance the portfolio. 
-        
-        :param portfolio: 
-        :param signal:
-        :param args: 
-        :param kwargs: 
-        :return: 
-        """
-        current_weights = self._get_current_asset_weights(portfolio)
+    def _handle_trade_signal(self, portfolio: AbstractPortfolio,
+                             signal: SignalEvent):
+        super()._handle_trade_signal(portfolio, signal)
+
+    def _handle_hold_signal(self, portfolio: AbstractPortfolio,
+                            signal: SignalEvent):
+        super()._handle_hold_signal(portfolio, signal)
+
+    def _handle_exit_signal(self, portfolio: AbstractPortfolio,
+                            signal: SignalEvent):
+        return super()._handle_exit_signal(portfolio, signal)
+
+    def _handle_cancel_signal(self, portfolio: AbstractPortfolio,
+                              signal: SignalEvent):
+        super()._handle_cancel_signal(portfolio, signal)
+
+    def _handle_general_trade_signal(self, signal: SignalEvent,
+                                     portfolio: AbstractPortfolio):
+        pass
+
+    def _handle_long_signal(self, signal: SignalEvent,
+                            portfolio: AbstractPortfolio):
+        pass
+
+    def _handle_short_signal(self, signal: SignalEvent,
+                             portfolio: AbstractPortfolio):
+        pass
 
     def _get_target_qty(self,
                         portfolio: AbstractPortfolio,

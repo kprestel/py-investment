@@ -224,8 +224,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
             except KeyError:
                 market_value = 0
                 self.logger.info(
-                        '{ticker} is not currently owned, market value will'
-                        'be set to 0.'.format(ticker=ticker))
+                        f'{ticker} is not currently owned, market value will'
+                        'be set to 0.')
             else:
                 adj_close = self.bars.get_latest_bar_value(
                         ticker, pd_utils.ADJ_CLOSE_COL)
@@ -303,8 +303,8 @@ class BasicPortfolio(AbstractPortfolio):
                 self._update_from_trade(trade)
             else:
                 self.logger.warning(
-                        f'Insufficient funds available to execute trade for '
-                        'ticker: {order.ticker}')
+                        'Insufficient funds available to execute trade for '
+                        f'ticker: {order.ticker}')
                 if self.raise_on_warnings:
                     raise InsufficientFundsError(ticker=order.ticker)
 
@@ -374,8 +374,9 @@ class BasicPortfolio(AbstractPortfolio):
         elif qty < 0:
             action = TradeAction.BUY
         else:
-            raise ValueError(f'Cannot exit from a position that is not owned.'
-                             'Owned qty is 0 for ticker: {signal.ticker}.')
+            raise ValueError(
+                    f'Cannot exit from a position that is not owned.'
+                    f'Owned qty is 0 for ticker: {signal.ticker}.')
 
         self.blotter.place_order(signal.ticker, action, signal.order_type,
                                  qty, signal.stop_price, signal.limit_price)
