@@ -272,8 +272,11 @@ class Blotter(object):
         """
         self._do_order_cancel(self._find_order(order_id, ticker), reason)
 
-    def cancel_all_orders_for_asset(self, ticker, reason='', upper_price=None,
-                                    lower_price=None, order_type=None,
+    def cancel_all_orders_for_asset(self, ticker,
+                                    reason='',
+                                    upper_price=None,
+                                    lower_price=None,
+                                    order_type=None,
                                     trade_action=None):
         """
         Cancel all orders for a given ticker's ticker and then clean up the 
@@ -291,38 +294,61 @@ class Blotter(object):
         either ``BUY`` or ``SELL``.
         """
         for order in self.orders[ticker].values():
-            self._do_order_cancel(order, reason)
+            if self._check_filters(order, upper_price, lower_price,
+                                   order_type, trade_action):
+                self._do_order_cancel(order, reason)
 
-    def _filter_orders(self,
-                       ticker: str,
+    def _check_filters(self,
+                       order: AnyOrder,
                        upper_price: float,
                        lower_price: float,
                        order_type: OrderType,
-                       trade_action: TradeAction):
-        """
-        Return an iterable of orders that meet the provided criteria.
-        
-        :param ticker: 
-        :param upper_price: 
-        :param lower_price: 
-        :param OrderType order_type:
-        :param TradeAction trade_action:
-        :return: 
-        """
-        # TODO: this... how to filter efficiently?
-        for order in self.orders[ticker].values():
-            if order_type is not None and order.order_type is not order_type:
-                continue
-            elif trade_action is not None and order.action is not trade_action:
-                continue
-
-    @staticmethod
-    def _filter_on_order_type(order: AnyOrder,
-                              order_type: OrderType):
-        if order_type is None:
+                       trade_action: TradeAction) -> bool:
+        """Check all of the possible filters."""
+        if self._filter_on_order_type(order, order_type):
+            return True
+        elif self._filter_on_trade_action(order, trade_action):
+            return True
+        elif self._filter_on_price(order, upper_price=upper_price,
+                                   lower_price=lower_price):
+            return True
+        else:
             return False
+
+    def _filter_on_order_type(self,
+                              order: AnyOrder,
+                              order_type: OrderType) -> bool:
+        """
+        Filter based on :class:``OrderType``. If the ``order`` is not the same 
+        :class:``OrderType`` as given then it will be filtered out from
+        whatever action is being taken on the orders.
+        
+        :param order: The order to check whether it should be filtered or not.
+        :param order_type: The type of order that the action should be taken 
+        on.
+        :return: True if the order meets the criteria and the action should be
+        taken.
+        """
+        if order_type is None:
+            self.logger.debug('Order type was None. Filtering...')
+            return True
         else:
             return order.order_type is order_type
+
+    def _filter_on_trade_action(self,
+                                order: AnyOrder,
+                                trade_action: TradeAction):
+        """
+        
+        :param order: 
+        :param trade_action: 
+        :return: 
+        """
+        if trade_action is None:
+            self.logger.debug('Trade action was none. Filtering...')
+            return False
+        else:
+            return order.action is trade_action
 
     def _filter_on_price(self,
                          order: AnyOrder,
@@ -330,9 +356,13 @@ class Blotter(object):
                          lower_price: float) -> bool:
         """
         Filter based on an upper and lower price and return ``True`` if the 
-        order should be filtered. Meaning that it should be excluded
-        from whatever action is being taken on orders that match the given
-        criteria.
+        order meets the criteria. Meaning that whatever action is being 
+        taken on orders that match the given criteria should be taken on 
+        the given ``order``.
+        
+        If neither ``upper_price`` or ``lower_price`` are given then it is 
+        assumed that orders should be filtered based on price and 
+        ``False`` will be returned.
         
         :param order: The order that is being checked if it should be filtered
         or not.
@@ -342,23 +372,24 @@ class Blotter(object):
         :param lower_price: Same as ``upper_price`` but any order with a 
         ``stop_price`` or ``limit_price`` below this amount will be 
         filtered out.
-        :return: True if the 
+        :return: True if the order meets the criteria and the action should be 
+        taken on it.
         """
         if upper_price is None and lower_price is None:
             self.logger.warning('upper and lower price were both None.')
-            return True
+            return False
 
         if lower_price is None:
-            return self._do_price_filter(order, upper_price, operator.lt)
+            return self._do_price_filter(order, upper_price, operator.gt)
 
         if upper_price is None:
-            return self._do_price_filter(order, lower_price, operator.gt)
+            return self._do_price_filter(order, lower_price, operator.lt)
 
         lower_price_broken = self._do_price_filter(order, lower_price,
-                                                   operator.gt)
+                                                   operator.lt)
 
         upper_price_broken = self._do_price_filter(order, upper_price,
-                                                   operator.lt)
+                                                   operator.gt)
 
         return lower_price_broken or upper_price_broken
 
@@ -368,9 +399,6 @@ class Blotter(object):
                          operator: operator) -> bool:
         """
         Filter based on stop and limit price. 
-        
-        If either stop or limit price is broken then the order will not be 
-        filtered.
         
         :param order: 
         :param price: 
