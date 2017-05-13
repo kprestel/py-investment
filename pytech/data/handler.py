@@ -186,7 +186,7 @@ class YahooDataHandler(DataHandler):
         else:
             return bars_list[-n:]
 
-    def get_latest_bar_dt(self, ticker):
+    def get_latest_bar_dt(self, ticker) -> dt.datetime:
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:

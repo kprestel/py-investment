@@ -13,11 +13,15 @@ from pytech.fin.owned_asset import OwnedAsset
 from pytech.trading.blotter import Blotter
 from pytech.trading.trade import Trade
 from pytech.utils import pandas_utils as pd_utils
-from pytech.utils.enums import (EventType, Position, SignalType,
-                                TradeAction)
-from pytech.utils.exceptions import (InsufficientFundsError,
-                                     InvalidEventTypeError,
-                                     InvalidSignalTypeError)
+from pytech.utils.enums import (
+    EventType, Position, SignalType,
+    TradeAction
+)
+from pytech.utils.exceptions import (
+    InsufficientFundsError,
+    InvalidEventTypeError,
+    InvalidSignalTypeError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +65,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         # positions = qty
         self.all_positions_qty = self._construct_all_positions()
         self.total_commission = 0.0
+        self.positions_df = pd.DataFrame()
         self.raise_on_warnings = raise_on_warnings
 
     @property
@@ -196,21 +201,22 @@ class AbstractPortfolio(metaclass=ABCMeta):
         latest_dt = self.bars.get_latest_bar_dt(next(iter(self.ticker_list)))
 
         # update positions
-        dp = self._get_temp_dict()
-        dp['datetime'] = latest_dt
+        # dp = self._get_temp_dict()
+        # dp['datetime'] = latest_dt
+        dh = self._get_temp_dict()
 
         for ticker in self.ticker_list:
             try:
-                dp[ticker] = self.owned_assets[ticker].shares_owned
+                dh[ticker] = self.owned_assets[ticker].shares_owned
             except KeyError:
-                dp[ticker] = 0
+                dh[ticker] = 0
 
         # append current positions
-        self.all_positions_qty.append(dp)
+        # self.all_positions_qty.append(dp)
 
         # update holdings
-        dh = self._get_temp_dict()
-        dh['datetime'] = latest_dt
+        # dh = self._get_temp_dict()
+        index = []
         dh['cash'] = self.cash
         dh['commission'] = self.total_commission
         dh['total'] = self.cash
@@ -221,18 +227,24 @@ class AbstractPortfolio(metaclass=ABCMeta):
                 shares_owned = owned_asset.shares_owned
             except KeyError:
                 market_value = 0
-                self.logger.info(
-                        f'{ticker} is not currently owned, market value will'
-                        'be set to 0.')
+                self.logger.info(f'{ticker} is not currently owned, '
+                                 f'market value will be set to 0.')
             else:
-                adj_close = self.bars.get_latest_bar_value(
-                        ticker, pd_utils.ADJ_CLOSE_COL)
-                market_value = (shares_owned * adj_close)
+                adj_close = self.bars.get_latest_bar_value(ticker,
+                                                           pd_utils.ADJ_CLOSE_COL)
+                market_value = shares_owned * adj_close
                 owned_asset.update_total_position_value(adj_close, latest_dt)
 
             # approximate to real value.
             dh[ticker] = market_value
             dh['total'] += market_value
+            index.append((latest_dt, ticker))
+
+        multi_index = pd.MultiIndex.from_tuples(index, names=['datetime',
+                                                              'ticker'])
+        df = pd.DataFrame(dh, index=multi_index)
+        self.positions_df = pd.concat([self.positions_df, df])
+        self.logger.info(self.positions_df)
 
         self.all_holdings_mv.append(dh)
 
@@ -291,11 +303,10 @@ class BasicPortfolio(AbstractPortfolio):
         if event.type is EventType.FILL:
             order = self.blotter[event.order_id]
             if self.check_liquidity(event.price, event.available_volume):
-                trade = self.blotter.make_trade(
-                        order,
-                        event.price,
-                        event.dt,
-                        event.available_volume)
+                trade = self.blotter.make_trade(order,
+                                                event.price,
+                                                event.dt,
+                                                event.available_volume)
                 self._update_from_trade(trade)
             else:
                 self.logger.warning(
@@ -384,11 +395,11 @@ class BasicPortfolio(AbstractPortfolio):
 
         :param signal:
         """
-        self.blotter.cancel_all_orders_for_asset(
-                signal.ticker,
-                upper_price=signal.upper_price,
-                lower_price=signal.lower_price,
-                order_type=signal.order_type)
+        self.blotter.cancel_all_orders_for_asset(signal.ticker,
+                                                 upper_price=signal.upper_price,
+                                                 lower_price=signal.lower_price,
+                                                 order_type=signal.order_type,
+                                                 trade_action=signal.action)
 
     def _handle_hold_signal(self, signal: SignalEvent):
         """

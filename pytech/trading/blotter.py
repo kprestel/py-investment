@@ -179,9 +179,8 @@ class Blotter(object):
             return None
         elif qty > self.max_shares:
             raise OverflowError(
-                    'Cannot place an order for {shares}. Max shares is set'
-                    'to {max_shares}'
-                        .format(shares=qty, max_shares=self.max_shares)
+                    f'Cannot place an order for {qty}. Max shares is set'
+                    f'to {self.max_shares}'
             )
 
         if action is None and qty < 0:
@@ -449,14 +448,28 @@ class Blotter(object):
         """
         self.orders[order.ticker][order.id].status = OrderStatus.HELD
 
-    def hold_all_orders_for_asset(self, ticker):
+    def hold_all_orders_for_asset(self, ticker: str,
+                                  upper_price: float = None,
+                                  lower_price: float = None,
+                                  order_type: OrderType = None,
+                                  trade_action: TradeAction = None):
         """
-        Place all open orders for the given asset on hold.
-        
-        :param str ticker: The ticker of the asset to place all orders on hold.
+        Place a hold on all orders for a given ticker's ticker.
+
+        :param ticker: The ticker of the ticker to cancel all orders for.
+        :param lower_price: (optional) Only hold orders 
+        lower than this price.
+        :param upper_price: (optional) Only hold orders greater than
+        this price.
+        :param order_type: (optional) Only hold orders of the given
+        order type.
+        :param trade_action: (optional) Only hold orders that are
+        either ``BUY`` or ``SELL``.
         """
         for order in self.orders[ticker].values():
-            self.hold_order(order)
+            if self._check_filters(order, upper_price, lower_price,
+                                   order_type, trade_action):
+                self.hold_order(order)
 
     def reject_order(self, order_id, ticker=None, reason=''):
         """
@@ -476,10 +489,8 @@ class Blotter(object):
         self._find_order(order_id, ticker).reject(reason)
 
         self.logger.warning(
-                'Order id: {id} for ticker: {ticker} '
-                'was rejected because: {reason}'
-                    .format(id=order_id, ticker=ticker,
-                            reason=reason or 'Unknown'))
+                f'Order id: {order_id} for ticker: {ticker} '
+                f'was rejected because: {reason}')
 
     def check_order_triggers(self):
         """
@@ -553,21 +564,3 @@ class Blotter(object):
                     open_orders[ticker] = order
 
         self.orders = open_orders
-
-
-class OrderFilter(object):
-    """Filters  orders for the blotter"""
-
-    def __init__(self,
-                 upper_price: float,
-                 lower_price: float,
-                 order_type: OrderType,
-                 trade_action: TradeAction):
-        """Constructor for OrderFilter"""
-        self.upper_price = upper_price
-        self.lower_price = lower_price
-        self.order_type = order_type
-        self.trade_action = trade_action
-
-    def __call__(self, *args, **kwargs):
-        pass
