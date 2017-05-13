@@ -8,6 +8,7 @@ import pytech.trading.blotter as b
 from pytech import TEST_DATA_DIR
 from pytech.data.handler import YahooDataHandler
 from pytech.fin.portfolio import BasicPortfolio
+import pytech.db.db as db
 
 
 @pytest.fixture()
@@ -25,7 +26,8 @@ def no_requests(monkeypatch):
     """Prevent making requests to yahoo to speed up testing"""
 
     def patch_requests(ticker, data_source, start, end):
-        return pd.read_csv(get_test_csv_path(ticker))
+        return db.read(ticker)
+        # return pd.read_csv(get_test_csv_path(ticker))
 
     monkeypatch.setattr('pandas_datareader.data.DataReader', patch_requests)
 

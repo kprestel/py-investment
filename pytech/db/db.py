@@ -41,7 +41,7 @@ def write(symbol: str,
 def read(symbol: str,
          chunk_range: pd.DatetimeIndex or DateRange = None,
          filter_data=True,
-         **kwargs):
+         **kwargs) -> pd.DataFrame or pd.Series:
     """
     Retrieve data from the DB.
     
@@ -53,7 +53,10 @@ def read(symbol: str,
     :param kwargs: 
     :return: 
     """
-    lib.read(symbol, chunk_range, filter_data, **kwargs)
+    return lib.read(symbol,
+                    chunk_range=chunk_range,
+                    filter_data=filter_data,
+                    **kwargs)
 
 
 @mongo_retry
@@ -98,8 +101,8 @@ def update(symbol: str, item: pd.TimeSeries or pd.DataFrame,
 
 @mongo_retry
 def delete(symbol: str,
-           chunk_range: pd.DatetimeIndex or DateRange=None,
-           audit: Dict=None) -> None:
+           chunk_range: pd.DatetimeIndex or DateRange = None,
+           audit: Dict = None) -> None:
     """
     Delete all chunks for a symbol, or optionally, chunks within a range.
     
