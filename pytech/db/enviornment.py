@@ -19,8 +19,8 @@ class Environment(object):
         self.trading_tz = trading_tz
         self.trade_cal = mcal.get_calendar(trade_cal)
         self.db_conn = DBConnector(db_path)
-        self.db_conn.init_db()
-        self.asset_finder = AssetFinder(self.db_conn.engine)
+        # self.db_conn.init_db()
+        # self.asset_finder = AssetFinder(self.db_conn.engine)
 
 
 class SimParams(object):

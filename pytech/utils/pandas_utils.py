@@ -2,7 +2,7 @@ import pandas as pd
 
 # constants for the expected column names of ALL ohlcv DataFrames
 
-DATE_COL = 'asof_date'
+DATE_COL = 'date'
 OPEN_COL = 'open'
 HIGH_COL = 'high'
 LOW_COL = 'low'

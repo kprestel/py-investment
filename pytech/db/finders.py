@@ -43,16 +43,16 @@ class Finder(metaclass=ABCMeta):
             possible extra parameters.
         :type engine: :class:`SQLAlchemy.engine` or str
         """
-        self.connector = DBConnector(engine, **kwargs)
-        self.engine = self.connector.engine
-        self.conn = self.engine.connect()
+        # self.connector = DBConnector(engine, **kwargs)
+        # self.engine = self.connector.engine
+        # self.conn = self.engine.connect()
 
-        metadata = MetaData(bind=self.engine)
+        # metadata = MetaData(bind=self.engine)
 
-        metadata.reflect(only=PYTECH_DB_TABLE_NAMES)
+        # metadata.reflect(only=PYTECH_DB_TABLE_NAMES)
 
-        for table_name in PYTECH_DB_TABLE_NAMES:
-            setattr(self, table_name, metadata.tables[table_name])
+        # for table_name in PYTECH_DB_TABLE_NAMES:
+        #     setattr(self, table_name, metadata.tables[table_name])
 
         self.logger = logging.getLogger(self.__class__.__name__)
 

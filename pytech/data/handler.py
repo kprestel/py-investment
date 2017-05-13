@@ -11,6 +11,7 @@ import pandas_datareader.data as web
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent
+import pytech.db.db as db
 
 
 class DataHandler(metaclass=ABCMeta):
@@ -127,11 +128,14 @@ class YahooDataHandler(DataHandler):
         comb_index = None
 
         for t in self.tickers:
-            self.ticker_data[t] = web.DataReader(
-                    t, data_source=self.DATA_SOURCE,
-                    start=self.start_date, end=self.end_date)
+            self.ticker_data[t] = web.DataReader(t,
+                                                 data_source=self.DATA_SOURCE,
+                                                 start=self.start_date,
+                                                 end=self.end_date)
             self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(
                     self.ticker_data[t])
+
+            db.write(t, self.ticker_data[t], chunk_size='D')
 
             if comb_index is None:
                 comb_index = self.ticker_data[t].index

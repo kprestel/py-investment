@@ -1,16 +1,13 @@
 import os
-import pandas as pd
 import queue
 
+import pandas as pd
 import pytest
-import queuelib.queue
 
-from pytech import TEST_DATA_DIR
 import pytech.trading.blotter as b
+from pytech import TEST_DATA_DIR
 from pytech.data.handler import YahooDataHandler
 from pytech.fin.portfolio import BasicPortfolio
-
-from pytech.fin.asset import Fundamental, Stock
 
 
 @pytest.fixture()
@@ -41,8 +38,8 @@ def get_test_csv_path(ticker):
 
 @pytest.fixture()
 def ticker_list():
-    return ['AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST',
-            'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL']
+    return {'AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST',
+            'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL'}
 
 
 @pytest.fixture()
