@@ -244,7 +244,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
                                                               'ticker'])
         df = pd.DataFrame(dh, index=multi_index)
         self.positions_df = pd.concat([self.positions_df, df])
-        self.logger.info(self.positions_df)
+        # self.logger.info(self.positions_df)
 
         self.all_holdings_mv.append(dh)
 

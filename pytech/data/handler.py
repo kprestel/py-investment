@@ -11,7 +11,9 @@ import pandas_datareader.data as web
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent
-import pytech.db.db as db
+# import pytech.db.db as db
+from pytech.mongo import ARCTIC_STORE
+from pytech.mongo.barstore import ChunkStore
 
 
 class DataHandler(metaclass=ABCMeta):
@@ -44,6 +46,7 @@ class DataHandler(metaclass=ABCMeta):
         self.continue_backtest = True
         self.start_date = dt_utils.parse_date(start_date)
         self.end_date = dt_utils.parse_date(end_date)
+        self.chunk_store = ARCTIC_STORE['pytech.bars']
         self._populate_ticker_data()
 
     @abstractmethod
@@ -135,7 +138,8 @@ class YahooDataHandler(DataHandler):
             self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(
                     self.ticker_data[t])
 
-            db.write(t, self.ticker_data[t], chunk_size='D')
+            # db.write(t, self.ticker_data[t], chunk_size='D')
+            self.chunk_store.write(t, self.ticker_data[t], chunk_size='D')
 
             if comb_index is None:
                 comb_index = self.ticker_data[t].index

@@ -60,7 +60,7 @@ def read(symbol: str,
 
 
 @mongo_retry
-def append(symbol: str, item: pd.DataFrame or pd.TimeSeries) -> None:
+def append(symbol: str, item: pd.DataFrame or pd.Series) -> None:
     """
     Appends data from ``item`` to symbol's data in the DB.
     
@@ -73,7 +73,7 @@ def append(symbol: str, item: pd.DataFrame or pd.TimeSeries) -> None:
 
 
 @mongo_retry
-def update(symbol: str, item: pd.TimeSeries or pd.DataFrame,
+def update(symbol: str, item: pd.Series or pd.DataFrame,
            chunk_range: pd.DatetimeIndex or DateRange = None,
            upsert: bool = False,
            **kwargs) -> None:
