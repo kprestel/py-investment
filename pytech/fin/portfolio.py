@@ -11,7 +11,7 @@ import pytech.utils.dt_utils as dt_utils
 from pytech.backtest.event import SignalEvent
 from pytech.data.handler import DataHandler
 from pytech.fin.owned_asset import OwnedAsset
-from pytech.mongo import ARCTIC_STORE
+from pytech.mongo import ARCTIC_STORE, PortfolioStore
 from pytech.trading.blotter import Blotter
 from pytech.trading.trade import Trade
 from pytech.utils import pandas_utils as pd_utils
@@ -45,6 +45,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
     start_date: datetime
     ticker_list: List[str]
     owned_assets: Dict[str, OwnedAsset]
+    lib: PortfolioStore
 
     def __init__(self,
                  data_handler: DataHandler,
@@ -248,12 +249,13 @@ class AbstractPortfolio(metaclass=ABCMeta):
         df = pd.DataFrame(dh, index=multi_index)
         self.positions_df = pd.concat([self.positions_df, df])
         self.logger.info('Writing current portfolio state to DB.')
-        self.lib.write('portfolio', self.positions_df)
-        try:
-            self.lib.snapshot(latest_dt)
-        except DuplicateSnapshotException:
-            self.logger.debug('Snapshot with name: '
-                              f'{latest_dt} already exists')
+        self.lib.write_snapshot('portfolio', self.positions_df, latest_dt)
+
+        # try:
+        #     self.lib.snapshot(latest_dt)
+        # except DuplicateSnapshotException:
+        #     self.logger.debug('Snapshot with name: '
+        #                       f'{latest_dt} already exists')
 
         self.all_holdings_mv.append(dh)
 

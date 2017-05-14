@@ -7,6 +7,7 @@ from arctic.chunkstore.chunkstore import ChunkStore
 from arctic.chunkstore.date_chunker import DateChunker
 from arctic.date import DateRange
 from arctic.decorators import mongo_retry
+import pytech.utils.pandas_utils as pd_utils
 
 
 class BarStore(ChunkStore):
@@ -59,6 +60,13 @@ class BarStore(ChunkStore):
         In the case of the default :class:``DateChunker`` you can specify a 
         ``chunk_size`` (D, M, or Y).
         """
+        if not isinstance(item, (pd.DataFrame, pd.Series)):
+            raise TypeError('Can only chunk DataFrames and Series. '
+                            f'{type(item)} was provided')
+        else:
+            # ensure that the column names are correct.
+            item = pd_utils.rename_bar_cols(item)
+
         return super().write(symbol, item, metadata, chunker, audit, **kwargs)
 
     @mongo_retry

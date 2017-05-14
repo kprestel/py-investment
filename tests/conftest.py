@@ -32,7 +32,7 @@ def no_requests(monkeypatch):
     def patch_requests(ticker, data_source, start, end):
         return lib.read(ticker)
         # return db.read(ticker)
-        # return pd.read_csv(get_test_csv_path(ticker))
+        # return pd.read_csv(get_test_csv_path(ticker), parse_dates=['Date'])
 
     monkeypatch.setattr('pandas_datareader.data.DataReader', patch_requests)
 

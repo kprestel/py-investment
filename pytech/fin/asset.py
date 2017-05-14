@@ -178,7 +178,7 @@ class Asset(metaclass=ABCMeta):
             return None
 
         # rename the columns to what the DB expects
-        return pd_utils.rename_yahoo_ohlcv_cols(temp_ohlcv)
+        return pd_utils.rename_bar_cols(temp_ohlcv)
 
     @classmethod
     def get_subclass_dict(cls, subclass_dict=None):

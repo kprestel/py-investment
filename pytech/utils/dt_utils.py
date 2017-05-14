@@ -25,14 +25,16 @@ def parse_date(date_to_parse):
     elif isinstance(date_to_parse, datetime):
         return pd.to_datetime(date_to_parse.replace(tzinfo=tz.tzutc()),
                               utc=True)
+    elif isinstance(date_to_parse, date):
+        return pd.to_datetime(date_to_parse, utc=True)
     elif isinstance(date_to_parse, str):
         # TODO: timezone
-        return pd.to_datetime(parser.parse(date_to_parse))
+        return pd.to_datetime(date_to_parse, utc=True)
     else:
         raise TypeError(
-                f'date_to_parse must be a pandas '
+                'date_to_parse must be a pandas '
                 'Timestamp, datetime, or a date string. '
-                '{type(date_to_parse)} was provided')
+                f'{type(date_to_parse)} was provided')
 
 
 def get_default_date(is_start_date):

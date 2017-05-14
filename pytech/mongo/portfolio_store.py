@@ -5,6 +5,7 @@ from typing import Any, Dict
 import pandas as pd
 from arctic.date import DateRange
 from arctic.decorators import mongo_retry
+from arctic.exceptions import DuplicateSnapshotException
 from arctic.store.version_store import VersionStore
 from arctic.store.versioned_item import VersionedItem
 
@@ -60,8 +61,8 @@ class PortfolioStore(VersionStore):
             return versioned_item.data
 
     def write_snapshot(self, symbol: str,
-                       snap_shot: dt.datetime or str,
                        data: pd.Series or pd.DataFrame,
+                       snap_shot: dt.datetime or str,
                        metadata: Dict = None,
                        prune_previous_version: bool = False,
                        **kwargs) -> VersionedItem:
@@ -79,5 +80,9 @@ class PortfolioStore(VersionStore):
         """
         versioned_item = super().write(symbol, data, metadata,
                                        prune_previous_version, **kwargs)
-        super().snapshot(snap_shot)
+        try:
+            super().snapshot(snap_shot)
+        except DuplicateSnapshotException:
+            self.logger.info('Snapshot with name: '
+                             f'{snap_shot} already exists.')
         return versioned_item

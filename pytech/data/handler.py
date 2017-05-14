@@ -7,12 +7,14 @@ from typing import Dict, Iterable
 import numpy as np
 import pandas as pd
 import pandas_datareader.data as web
+from arctic.date import DateRange
+from arctic.exceptions import NoDataFoundException
 
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent
 # import pytech.db.db as db
-from pytech.mongo import ARCTIC_STORE
+from pytech.mongo import ARCTIC_STORE, BarStore
 
 
 class DataHandler(metaclass=ABCMeta):
@@ -22,6 +24,7 @@ class DataHandler(metaclass=ABCMeta):
     start_date: dt.datetime
     end_date: dt.datetime
     ticker_data: Dict[str, pd.DataFrame]
+    lib: BarStore
 
     def __init__(self,
                  events: queue.Queue,
@@ -45,7 +48,7 @@ class DataHandler(metaclass=ABCMeta):
         self.continue_backtest = True
         self.start_date = dt_utils.parse_date(start_date)
         self.end_date = dt_utils.parse_date(end_date)
-        self.chunk_store = ARCTIC_STORE['pytech.bars']
+        self.lib = ARCTIC_STORE['pytech.bars']
         self._populate_ticker_data()
 
     @abstractmethod
@@ -128,17 +131,25 @@ class YahooDataHandler(DataHandler):
         df as the value and the ticker as the key.
         """
         comb_index = None
+        # only create the DateRange object once.
+        date_range = DateRange(start=self.start_date, end=self.end_date)
+        # date_range = pd.date_range(self.start_date, self.end_date)
 
         for t in self.tickers:
-            self.ticker_data[t] = web.DataReader(t,
-                                                 data_source=self.DATA_SOURCE,
-                                                 start=self.start_date,
-                                                 end=self.end_date)
+            try:
+                self.ticker_data[t] = self.lib.read(t, chunk_range=date_range)
+            except NoDataFoundException:
+                self.ticker_data[t] = web.DataReader(t,
+                                                     self.DATA_SOURCE,
+                                                     self.start_date,
+                                                     self.end_date)
             # TODO: generalize this.
-            self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(self.ticker_data[t])
+            self.ticker_data[t] = pd_utils.rename_bar_cols(
+                    self.ticker_data[t])
 
             # db.write(t, self.ticker_data[t], chunk_size='D')
-            # self.chunk_store.write(t, self.ticker_data[t], chunk_size='D')
+            # self.lib.delete(t)
+            # self.lib.write(t, self.ticker_data[t], chunk_size='D')
 
             if comb_index is None:
                 comb_index = self.ticker_data[t].index
