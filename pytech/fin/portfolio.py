@@ -5,11 +5,13 @@ from datetime import datetime
 from typing import Dict, List
 
 import pandas as pd
+from arctic.exceptions import DuplicateSnapshotException
 
 import pytech.utils.dt_utils as dt_utils
 from pytech.backtest.event import SignalEvent
 from pytech.data.handler import DataHandler
 from pytech.fin.owned_asset import OwnedAsset
+from pytech.mongo import ARCTIC_STORE
 from pytech.trading.blotter import Blotter
 from pytech.trading.trade import Trade
 from pytech.utils import pandas_utils as pd_utils
@@ -65,6 +67,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         # positions = qty
         self.all_positions_qty = self._construct_all_positions()
         self.total_commission = 0.0
+        self.lib = ARCTIC_STORE['pytech.portfolio']
         self.positions_df = pd.DataFrame()
         self.raise_on_warnings = raise_on_warnings
 
@@ -192,8 +195,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
         a :class:`MarketEvent`
         """
         if event.event_type is not EventType.MARKET:
-            raise InvalidEventTypeError(
-                    expected=EventType.MARKET, event_type=event.event_type)
+            raise InvalidEventTypeError(expected=EventType.MARKET,
+                                        event_type=event.event_type)
 
         self.blotter.check_order_triggers()
 
@@ -244,7 +247,13 @@ class AbstractPortfolio(metaclass=ABCMeta):
                                                               'ticker'])
         df = pd.DataFrame(dh, index=multi_index)
         self.positions_df = pd.concat([self.positions_df, df])
-        # self.logger.info(self.positions_df)
+        self.logger.info('Writing current portfolio state to DB.')
+        self.lib.write('portfolio', self.positions_df)
+        try:
+            self.lib.snapshot(latest_dt)
+        except DuplicateSnapshotException:
+            self.logger.debug('Snapshot with name: '
+                              f'{latest_dt} already exists')
 
         self.all_holdings_mv.append(dh)
 

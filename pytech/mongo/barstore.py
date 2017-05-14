@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict
 
 import pandas as pd
@@ -7,23 +8,18 @@ from arctic.chunkstore.date_chunker import DateChunker
 from arctic.date import DateRange
 from arctic.decorators import mongo_retry
 
-# from ..mongo import ARCTIC_STORE
-
-ARCTIC_LIB = 'bars'
-
 
 class BarStore(ChunkStore):
     """Override the required methods so that they can be wrapped properly."""
 
-    _LIBRARY_TYPE = 'pytech.Bars'
+    LIBRARY_TYPE = 'pytech.Bars'
+    LIBRARY_NAME = 'pytech.bars'
 
     def __init__(self, arctic_lib):
+        self.logger = logging.getLogger(__name__)
         super().__init__(arctic_lib)
         print(f'my name is {arctic_lib.get_name()}')
-
-    @classmethod
-    def initialize_library(cls, arctic_lib, **kwargs)-> None:
-        super().initialize_library(arctic_lib, **kwargs)
+        self.logger.info(f'BarStore collection name: {arctic_lib.get_name()}')
 
     @mongo_retry
     def read(self, symbol: str,

@@ -13,7 +13,6 @@ import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent
 # import pytech.db.db as db
 from pytech.mongo import ARCTIC_STORE
-from pytech.mongo.barstore import ChunkStore
 
 
 class DataHandler(metaclass=ABCMeta):
@@ -135,11 +134,11 @@ class YahooDataHandler(DataHandler):
                                                  data_source=self.DATA_SOURCE,
                                                  start=self.start_date,
                                                  end=self.end_date)
-            self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(
-                    self.ticker_data[t])
+            # TODO: generalize this.
+            self.ticker_data[t] = pd_utils.rename_yahoo_ohlcv_cols(self.ticker_data[t])
 
             # db.write(t, self.ticker_data[t], chunk_size='D')
-            self.chunk_store.write(t, self.ticker_data[t], chunk_size='D')
+            # self.chunk_store.write(t, self.ticker_data[t], chunk_size='D')
 
             if comb_index is None:
                 comb_index = self.ticker_data[t].index
