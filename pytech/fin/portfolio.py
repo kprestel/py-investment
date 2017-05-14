@@ -247,16 +247,10 @@ class AbstractPortfolio(metaclass=ABCMeta):
         multi_index = pd.MultiIndex.from_tuples(index, names=['datetime',
                                                               'ticker'])
         df = pd.DataFrame(dh, index=multi_index)
+
         self.positions_df = pd.concat([self.positions_df, df])
         self.logger.info('Writing current portfolio state to DB.')
         self.lib.write_snapshot('portfolio', self.positions_df, latest_dt)
-
-        # try:
-        #     self.lib.snapshot(latest_dt)
-        # except DuplicateSnapshotException:
-        #     self.logger.debug('Snapshot with name: '
-        #                       f'{latest_dt} already exists')
-
         self.all_holdings_mv.append(dh)
 
 

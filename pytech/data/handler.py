@@ -26,6 +26,8 @@ class DataHandler(metaclass=ABCMeta):
     ticker_data: Dict[str, pd.DataFrame]
     lib: BarStore
 
+    CHUNK_SIZE = 'D'
+
     def __init__(self,
                  events: queue.Queue,
                  tickers: Iterable,
@@ -133,23 +135,13 @@ class YahooDataHandler(DataHandler):
         comb_index = None
         # only create the DateRange object once.
         date_range = DateRange(start=self.start_date, end=self.end_date)
-        # date_range = pd.date_range(self.start_date, self.end_date)
 
         for t in self.tickers:
             try:
+                # check the DB first before making network call.
                 self.ticker_data[t] = self.lib.read(t, chunk_range=date_range)
             except NoDataFoundException:
-                self.ticker_data[t] = web.DataReader(t,
-                                                     self.DATA_SOURCE,
-                                                     self.start_date,
-                                                     self.end_date)
-            # TODO: generalize this.
-            self.ticker_data[t] = pd_utils.rename_bar_cols(
-                    self.ticker_data[t])
-
-            # db.write(t, self.ticker_data[t], chunk_size='D')
-            # self.lib.delete(t)
-            # self.lib.write(t, self.ticker_data[t], chunk_size='D')
+                self.ticker_data[t] = self._get_data_from_web(t)
 
             if comb_index is None:
                 comb_index = self.ticker_data[t].index
@@ -162,6 +154,17 @@ class YahooDataHandler(DataHandler):
             self.ticker_data[t] = (self.ticker_data[t]
                                    .reindex(index=comb_index, method='pad')
                                    .iterrows())
+
+    def _get_data_from_web(self, ticker):
+        """Make the network call and write the new df to the DB."""
+        df = web.DataReader(ticker,
+                            self.DATA_SOURCE,
+                            self.start_date,
+                            self.end_date)
+        # TODO: generalize this.
+        df = pd_utils.rename_bar_cols(df)
+        self.lib.write(ticker, df, self.CHUNK_SIZE)
+        return df
 
     def _get_new_bar(self, ticker):
         """

@@ -1,6 +1,6 @@
 import datetime as dt
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 import pandas as pd
 from arctic.date import DateRange
@@ -32,7 +32,7 @@ class PortfolioStore(VersionStore):
              from_version: Any = None,
              allow_secondary: bool or None = None,
              return_metadata: bool = False,
-             **kwargs) -> VersionedItem or pd.DataFrame or pd.Series:
+             **kwargs) -> Union[VersionedItem, pd.DataFrame, pd.Series]:
         """
         Read data for the named symbol. Returns a ``VersionedItem`` object
         with a data and metadata element that were passed to the ``write`` 

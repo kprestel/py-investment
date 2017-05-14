@@ -2,7 +2,7 @@ import logging
 from abc import ABCMeta, abstractmethod
 
 import pytech.utils.pandas_utils as pd_utils
-from pytech.backtest.event import (MarketEvent, SignalEvent)
+from pytech.backtest.event import MarketEvent, SignalEvent
 from pytech.data.handler import DataHandler
 from pytech.trading.order import get_order_types
 from pytech.utils.enums import EventType
@@ -26,10 +26,8 @@ class BuyAndHold(Strategy):
         super().__init__()
 
         if not issubclass(data_handler.__class__, DataHandler):
-            raise TypeError(
-                    'bars must be a subclass of DataHandler. '
-                    '{} was provided'.format(type(data_handler))
-            )
+            raise TypeError('bars must be a subclass of DataHandler. '
+                            f'{type(data_handler)} was provided')
         else:
             self.bars = data_handler
 
@@ -61,10 +59,9 @@ class BuyAndHold(Strategy):
         if event.event_type is EventType.MARKET:
 
             for ticker in self.ticker_list:
-                self.logger.debug(
-                        f'Processing ticker: {ticker}')
-                bars = self.bars.get_latest_bar_value(
-                        ticker, pd_utils.ADJ_CLOSE_COL)
+                self.logger.debug(f'Processing ticker: {ticker}')
+                bars = self.bars.get_latest_bar_value(ticker,
+                                                      pd_utils.ADJ_CLOSE_COL)
                 self.logger.debug(f'bars: {bars}')
 
                 if bars is not None:

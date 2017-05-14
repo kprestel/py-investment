@@ -8,9 +8,7 @@ import pytech.trading.blotter as b
 from pytech import TEST_DATA_DIR
 from pytech.data.handler import YahooDataHandler
 from pytech.fin.portfolio import BasicPortfolio
-import pytech.db.db as db
 from pytech.mongo import ARCTIC_STORE
-from pytech.mongo.barstore import BarStore
 
 lib = ARCTIC_STORE['pytech.bars']
 
