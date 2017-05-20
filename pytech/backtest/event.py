@@ -1,7 +1,7 @@
 import datetime
 import logging
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 import pytech.utils.dt_utils as dt_utils
 from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
@@ -52,7 +52,7 @@ class SignalEvent(Event):
 
     def __init__(self,
                  ticker: str,
-                 signal_type: SignalType or str,
+                 signal_type: Union[SignalType, str],
                  limit_price: float = None,
                  stop_price: float = None,
                  target_price: float = None,
@@ -117,9 +117,19 @@ class SignalEvent(Event):
             self.position = None
 
         if order_type is OrderType.MARKET:
-            # Typically a Market order is not desirable so we warn on it.
-            self.logger.warning(
-                    'Creating a SignalEvent with a Market order type.')
+            # try to determine what kind of order to place based on stop and
+            # limit prices given
+            if stop_price is None and limit_price is not None:
+                order_type = OrderType.LIMIT
+            elif stop_price is not None and limit_price is None:
+                order_type = OrderType.STOP
+            elif stop_price is not None and limit_price is not None:
+                order_type = OrderType.STOP_LIMIT
+            else:
+                order_type = OrderType.MARKET
+                # Typically a Market order is not desirable so we warn on it.
+                self.logger.warning(
+                        'Creating a SignalEvent with a Market order type.')
 
         self.order_type = OrderType.check_if_valid(order_type)
 

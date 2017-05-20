@@ -247,7 +247,6 @@ class YahooDataHandler(DataHandler):
                 self.continue_backtest = False
             else:
                 if bar is not None:
-                    self.logger.debug(f'Appending bar: {bar}')
                     self.latest_ticker_data[ticker].append(bar)
 
         self.events.put(MarketEvent())

@@ -1,6 +1,6 @@
 import pytest
 from pytech.backtest.backtest import Backtest
-from pytech.algo.strategy import BuyAndHold
+from pytech.algo.strategy import BuyAndHold, CrossOverStrategy
 import datetime as dt
 
 
@@ -14,7 +14,7 @@ class TestBacktest(object):
         backtest = Backtest(ticker_list=ticker_list,
                             initial_capital=initial_capital,
                             start_date=start_date,
-                            strategy=BuyAndHold)
+                            strategy=CrossOverStrategy)
 
         assert isinstance(backtest, Backtest)
         backtest._run()

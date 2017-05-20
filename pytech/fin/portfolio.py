@@ -47,6 +47,11 @@ class AbstractPortfolio(metaclass=ABCMeta):
     owned_assets: Dict[str, OwnedAsset]
     lib: PortfolioStore
 
+    # stores all of the ticks portfolio position.
+    POSITION_COLLECTION = 'portfolio'
+    # stores the latest tick portfolio position.
+    TICK_COLLECTION = 'portfolio_tick'
+
     def __init__(self,
                  data_handler: DataHandler,
                  events: queue.Queue,
@@ -228,12 +233,12 @@ class AbstractPortfolio(metaclass=ABCMeta):
         for ticker in self.ticker_list:
             try:
                 owned_asset = self.owned_assets[ticker]
-                shares_owned = owned_asset.shares_owned
             except KeyError:
                 market_value = 0
                 self.logger.info(f'{ticker} is not currently owned, '
                                  f'market value will be set to 0.')
             else:
+                shares_owned = owned_asset.shares_owned
                 adj_close = self.bars.get_latest_bar_value(ticker,
                                                            pd_utils.ADJ_CLOSE_COL)
                 market_value = shares_owned * adj_close
@@ -250,7 +255,10 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
         self.positions_df = pd.concat([self.positions_df, df])
         self.logger.info('Writing current portfolio state to DB.')
-        self.lib.write_snapshot('portfolio', self.positions_df, latest_dt)
+        self.lib.write_snapshot(self.POSITION_COLLECTION,
+                                self.positions_df,
+                                latest_dt)
+        self.lib.write_snapshot(self.TICK_COLLECTION, df, latest_dt)
         self.all_holdings_mv.append(dh)
 
 

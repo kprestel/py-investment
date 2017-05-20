@@ -81,6 +81,7 @@ class PortfolioStore(VersionStore):
         versioned_item = super().write(symbol, data, metadata,
                                        prune_previous_version, **kwargs)
         try:
+            self.logger.info(f'Writing snapshot with name: {snap_shot}')
             super().snapshot(snap_shot)
         except DuplicateSnapshotException:
             self.logger.info('Snapshot with name: '

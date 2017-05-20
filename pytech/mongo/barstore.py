@@ -20,7 +20,6 @@ class BarStore(ChunkStore):
     def __init__(self, arctic_lib):
         self.logger = logging.getLogger(__name__)
         super().__init__(arctic_lib)
-        print(f'my name is {arctic_lib.get_name()}')
         self.logger.info(f'BarStore collection name: {arctic_lib.get_name()}')
 
     @mongo_retry
