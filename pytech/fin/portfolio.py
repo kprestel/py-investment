@@ -399,8 +399,8 @@ class BasicPortfolio(AbstractPortfolio):
                     f'Cannot exit from a position that is not owned.'
                     f'Owned qty is 0 for ticker: {signal.ticker}.')
 
-        self.blotter.place_order(signal.ticker, action, signal.order_type,
-                                 qty, signal.stop_price, signal.limit_price)
+        self.blotter.place_order(signal.ticker, qty, action, signal.order_type,
+                                 signal.stop_price, signal.limit_price)
 
     def _handle_cancel_signal(self, signal: SignalEvent):
         """

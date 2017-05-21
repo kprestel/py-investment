@@ -5,14 +5,12 @@ from pytech.utils.enums import OrderStatus, OrderType, TradeAction
 class TestBlotter(object):
     def test_place_order(self, blotter):
 
-        blotter.place_order(
-                'AAPL', 'BUY', 'LIMIT', 50, limit_price=100.10, order_id='one')
-        blotter.place_order(
-                'MSFT', 'SELL', 'LIMIT', 50, limit_price=93.10,
-                order_id='three')
-        blotter.place_order(
-                'FB', 'SELL', 'LIMIT', 50, limit_price=105.10,
-                order_id='four')
+        blotter.place_order('AAPL', 50, 'BUY', 'LIMIT', limit_price=100.10,
+                            order_id='one')
+        blotter.place_order('MSFT', 50, 'SELL', 'LIMIT', limit_price=93.10,
+                            order_id='three')
+        blotter.place_order('FB', 50, 'SELL', 'LIMIT', limit_price=105.10,
+                            order_id='four')
 
         for k, v in blotter:
             assert isinstance(v, ord.Order)

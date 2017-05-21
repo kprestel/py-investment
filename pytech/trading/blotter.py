@@ -3,7 +3,7 @@ import logging
 import operator
 import queue
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Union
 
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import TradeEvent
@@ -54,6 +54,9 @@ class Blotter(object):
         self.events = events
         self.bars = None
         self.max_shares = max_shares or int(1e+11)
+        # how much an auto generated limit price will be over the market price.
+        self.limit_pct_buffer = 1.02
+        self.stop_pct_buffer = .98
 
         if commission_model is None:
             self.commission_model = PerOrderCommissionModel()
@@ -67,12 +70,12 @@ class Blotter(object):
             )
 
     @property
-    def bars(self):
+    def bars(self) -> DataHandler:
         """Allow access to the :class:`DataHandler`"""
         return self._bars
 
     @bars.setter
-    def bars(self, data_handler):
+    def bars(self, data_handler) -> None:
         if isinstance(data_handler, DataHandler):
             self._bars = data_handler
         elif data_handler is None:
@@ -137,9 +140,9 @@ class Blotter(object):
 
     def place_order(self,
                     ticker: str,
-                    action: TradeAction,
-                    order_type: OrderType,
                     qty: int,
+                    action: Union[TradeAction, str] = None,
+                    order_type: Union[OrderType, str] = None,
                     stop_price: float = None,
                     limit_price: float = None,
                     date_placed: datetime = None,
@@ -175,16 +178,33 @@ class Blotter(object):
         if qty == 0:
             # No point in making an order for 0 shares.
             return None
-        elif qty > self.max_shares:
-            raise OverflowError(
-                    f'Cannot place an order for {qty}. Max shares is set'
-                    f'to {self.max_shares}'
-            )
+
+        # TODO: implement controls.
 
         if action is None and qty < 0:
             action = TradeAction.SELL
         elif action is None and qty > 0:
             action = TradeAction.BUY
+
+        if order_type is None:
+            if action is TradeAction.SELL:
+                order_type = OrderType.STOP
+            elif action is TradeAction.BUY:
+                order_type = OrderType.LIMIT
+        else:
+            OrderType.check_if_valid(order_type)
+
+        is_limit_order = order_type in [OrderType.LIMIT, OrderType.STOP_LIMIT]
+        is_stop_order = order_type in [OrderType.STOP, OrderType.STOP_LIMIT]
+
+        if is_limit_order and limit_price is None:
+            curr_price = self.bars.get_latest_bar_value(ticker,
+                                                        pd_utils.ADJ_CLOSE_COL)
+            limit_price = curr_price * self.limit_pct_buffer
+        elif is_stop_order and stop_price is None:
+            curr_price = self.bars.get_latest_bar_value(ticker,
+                                                        pd_utils.ADJ_CLOSE_COL)
+            stop_price = curr_price * self.stop_pct_buffer
 
         if date_placed is None:
             date_placed = self.current_dt
@@ -234,14 +254,6 @@ class Blotter(object):
 
         if order_type is OrderType.STOP_LIMIT:
             return StopLimitOrder(ticker, action, qty, **kwargs)
-
-    def _make_order(self,
-                    ticker: str,
-                    action: TradeAction,
-                    qty: int,
-                    order_type: OrderType,
-                    **kwargs) -> AnyOrder:
-        pass
 
     def _find_order(self, order_id, ticker):
         if ticker is None:

@@ -97,12 +97,8 @@ class AbstractSignalHandler(metaclass=ABCMeta):
                     f'Cannot exit from a position that is not owned. '
                     f'Owned qty is 0 for ticker: {signal.ticker}.')
 
-        self.blotter.place_order(signal.ticker,
-                                 action,
-                                 signal.order_type,
-                                 qty,
-                                 signal.stop_price,
-                                 signal.limit_price)
+        self.blotter.place_order(signal.ticker, qty, action, signal.order_type,
+                                 signal.stop_price, signal.limit_price)
 
     @abstractmethod
     def _handle_long_signal(self,
