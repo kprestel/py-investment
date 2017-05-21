@@ -142,3 +142,7 @@ class BadOrderParams(TypeError, PyInvestmentError):
     """Raised when an order is placed that is illegal."""
     msg = 'Attempted to place an order with a {order_type} of {price}'
 
+
+class TradeControlViolation(PyInvestmentError):
+    msg = ('Order for {qty} shares of {ticker} at {dt} violates trading '
+           'constraint {constraint}')

@@ -7,7 +7,7 @@ from pytech.utils.enums import SignalType, TradeAction
 from pytech.utils.exceptions import InvalidSignalTypeError
 
 
-class AbstractStrategyHandler(metaclass=ABCMeta):
+class AbstractSignalHandler(metaclass=ABCMeta):
     def __init__(self, portfolio: AbstractPortfolio):
         self.logger = logging.getLogger(__name__)
         self.portfolio = portfolio
@@ -138,8 +138,8 @@ class AbstractStrategyHandler(metaclass=ABCMeta):
         raise NotImplementedError
 
 
-class BasicStrategyHandler(AbstractStrategyHandler):
-    """A basic implementation of a Strategy handler."""
+class BasicSignalHandler(AbstractSignalHandler):
+    """A basic implementation of a Signal handler."""
 
     def __init__(self, portfolio):
         """Constructor for BasicStrategyHandler"""

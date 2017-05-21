@@ -78,10 +78,8 @@ class Blotter(object):
         elif data_handler is None:
             self._bars = None
         else:
-            raise TypeError(
-                    'bars must be an instance of DataHandler. {} was provided'
-                        .format(type(data_handler))
-            )
+            raise TypeError(f'bars must be an instance of DataHandler. '
+                            f'{type(data_handler)} was provided')
 
     @property
     def asset_finder(self):
