@@ -46,7 +46,7 @@ networkx==1.11
 numpy==1.12.1
 odo==0.5.0
 ordereddict==1.1
-pandas==0.20.1
+pandas==0.19.2
 pandas-datareader==0.3.0.post0
 pandas-market-calendars==0.6
 parsel==1.0.3

@@ -28,19 +28,19 @@ class Asset(metaclass=ABCMeta):
     """
     This is the base class that all Asset classes should inherit from.
 
-    Inheriting from it will provide a table name and the proper mapper args 
-    required for the db.  It will also allow it to have a relationship 
+    Inheriting from it will provide a table name and the proper mapper args
+    required for the db.  It will also allow it to have a relationship
     with the :class:``OwnedAsset``.
 
     The child class is responsible for giving each instance a ticker to identify it.
 
-    If the child class needs any more fields it is responsible for creating 
-    them at the class level as well as populating them via the child's constructor, 
+    If the child class needs any more fields it is responsible for creating
+    them at the class level as well as populating them via the child's constructor,
     in addition to calling the ``Asset`` constructor.
 
-    Any child class instance of this base class is considered to be a part of 
+    Any child class instance of this base class is considered to be a part of
     the **Asset Universe** or the assets that
-    are eligible to be traded.  If a child instance of an Asset does not yet 
+    are eligible to be traded.  If a child instance of an Asset does not yet
     exist in the universe and the
     :class:``~pytech.portfolio.Portfolio`` tries to trade it an exception will occur.
     """
@@ -48,8 +48,6 @@ class Asset(metaclass=ABCMeta):
     def __init__(self, ticker, start_date, end_date, ohlcv=None):
         self.ticker = ticker
         self.asset_type = self.__class__.__name__
-        # will get assigned when written to the db.
-        self.id = None
         self.logger = logging.getLogger(self.__class__.__name__)
 
         self._start_date = start_date
@@ -74,13 +72,12 @@ class Asset(metaclass=ABCMeta):
     @ohlcv.setter
     def ohlcv(self, ohlcv):
         if not (isinstance(ohlcv, pd.DataFrame) or
-                    not isinstance(ohlcv, pd.TimeSeries)):
+                    not isinstance(ohlcv, pd.Series)):
             raise TypeError(
                     'ohlcv must be a pandas DataFrame or TimeSeries. '
                     '{} was provided'.format(type(ohlcv)))
 
         self._ohlcv = ohlcv
-        db.ohlcv_to_sql(self)
 
     @property
     def start_date(self):
@@ -172,9 +169,8 @@ class Asset(metaclass=ABCMeta):
                                         start=start_date, end=end_date)
             temp_ohlcv.reset_index(inplace=True, drop=False)
         except:
-            logger.exception(
-                    'Could not create series for ticker: {}. Unknown error occurred.'.format(
-                            self.ticker))
+            logger.exception('Could not create series for ticker: {}. '
+                             'Unknown error occurred.'.format(self.ticker))
             return None
 
         # rename the columns to what the DB expects
@@ -275,28 +271,24 @@ class Stock(Asset):
         table_name = 'sma_test'
         # stmt = text('SELECT * FROM sma_test WHERE asset_id = :asset_id')
         # stmt.bindparams(asset_id=self.id)
-        sql = 'SELECT * FROM sma_test WHERE asset_id = :asset_id'
-        conn = db.raw_connection()
-        print(Base.metadata)
-        try:
+        # try:
             # TODO: parse dates
-            df = pd.read_sql(sql, con=conn, params={
-                'asset_id': self.id
-            })
-        except OperationalError:
-            logger.exception('error in query')
-            sma_ts = pd.Series(
-                    self.ohlcv[column].rolling(center=False, window=period,
-                                               min_periods=period - 1).mean()).dropna()
-            db.ohlcv_to_sql(sma_ts, ticker=self.ticker)
-            print('creating')
-            print(sma_ts)
-            return sma_ts
+            # df = pd.read_sql(sql, con=conn, params={
+            #     'asset_id': self.id
+            # })
+        # except OperationalError:
+        #     logger.exception('error in query')
+        sma_ts = pd.Series(
+                self.ohlcv[column].rolling(center=False, window=period,
+                                           min_periods=period - 1).mean()).dropna()
+        print('creating')
+        print(sma_ts)
+        return sma_ts
             # return sma_ts
-        else:
-            print('found')
-            print(df)
-            return df
+        # else:
+        #     print('found')
+        #     print(df)
+        #     return df
 
     def simple_moving_median(self, period=50, column='adj_close'):
         """
@@ -315,12 +307,14 @@ class Stock(Asset):
     def exponential_weighted_moving_average(self, period=50,
                                             column='adj_close'):
         """
+        Compute the exponential weighted moving average (ewma)
+        over a given period.
+
         :param ohlc: dict
         :param period: int, the number of days to use
         :param column: string, the name of the column to use to compute the mean
         :return: Timeseries containing the simple moving median
 
-        compute the exponential weighted moving average (ewma) over a given period and return it in timeseries
         """
         return pd.Series(
                 self.ohlcv[column].ewm(ignore_na=False, min_periods=period - 1,
@@ -644,7 +638,6 @@ class Stock(Asset):
         IFT_RSI signals buy when the indicator crosses -0.5 or crosses +0.5 if it has not previously crossed over -0.5
         it signals to sell short when indicators crosses under +0.5 or crosses under -0.5 if it has not previously crossed +.05
         """
-        import numpy as np
         v1 = pd.Series(.1 * (
             self._rsi_computation(period=rsi_period, column=column) - 50),
                        name='v1')
