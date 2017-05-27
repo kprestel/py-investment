@@ -496,7 +496,8 @@ class Stock(Asset):
         :param column: string
         :return: generator
 
-        smoother than the SMA, it aims to minimize lag and track price trends more accurately
+        smoother than the SMA, it aims to minimize lag and track price trends
+        more accurately
 
         best used in mid to long term analysis
         """
@@ -992,7 +993,7 @@ class Stock(Asset):
         for chunk in self._chunks(period=period, column=column, ts=ts):
             # TODO: figure out a better way to handle this. this is better than a catch all except though
             try:
-                wma.append(self.chunked_weighted_moving_average(chunk=chunk,
+                wma.append(self._chunked_weighted_moving_average(chunk=chunk,
                                                                 period=period))
             except AttributeError:
                 wma.append(None)
