@@ -117,7 +117,7 @@ class Backtest(object):
                         self._process_event(event)
 
     def _process_event(self, event):
-        self.logger.info(
+        self.logger.debug(
                 f'Processing {event.event_type}')
 
         if event.event_type is EventType.MARKET:

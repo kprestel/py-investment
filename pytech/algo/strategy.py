@@ -54,8 +54,8 @@ class BuyAndHold(Strategy):
 
     def generate_signals(self, event: MarketEvent):
         """
-        For buy and hold we generate a single single per symbol and then 
-        no more signals. Meaning we are always long the market 
+        For buy and hold we generate a single single per symbol and then
+        no more signals. Meaning we are always long the market
         from the start to the end of the sim.
 
         :param MarketEvent event: A :class:`MarketEvent` object.
@@ -87,9 +87,9 @@ class CrossOverStrategy(Strategy):
 
     def generate_signals(self, event: MarketEvent):
         """
-        
-        :param event: 
-        :return: 
+
+        :param event:
+        :return:
         """
         self.logger.info('Generating signals')
 
@@ -119,7 +119,7 @@ class CrossOverStrategy(Strategy):
 
             # TODO: make me smarter.
             if short > long:
-                self.logger.info(f'Creating LONG signal for ticker: {ticker}')
+                self.logger.debug(f'Creating LONG signal for ticker: {ticker}')
                 self.events.put(
                         SignalEvent(
                                 ticker,
@@ -128,7 +128,7 @@ class CrossOverStrategy(Strategy):
                                 action=TradeAction.BUY,
                                 position=Position.LONG))
             elif short < long:
-                self.logger.info(f'Creating SHORT signal for ticker: {ticker}')
+                self.logger.debug(f'Creating SHORT signal for ticker: {ticker}')
                 self.events.put(
                         SignalEvent(
                                 ticker,
@@ -138,8 +138,3 @@ class CrossOverStrategy(Strategy):
                                 position=Position.SHORT))
             else:
                 continue
-
-                # signals['signal'][self.short_window:] = (
-                #     np.where(signals['short_mavg'][self.short_window] >
-                #              signals['long_mavg'][self.short_window], 1, 0)
-                # )

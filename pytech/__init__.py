@@ -27,4 +27,4 @@ except OSError:
 
 # Session must be created before importing the other classes.
 # Session = sessionmaker(bind=engine)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)

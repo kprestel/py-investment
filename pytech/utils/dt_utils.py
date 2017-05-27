@@ -3,7 +3,10 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 from dateutil import tz
 
+from pytech.utils.decorators import memoize
 
+
+@memoize
 def parse_date(date_to_parse):
     """
     Converts strings or datetime objects to UTC timestamps.

@@ -12,7 +12,7 @@ from arctic.store.versioned_item import VersionedItem
 
 class PortfolioStore(VersionStore):
     """
-    Wrapper for the :class:``arctic.store.version_store.VersionStore`` to 
+    Wrapper for the :class:``arctic.store.version_store.VersionStore`` to
     persist portfolio data.
     """
 
@@ -35,22 +35,22 @@ class PortfolioStore(VersionStore):
              **kwargs) -> Union[VersionedItem, pd.DataFrame, pd.Series]:
         """
         Read data for the named symbol. Returns a ``VersionedItem`` object
-        with a data and metadata element that were passed to the ``write`` 
+        with a data and metadata element that were passed to the ``write``
         function.
-        
+
         :param symbol: Name for the item.
-        :param as_of: 
-        
+        :param as_of:
+
             * int: specific version number
             * str: snapshot name
             * datetime the version that existed at that point in time.
-            
+
         :param date_range: ``DateRange`` to read data for.
-        :param from_version: 
-        :param allow_secondary: 
-        :param return_metadata: If true then a ``VersionedItem`` will be 
+        :param from_version:
+        :param allow_secondary:
+        :param return_metadata: If true then a ``VersionedItem`` will be
         returned, otherwise only the data will be returned.
-        :param kwargs: 
+        :param kwargs:
         :return: A ``VersionedItem`` or a pandas DataFrame or Series.
         """
         versioned_item = super().read(symbol, as_of, date_range, from_version,
@@ -69,14 +69,14 @@ class PortfolioStore(VersionStore):
         """
         Write the data for the named symbol and also create a snapshot with
         the given date.
-        
-        :param symbol: 
-        :param snap_shot: 
-        :param data: 
-        :param metadata: 
-        :param prune_previous_version: 
-        :param kwargs: 
-        :return: 
+
+        :param symbol:
+        :param snap_shot:
+        :param data:
+        :param metadata:
+        :param prune_previous_version:
+        :param kwargs:
+        :return:
         """
         versioned_item = super().write(symbol, data, metadata,
                                        prune_previous_version, **kwargs)
@@ -84,6 +84,6 @@ class PortfolioStore(VersionStore):
             self.logger.info(f'Writing snapshot with name: {snap_shot}')
             super().snapshot(snap_shot)
         except DuplicateSnapshotException:
-            self.logger.info('Snapshot with name: '
-                             f'{snap_shot} already exists.')
+            self.logger.debug('Snapshot with name: '
+                              f'{snap_shot} already exists.')
         return versioned_item

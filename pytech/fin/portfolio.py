@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Dict, List
 
 import pandas as pd
-from arctic.exceptions import DuplicateSnapshotException
 
 import pytech.utils.dt_utils as dt_utils
 from pytech.backtest.event import SignalEvent
@@ -36,7 +35,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         * update_signal(self, event)
         * update_fill(self, event)
 
-    Child portfolio classes must also call super().__init__() in order to set 
+    Child portfolio classes must also call super().__init__() in order to set
     the class up correctly.
     """
     bars: DataHandler
@@ -81,7 +80,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
     def total_value(self):
         """
         A read only property to make getting the current total market value
-        easier. 
+        easier.
         **This includes cash.**
         """
         return self.all_holdings_mv[-1]['total']
@@ -89,7 +88,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
     @property
     def total_asset_mv(self):
         """
-        A read only property to make getting the total market value of the 
+        A read only property to make getting the total market value of the
         owned assets easier.
         :return: The total market value of the owned assets in the portfolio.
         """
@@ -101,7 +100,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
     @abstractmethod
     def update_signal(self, event):
         """
-        Acts on a :class:`SignalEvent` to generate new orders based on the 
+        Acts on a :class:`SignalEvent` to generate new orders based on the
         portfolio logic.
         """
         raise NotImplementedError('Must implement update_signal()')
@@ -109,16 +108,16 @@ class AbstractPortfolio(metaclass=ABCMeta):
     @abstractmethod
     def update_fill(self, event):
         """
-        Updates the portfolio current positions and holdings based on a 
+        Updates the portfolio current positions and holdings based on a
         :class:`FillEvent`.
         """
         raise NotImplementedError('Must implement update_fill()')
 
     def _construct_all_positions(self):
         """
-        Constructs the position list using the start date to determine when 
+        Constructs the position list using the start date to determine when
         the index will begin.
-        
+
         This should only be called once.
         """
         d = self._get_temp_dict()
@@ -135,9 +134,9 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
     def _construct_current_holdings(self):
         """
-        Construct a dict which holds the instantaneous market value of the 
+        Construct a dict which holds the instantaneous market value of the
         portfolio across all symbols.
-        
+
         This should only be called once.
         """
         d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
@@ -156,14 +155,14 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
     def check_liquidity(self, avg_price_per_share, qty):
         """
-        Check if the portfolio has enough liquidity to actually make the trade. 
+        Check if the portfolio has enough liquidity to actually make the trade.
         This method should be called before
         executing any trade.
 
-        :param float avg_price_per_share: The price per share in the trade 
+        :param float avg_price_per_share: The price per share in the trade
         **AFTER** commission has been applied.
         :param int qty: The amount of shares to be traded.
-        :return: True if there is enough cash to make the trade or if qty is 
+        :return: True if there is enough cash to make the trade or if qty is
         negative indicating a sale.
         """
         if qty < 0:
@@ -178,9 +177,9 @@ class AbstractPortfolio(metaclass=ABCMeta):
     def get_owned_asset_mv(self, ticker):
         """
         Return the current market value for an :class:`OwnedAsset`
-        
+
         :param str ticker: The ticker of the owned asset.
-        :return: The current market value for the ticker. 
+        :return: The current market value for the ticker.
         :raises: KeyError
         """
         try:
@@ -192,7 +191,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
     def update_timeindex(self, event):
         """
-        Adds a new record to the positions matrix for all the current market 
+        Adds a new record to the positions matrix for all the current market
         data bar. This reflects the PREVIOUS bar.
         Makes use of MarketEvent from the events queue.
 
@@ -235,8 +234,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
                 owned_asset = self.owned_assets[ticker]
             except KeyError:
                 market_value = 0
-                self.logger.info(f'{ticker} is not currently owned, '
-                                 f'market value will be set to 0.')
+                self.logger.debug(f'{ticker} is not currently owned, '
+                                  f'market value will be set to 0.')
             else:
                 shares_owned = owned_asset.shares_owned
                 adj_close = self.bars.get_latest_bar_value(ticker,
@@ -290,7 +289,7 @@ class BasicPortfolio(AbstractPortfolio):
 
     def _update_existing_owned_asset_from_trade(self, trade):
         """
-        Update an existing owned asset or delete it if the trade results 
+        Update an existing owned asset or delete it if the trade results
         in all shares being sold.
         """
         owned_asset = self.owned_assets[trade.ticker]
@@ -364,11 +363,11 @@ class BasicPortfolio(AbstractPortfolio):
     def _handle_trade_signal(self, signal: SignalEvent):
         """
         Process a new trade signal and take the appropriate action.
-        
+
         This could include opening a new order or taking no action at all.
-        
+
         :param signal: The trade signal.
-        :return: 
+        :return:
         """
         try:
             if signal.position is SignalType.LONG:
@@ -384,7 +383,7 @@ class BasicPortfolio(AbstractPortfolio):
     def _handle_exit_signal(self, signal: SignalEvent):
         """
         Create an order that will close out the position in the signal.
-        
+
         :param signal:
         :return:
         """
@@ -426,24 +425,24 @@ class BasicPortfolio(AbstractPortfolio):
     def _handle_long_signal(self, signal):
         """
         Handle a long signal by placing an order to **BUY**.
-        
-        :param LongSignalEvent or SignalEvent signal: 
-        :return: 
+
+        :param LongSignalEvent or SignalEvent signal:
+        :return:
         """
 
     def _handle_short_signal(self, signal):
         """
         Handle a short signal.
-        
-        :param ShortSignalEvent or SignalEvent signal: 
-        :return: 
+
+        :param ShortSignalEvent or SignalEvent signal:
+        :return:
         """
 
     def _handle_general_trade_signal(self, signal: SignalEvent):
         """
         Handle an ambiguous trade signal, meaning a trade signal that is
         not explicitly defined as **LONG** or **SHORT**.  This most often means
-        defaulting to whatever :class:``Balancer`` the portfolio has 
+        defaulting to whatever :class:``Balancer`` the portfolio has
         implemented.
         """
 
@@ -503,7 +502,7 @@ class Portfolio(object):
 
     def __iter__(self):
         """
-        Iterate over all the :class:`~.owned_asset.OwnedAsset`s 
+        Iterate over all the :class:`~.owned_asset.OwnedAsset`s
         in the portfolio.
         """
         yield self.owned_assets.items()
@@ -543,7 +542,7 @@ class Portfolio(object):
 
     def _update_existing_owned_asset_from_trade(self, trade):
         """
-        Update an existing owned asset or delete it if the trade results 
+        Update an existing owned asset or delete it if the trade results
         in all shares being sold.
         """
         owned_asset = self.owned_assets[trade.ticker]

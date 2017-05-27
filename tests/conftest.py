@@ -8,6 +8,7 @@ import pytech.trading.blotter as b
 from pytech import TEST_DATA_DIR
 from pytech.data.handler import YahooDataHandler
 from pytech.fin.portfolio import BasicPortfolio
+from pytech.fin.handler import BasicSignalHandler
 from pytech.mongo import ARCTIC_STORE
 
 lib = ARCTIC_STORE['pytech.bars']
@@ -23,7 +24,7 @@ def end_date():
     return '2017-01-01'
 
 
-@pytest.fixture(autouse=True)
+# @pytest.fixture(autouse=True)
 def no_requests(monkeypatch):
     """Prevent making requests to yahoo to speed up testing"""
 
@@ -83,6 +84,13 @@ def yahoo_data_handler(events, ticker_list, start_date, end_date):
 
 @pytest.fixture()
 def basic_portfolio(events, yahoo_data_handler, start_date, populated_blotter):
+    """Return a BasicPortfolio to be used in testing."""
     populated_blotter.bars = yahoo_data_handler
     return BasicPortfolio(yahoo_data_handler, events, start_date,
                           populated_blotter)
+
+
+@pytest.fixture()
+def basic_signal_handler(basic_portfolio):
+    """Return a BasicSignalHandler to be used in testing."""
+    return BasicSignalHandler(basic_portfolio)

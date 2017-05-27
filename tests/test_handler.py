@@ -33,11 +33,11 @@ class TestYahooDataHandler(object):
     def test_get_latest_bar_value(self, yahoo_data_handler):
         """
         Test getting the latest bar values.
-        
+
         This test tests two days (a day is when update_bars() is called)
         and asserts that the correct values are present for the tickers.
-        
-        :param YahooDataHandler yahoo_data_handler: 
+
+        :param YahooDataHandler yahoo_data_handler:
         """
         assert yahoo_data_handler is not None
         # yahoo_data_handler.update_bars()
@@ -78,8 +78,8 @@ class TestYahooDataHandler(object):
     def test_get_latest_bar_dt(self, yahoo_data_handler):
         """
         Test that the latest date returned is correct.
-        
-        :param YahooDataHandler yahoo_data_handler: 
+
+        :param YahooDataHandler yahoo_data_handler:
         """
         test_date = yahoo_data_handler.get_latest_bar_dt('AAPL')
         assert test_date == dt_utils.parse_date('2016-03-10')
@@ -97,9 +97,9 @@ class TestYahooDataHandler(object):
     def test_get_latest_bar(self, yahoo_data_handler):
         """
         Test getting the latest bar.
-        
-        :param YahooDataHandler yahoo_data_handler: 
-        :return: 
+
+        :param YahooDataHandler yahoo_data_handler:
+        :return:
         """
         bar = yahoo_data_handler.get_latest_bar('AAPL')
         dt = dt_utils.parse_date(bar[pd_utils.DATE_COL])
@@ -111,3 +111,8 @@ class TestYahooDataHandler(object):
         bar = yahoo_data_handler.get_latest_bar('AAPL')
         dt = dt_utils.parse_date(bar[pd_utils.DATE_COL])
         assert dt == dt_utils.parse_date('2016-03-11')
+
+    def test_make_agg_df(self, yahoo_data_handler: YahooDataHandler):
+        """Test creating the agg df"""
+        df = yahoo_data_handler.make_agg_df()
+        assert len(df.columns) == len(yahoo_data_handler.tickers)
