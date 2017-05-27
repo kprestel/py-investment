@@ -349,6 +349,110 @@ def rsi(df: pd.DataFrame, period: int = 14, col: str = pd_utils.ADJ_CLOSE_COL):
     return pd.Series(100 - (100 / (1 + relative_strength)), name='RSI')
 
 
-def bollinger_bands(df: pd.DataFrame, period: int = 30, moving_average=None,
+def macd_signal(df: pd.DataFrame, period_fast: int = 12, period_slow: int = 26,
+                signal: int = 9, col: str = pd_utils.ADJ_CLOSE_COL):
+    """
+    When the MACD falls below the signal line this is a bearish signal,
+    and vice versa.
+    When security price diverges from MACD it signals the end of a trend.
+    If MACD rises dramatically quickly, the shorter moving averages pulls
+    away from the slow moving average, it is a signal that the security is
+    overbought and should come back to normal levels soon.
+
+    As with any signals this can be misleading and should be combined with
+    something to avoid being faked out.
+
+    NOTE: be careful changing the default periods,
+    the method wont break but this is the 'traditional' way of doing this.
+
+    :param df:
+    :param period_fast: Traditionally 12.
+    :param period_slow: Traditionally 26.
+    :param signal: Traditionally 9.
+    :param col: The name of the column.
+    :return:
+    """
+    ema_fast = pd.Series(df[col].ewm(ignore_na=False,
+                                     min_periods=period_fast - 1,
+                                     span=period_fast).mean())
+    ema_slow = pd.Series(df[col].ewm(ignore_na=False,
+                                     min_periods=period_slow - 1,
+                                     span=period_slow).mean())
+    macd_series = pd.Series(ema_fast - ema_slow)
+    macd_signal_series = pd.Series(macd_series.ewm(ignore_na=False,
+                                                   span=signal).mean())
+    return pd.concat([macd_signal_series, macd_series], axis=1)
+
+
+def dmi(df: pd.DataFrame, period: int = 14):
+    """
+    DMI also known as Average Directional Movement Index (ADX)
+
+    This is a lagging indicator that only indicates a trend's strength rather
+    than trend direction so it is best coupled with another movement indicator
+    to determine the strength of a trend.
+
+    A strategy created by Alexander Elder states a buy signal is triggered
+    when the DMI peaks and starts to decline, when the positive dmi is above
+    the negative dmi.
+    A sell signal is triggered when dmi stops falling and goes flat.
+
+    :param df:
+    :param period:
+    :return:
+    """
+    temp_df = pd.DataFrame()
+    temp_df['up_move'] = df[pd_utils.HIGH_COL].diff()
+    temp_df['down_move'] = df[pd_utils.LOW_COL].diff()
+
+    positive_dm = []
+    negative_dm = []
+
+    for row in temp_df.itertuples():
+        if row.up_move > row.down_move and row.up_move > 0:
+            positive_dm.append(row.up_move)
+        else:
+            positive_dm.append(0)
+        if row.down_move > row.up_move and row.down_move > 0:
+            negative_dm.append(row.down_move)
+        else:
+            negative_dm.append(0)
+
+    temp_df['positive_dm'] = positive_dm
+    temp_df['negative_dm'] = negative_dm
+
+    atr = avg_true_range(df, period=period * 6)
+
+    dir_plus = pd.Series(
+            100 * (temp_df['positive_dm'] / atr).ewm(span=period,
+                                                     min_periods=period - 1).mean())
+
+    dir_minus = pd.Series(
+            100 * (temp_df['negative_dm'] / atr).ewm(span=period,
+                                                     min_periods=period - 1).mean())
+    return pd.concat([dir_plus, dir_minus])
+
+
+def bollinger_bands(df: pd.DataFrame,
+                    period: int = 30,
                     col: str = pd_utils.ADJ_CLOSE_COL):
-    pass
+    """
+    TODO.
+    :param df:
+    :param period:
+    :param col:
+    :return:
+    """
+    std_dev = df[col].std()
+    middle_band = sma(df, period=period, col=col)
+    upper_bband = pd.Series(middle_band + (2 * std_dev),
+                            name='upper_bband')
+    lower_bband = pd.Series(middle_band - (2 * std_dev),
+                            name='lower_bband')
+
+    percent_b = (df[col] - lower_bband) / (upper_bband - lower_bband)
+
+    b_bandwidth = pd.Series((upper_bband - lower_bband) / middle_band)
+
+    return pd.concat([upper_bband, middle_band, lower_bband, b_bandwidth,
+                      percent_b], axis=1)
