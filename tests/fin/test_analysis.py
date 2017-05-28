@@ -84,7 +84,6 @@ def test_zero_lag_ema(aapl_df):
     df = ta.zero_lag_ema(aapl_df)
     assert isinstance(df, pd.Series)
     high_df = ta.zero_lag_ema(aapl_df, col=pd_utils.HIGH_COL)
-    logger.debug(df)
     assert not df.equals(high_df)
 
 
@@ -93,5 +92,49 @@ def test_wma(aapl_df):
     df = ta.wma(aapl_df)
     assert isinstance(df, pd.Series)
     high_df = ta.wma(aapl_df, col=pd_utils.HIGH_COL)
-    logger.debug(df)
     assert not df.equals(high_df)
+
+
+def test_true_range(aapl_df):
+    """Test True Range."""
+    df = ta.true_range(aapl_df)
+    assert isinstance(df, pd.Series)
+    df = ta.true_range(aapl_df, period=21)
+    assert isinstance(df, pd.Series)
+
+
+def test_average_true_range(aapl_df):
+    """Test ATR."""
+    df = ta.avg_true_range(aapl_df)
+    assert isinstance(df, pd.Series)
+    df = ta.avg_true_range(aapl_df, period=18)
+    assert isinstance(df, pd.Series)
+
+
+def test_smoothed_ma(aapl_df):
+    """Test the smoothed moving average"""
+    df = ta.smoothed_ma(aapl_df)
+    assert isinstance(df, pd.Series)
+    high_df = ta.smoothed_ma(aapl_df, col=pd_utils.HIGH_COL)
+    assert not df.equals(high_df)
+
+
+def test_rsi(aapl_df):
+    """Test the RSI"""
+    df = ta.rsi(aapl_df)
+    assert isinstance(df, pd.Series)
+    high_df = ta.rsi(aapl_df, col=pd_utils.HIGH_COL)
+    assert not df.equals(high_df)
+
+
+def test_macd_signal(aapl_df):
+    """Test the MACD Signal"""
+    df = ta.macd_signal(aapl_df)
+    assert isinstance(df, pd.DataFrame)
+    high_df = ta.macd_signal(aapl_df, col=pd_utils.HIGH_COL)
+    assert not df.equals(high_df)
+
+
+
+
+

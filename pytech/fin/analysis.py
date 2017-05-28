@@ -173,14 +173,12 @@ def kama(df: pd.DataFrame, period: int = 20,
 
     kama_ = []
 
-    for smooth, ma, price in zip(sc.items(),
-                                 sma_.shift(-1).items(),
-                                 df[col].items()):
+    for smooth, ma, price in zip(sc, sma_.shift(-1), df[col]):
         try:
-            kama_.append(kama_[-1] + smooth[1] * (price[1] - kama_[-1]))
+            kama_.append(kama_[-1] + smooth * (price - kama_[-1]))
         except (IndexError, TypeError):
-            if pd.notnull(ma[1]):
-                kama_.append(ma[1] + smooth[1] * (price[1] - ma[1]))
+            if pd.notnull(ma):
+                kama_.append(ma + smooth * (price - ma))
             else:
                 kama_.append(None)
 
@@ -240,7 +238,6 @@ def _chunks(df: Union[pd.DataFrame, pd.Series],
     for i in enumerate(df_rev):
         chunk = df_rev.iloc[i[0]:i[0] + period]
         if len(chunk) != period:
-            logger.info(f'len={len(chunk)} period={period}')
             yield None
         else:
             yield chunk
@@ -258,7 +255,7 @@ def _chunked_wma(chunk, period) -> float:
     return sum(ma)
 
 
-def true_range(df: pd.DataFrame, period: int = 14):
+def true_range(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """
     Finds the true range a asset is trading within.
     Most recent period's high - most recent periods low.
@@ -294,10 +291,12 @@ def true_range(df: pd.DataFrame, period: int = 14):
         except TypeError:
             continue
 
-    return pd.Series(true_range_list, name='Average True Range')
+    return pd.Series(true_range_list,
+                     index=df.index[-period:],
+                     name='true_range').dropna()
 
 
-def avg_true_range(df: pd.DataFrame, period=14):
+def avg_true_range(df: pd.DataFrame, period=14) -> pd.Series:
     """
     Moving average of an asset's true range.
 
@@ -306,9 +305,10 @@ def avg_true_range(df: pd.DataFrame, period=14):
     :return:
     """
     tr = true_range(df, period * 2)
-    return pd.Series(tr.rolling(center=False,
-                                window=period,
-                                min_periods=period - 1).mean()).tail(period)
+    atr = tr.rolling(center=False,
+                     window=period,
+                     min_periods=period - 1).mean()
+    return pd.Series(atr, index=df.index[-period:], name='atr').dropna()
 
 
 def smoothed_ma(df: pd.DataFrame,
@@ -322,7 +322,8 @@ def smoothed_ma(df: pd.DataFrame,
     :param col:
     :return:
     """
-    return df[col].ewm(alpha=1 / period).mean()
+    ma = df[col].ewm(alpha=1 / period).mean()
+    return pd.Series(ma, index=df.index, name='smoothed_ma')
 
 
 def rsi(df: pd.DataFrame, period: int = 14, col: str = pd_utils.ADJ_CLOSE_COL):
@@ -337,19 +338,18 @@ def rsi(df: pd.DataFrame, period: int = 14, col: str = pd_utils.ADJ_CLOSE_COL):
     :param col:
     :return:
     """
-    rsi_series = pd.DataFrame()
+    rsi_series = pd.DataFrame(index=df.index)
     gain = [0]
     loss = [0]
 
-    for row, shifted_row in zip(iter(df[col].items()),
-                                iter(df[col].shift(-1).items())):
-        if row[1] - shifted_row[1] > 0:
-            gain.append(row[1] - shifted_row[1])
+    for row, shifted_row in zip(df[col], df[col].shift(-1)):
+        if row - shifted_row > 0:
+            gain.append(row - shifted_row)
             loss.append(0)
-        elif row[1] - shifted_row[1] < 0:
+        elif row - shifted_row < 0:
             gain.append(0)
-            loss.append(abs(row[1] - shifted_row[1]))
-        elif row[1] - shifted_row[1] == 0:
+            loss.append(abs(row - shifted_row))
+        elif row - shifted_row == 0:
             gain.append(0)
             loss.append(0)
 
@@ -359,11 +359,15 @@ def rsi(df: pd.DataFrame, period: int = 14, col: str = pd_utils.ADJ_CLOSE_COL):
     avg_gain = rsi_series['gain'].rolling(window=period).mean()
     avg_loss = rsi_series['loss'].rolling(window=period).mean()
     relative_strength = avg_gain / avg_loss
-    return pd.Series(100 - (100 / (1 + relative_strength)), name='RSI')
+    rsi_ = 100 - (100 / (1 + relative_strength))
+    return pd.Series(rsi_, index=df.index, name='rsi')
 
 
-def macd_signal(df: pd.DataFrame, period_fast: int = 12, period_slow: int = 26,
-                signal: int = 9, col: str = pd_utils.ADJ_CLOSE_COL):
+def macd_signal(df: pd.DataFrame,
+                period_fast: int = 12,
+                period_slow: int = 26,
+                signal: int = 9,
+                col: str = pd_utils.ADJ_CLOSE_COL) -> pd.DataFrame:
     """
     When the MACD falls below the signal line this is a bearish signal,
     and vice versa.
@@ -387,18 +391,25 @@ def macd_signal(df: pd.DataFrame, period_fast: int = 12, period_slow: int = 26,
     """
     ema_fast = pd.Series(df[col].ewm(ignore_na=False,
                                      min_periods=period_fast - 1,
-                                     span=period_fast).mean())
+                                     span=period_fast).mean(),
+                         index=df.index)
 
     ema_slow = pd.Series(df[col].ewm(ignore_na=False,
                                      min_periods=period_slow - 1,
-                                     span=period_slow).mean())
+                                     span=period_slow).mean(),
+                         index=df.index)
 
-    macd_series = pd.Series(ema_fast - ema_slow)
+    macd_series = pd.Series(ema_fast - ema_slow, index=df.index, name='macd')
 
-    macd_signal_series = pd.Series(macd_series.ewm(ignore_na=False,
-                                                   span=signal).mean())
+    macd_signal_series = macd_series.ewm(ignore_na=False,
+                                         span=signal).mean()
 
-    return pd.concat([macd_signal_series, macd_series], axis=1)
+    macd_signal_series = pd.Series(macd_signal_series,
+                                   index=df.index,
+                                   name='macd_signal')
+    macd_df = pd.concat([macd_signal_series, macd_series], axis=1)
+
+    return pd.DataFrame(macd_df).dropna()
 
 
 def dmi(df: pd.DataFrame, period: int = 14):
