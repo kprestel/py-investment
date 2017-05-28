@@ -183,7 +183,7 @@ def kama(df: pd.DataFrame, period: int = 20,
             else:
                 kama_.append(None)
 
-    return pd.Series(kama_, index=sma_.index, name='KAMA')
+    return pd.Series(kama_, index=df.index, name='KAMA')
 
 
 def zero_lag_ema(df: pd.DataFrame, period: int = 30,
