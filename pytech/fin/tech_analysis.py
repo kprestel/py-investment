@@ -1,12 +1,15 @@
 """
 Contains functions to perform technical analysis on pandas OHLCV data frames
 """
+import logging
 from typing import Union
 
 import pandas as pd
 
 import pytech.utils.pandas_utils as pd_utils
 from pytech.utils.decorators import memoize
+
+logger = logging.getLogger(__name__)
 
 
 @memoize
@@ -21,27 +24,31 @@ def sma(df: pd.DataFrame,
     :param col: The column in the data frame to use.
     :return: A series with the simple moving average
     """
-    sma = df[col].rolling(center=False, min_periods=period - 1).mean()
+    sma = df[col].rolling(center=False,
+                          window=period,
+                          min_periods=period - 1).mean()
     return sma.dropna()
 
 
-def simple_moving_median(df: pd.DataFrame,
-                         period: int = 50,
-                         column: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+@memoize
+def smm(df: pd.DataFrame,
+        period: int = 50,
+        col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
     Compute the simple moving median over a given period.
 
     :param df: The data frame.
     :param period: The number of days to use.
-    :param column: The name of the column to use to compute the median.
+    :param col: The name of the column to use to compute the median.
     :return: Series containing the simple moving median.
 
     """
-    return df[column].rolling(center=False,
-                              window=period,
-                              min_periods=period - 1).median()
+    return df[col].rolling(center=False,
+                           window=period,
+                           min_periods=period - 1).median()
 
 
+@memoize
 def ewma(df: pd.DataFrame, period: int = 50,
          col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -57,7 +64,8 @@ def ewma(df: pd.DataFrame, period: int = 50,
                        span=period).mean()
 
 
-# noinspection PyTypeChecker
+# noinspection PyTypeChecker,PyUnresolvedReferences
+@memoize
 def triple_ewma(df: pd.DataFrame, period: int = 50,
                 col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -69,14 +77,19 @@ def triple_ewma(df: pd.DataFrame, period: int = 50,
     :return:
     """
     ewma_ = ewma(df, period, col)
+
     triple_ema = 3 * ewma_
+
     ema_ema_ema = (ewma_.ewm(ignore_na=False, span=period).mean()
                    .ewm(ignore_na=False, span=period).mean())
-    return triple_ema - 3 * (ewma_.ewm(ignore_na=False,
-                                       min_periods=period - 1,
-                                       span=period).mean()) + ema_ema_ema
+
+    series = triple_ema - 3 * (ewma_.ewm(ignore_na=False,
+                                         min_periods=period - 1,
+                                         span=period).mean()) + ema_ema_ema
+    return series.dropna()
 
 
+@memoize
 def triangle_ma(df: pd.DataFrame, period: int = 50,
                 col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -88,10 +101,12 @@ def triangle_ma(df: pd.DataFrame, period: int = 50,
     :return:
     """
     sma_ = sma(df, period, col)
+
     return sma_.rolling(center=False, window=period,
-                        min_periods=period - 1).mean
+                        min_periods=period - 1).mean().dropna()
 
 
+@memoize
 def trix(df: pd.DataFrame, period: int = 50,
          col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -108,15 +123,19 @@ def trix(df: pd.DataFrame, period: int = 50,
     :return:
     """
     emwa_one = ewma(df, period, col)
+
     emwa_two = emwa_one.ewm(ignore_na=False,
                             min_periods=period - 1,
                             span=period).mean()
+
     emwa_three = emwa_two.ewm(ignore_na=False,
                               min_periods=period - 1,
                               span=period).mean()
-    return emwa_three.pct_change(periods=1)
+
+    return emwa_three.pct_change(periods=1).dropna()
 
 
+@memoize
 def efficiency_ratio(df: pd.DataFrame, period: int = 10,
                      col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -130,12 +149,14 @@ def efficiency_ratio(df: pd.DataFrame, period: int = 10,
     """
     change = df[col].diff(periods=period).abs()
     vol = df[col].diff().abs().rolling(window=period).sum()
-    return change / vol
+    return pd.Series(change / vol).dropna()
 
 
+@memoize
 def kama(df: pd.DataFrame, period: int = 20,
          col: str = pd_utils.ADJ_CLOSE_COL,
-         efficiency_ratio_periods: int = 10, ema_fast: int = 2,
+         efficiency_ratio_periods: int = 10,
+         ema_fast: int = 2,
          ema_slow: int = 30) -> pd.Series:
     """
     Kaufman's Adaptive Moving Average.
@@ -164,7 +185,7 @@ def kama(df: pd.DataFrame, period: int = 20,
                                  iter(df[col].items())):
         try:
             kama_.append(kama_[-1] + smooth[1] * (price[1] - kama_[-1]))
-        except:
+        except IndexError:
             if pd.notnull(ma[1]):
                 kama_.append(ma[1] + smooth[1] * (price[1] - ma[1]))
             else:
@@ -173,6 +194,7 @@ def kama(df: pd.DataFrame, period: int = 20,
     return pd.Series(kama_, index=sma_.index, name='KAMA')
 
 
+@memoize
 def zero_lag_ema(df: pd.DataFrame, period: int = 30,
                  col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -184,7 +206,8 @@ def zero_lag_ema(df: pd.DataFrame, period: int = 30,
     :return:
     """
     lag = (period - 1) / 2
-    return pd.Series(df[col] + (df[col].diff(lag)), name='Zero Lag EMA')
+    return pd.Series(df[col] + (df[col].diff(lag)),
+                     name='Zero Lag EMA').dropna()
 
 
 def wma(df: pd.DataFrame, period: int = 30,
@@ -375,12 +398,16 @@ def macd_signal(df: pd.DataFrame, period_fast: int = 12, period_slow: int = 26,
     ema_fast = pd.Series(df[col].ewm(ignore_na=False,
                                      min_periods=period_fast - 1,
                                      span=period_fast).mean())
+
     ema_slow = pd.Series(df[col].ewm(ignore_na=False,
                                      min_periods=period_slow - 1,
                                      span=period_slow).mean())
+
     macd_series = pd.Series(ema_fast - ema_slow)
+
     macd_signal_series = pd.Series(macd_series.ewm(ignore_na=False,
                                                    span=signal).mean())
+
     return pd.concat([macd_signal_series, macd_series], axis=1)
 
 

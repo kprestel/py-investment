@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 
+from pandas.tslib import Timestamp
 import pandas as pd
 from dateutil import tz
 
@@ -20,7 +21,7 @@ def parse_date(date_to_parse):
         raise TypeError(
                 'date must be a datetime object. {} was provided'.format(
                         type(date_to_parse)))
-    elif isinstance(date_to_parse, pd.TimeSeries):
+    elif isinstance(date_to_parse, Timestamp):
         if date_to_parse.tz is None:
             return date_to_parse.tz_localize('UTC')
         else:
