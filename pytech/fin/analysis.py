@@ -25,7 +25,7 @@ def sma(df: pd.DataFrame,
     sma = df[col].rolling(center=False,
                           window=period,
                           min_periods=period - 1).mean()
-    return pd.Series(sma.dropna(), name='sma', index=df.index)
+    return pd.Series(sma, name='sma', index=df.index).dropna()
 
 
 def smm(df: pd.DataFrame,
@@ -167,14 +167,15 @@ def kama(df: pd.DataFrame, period: int = 20,
     slow_alpha = 2 / (ema_slow + 1)
 
     # smoothing constant
+    # noinspection PyTypeChecker
     sc = pd.Series((er * (fast_alpha - slow_alpha) + slow_alpha) ** 2)
     sma_ = sma(df, period, col)
 
     kama_ = []
 
-    for smooth, ma, price in zip(iter(sc.items()),
-                                 iter(sma_.shift(-1).items()),
-                                 iter(df[col].items())):
+    for smooth, ma, price in zip(sc.items(),
+                                 sma_.shift(-1).items(),
+                                 df[col].items()):
         try:
             kama_.append(kama_[-1] + smooth[1] * (price[1] - kama_[-1]))
         except (IndexError, TypeError):
@@ -183,7 +184,7 @@ def kama(df: pd.DataFrame, period: int = 20,
             else:
                 kama_.append(None)
 
-    return pd.Series(kama_, index=df.index, name='KAMA')
+    return pd.Series(kama_, index=sma_.index, name='KAMA')
 
 
 def zero_lag_ema(df: pd.DataFrame, period: int = 30,

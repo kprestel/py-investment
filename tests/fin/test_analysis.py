@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 def test_sma(aapl_df):
     """Test of the SMA."""
-    logger.info(aapl_df.index)
     df = ta.sma(aapl_df)
     assert isinstance(df, pd.Series)
     high_df = ta.sma(aapl_df, col=pd_utils.HIGH_COL)
