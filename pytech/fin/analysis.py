@@ -220,8 +220,8 @@ def wma(df: pd.DataFrame, period: int = 30,
         except AttributeError:
             wma_.append(None)
 
-    # wma_ = wma_.reverse()
-    return pd.Series(wma_.reverse(), name='wma')
+    wma_.reverse()
+    return pd.Series(wma_, name='wma')
 
 
 def _chunks(df: Union[pd.DataFrame, pd.Series],
@@ -235,11 +235,7 @@ def _chunks(df: Union[pd.DataFrame, pd.Series],
     :param col:
     :return:
     """
-    try:
-        df_rev = df[col].iloc[::-1]
-    except KeyError:
-        logger.exception('Key error in chunks')
-        df_rev = df.iloc[::-1]
+    df_rev = df[col].iloc[::-1]
 
     for i in enumerate(df_rev):
         chunk = df_rev.iloc[i[0]:i[0] + period]
@@ -255,9 +251,9 @@ def _chunked_wma(chunk, period) -> float:
 
     ma = []
 
-    for price, i in zip(chunk.iloc[::-1].tolist(),
-                        list(range(period + 1))[1:]):
-        ma.append(price * (i / denominator))
+    for price, i in zip(chunk.iloc[::-1].items(),
+                        range(period + 1)[1:]):
+        ma.append(price[1] * (i / denominator))
 
     return sum(ma)
 
