@@ -2,7 +2,7 @@ import pytest
 import logging
 import pandas as pd
 
-import pytech.fin.tech_analysis as ta
+import pytech.fin.analysis as ta
 import pytech.utils.pandas_utils as pd_utils
 
 logger = logging.getLogger(__name__)
@@ -85,5 +85,14 @@ def test_zero_lag_ema(aapl_df):
     df = ta.zero_lag_ema(aapl_df)
     assert isinstance(df, pd.Series)
     high_df = ta.zero_lag_ema(aapl_df, col=pd_utils.HIGH_COL)
+    logger.debug(df)
+    assert not df.equals(high_df)
+
+
+def test_wma(aapl_df):
+    """Test WMA."""
+    df = ta.wma(aapl_df)
+    assert isinstance(df, pd.Series)
+    high_df = ta.wma(aapl_df, col=pd_utils.HIGH_COL)
     logger.debug(df)
     assert not df.equals(high_df)

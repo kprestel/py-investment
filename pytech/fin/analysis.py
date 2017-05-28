@@ -7,12 +7,10 @@ from typing import Union
 import pandas as pd
 
 import pytech.utils.pandas_utils as pd_utils
-from pytech.utils.decorators import memoize
 
 logger = logging.getLogger(__name__)
 
 
-@memoize
 def sma(df: pd.DataFrame,
         period: int = 50,
         col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
@@ -30,7 +28,6 @@ def sma(df: pd.DataFrame,
     return sma.dropna()
 
 
-@memoize
 def smm(df: pd.DataFrame,
         period: int = 50,
         col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
@@ -48,7 +45,6 @@ def smm(df: pd.DataFrame,
                            min_periods=period - 1).median()
 
 
-@memoize
 def ewma(df: pd.DataFrame, period: int = 50,
          col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -65,7 +61,6 @@ def ewma(df: pd.DataFrame, period: int = 50,
 
 
 # noinspection PyTypeChecker,PyUnresolvedReferences
-@memoize
 def triple_ewma(df: pd.DataFrame, period: int = 50,
                 col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -89,7 +84,6 @@ def triple_ewma(df: pd.DataFrame, period: int = 50,
     return series.dropna()
 
 
-@memoize
 def triangle_ma(df: pd.DataFrame, period: int = 50,
                 col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -106,7 +100,6 @@ def triangle_ma(df: pd.DataFrame, period: int = 50,
                         min_periods=period - 1).mean().dropna()
 
 
-@memoize
 def trix(df: pd.DataFrame, period: int = 50,
          col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -135,7 +128,6 @@ def trix(df: pd.DataFrame, period: int = 50,
     return emwa_three.pct_change(periods=1).dropna()
 
 
-@memoize
 def efficiency_ratio(df: pd.DataFrame, period: int = 10,
                      col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -152,7 +144,6 @@ def efficiency_ratio(df: pd.DataFrame, period: int = 10,
     return pd.Series(change / vol).dropna()
 
 
-@memoize
 def kama(df: pd.DataFrame, period: int = 20,
          col: str = pd_utils.ADJ_CLOSE_COL,
          efficiency_ratio_periods: int = 10,
@@ -194,7 +185,6 @@ def kama(df: pd.DataFrame, period: int = 20,
     return pd.Series(kama_, index=sma_.index, name='KAMA')
 
 
-@memoize
 def zero_lag_ema(df: pd.DataFrame, period: int = 30,
                  col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
@@ -207,11 +197,11 @@ def zero_lag_ema(df: pd.DataFrame, period: int = 30,
     """
     lag = (period - 1) / 2
     return pd.Series(df[col] + (df[col].diff(lag)),
-                     name='Zero Lag EMA').dropna()
+                     name='zero_lag_ema').dropna()
 
 
 def wma(df: pd.DataFrame, period: int = 30,
-        col: str = pd_utils.ADJ_CLOSE_COL):
+        col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
     """
     Weighted Moving Average.
 
@@ -228,8 +218,8 @@ def wma(df: pd.DataFrame, period: int = 30,
         except AttributeError:
             wma_.append(None)
 
-    wma_ = wma_.reverse()
-    return wma_
+    # wma_ = wma_.reverse()
+    return pd.Series(wma_.reverse(), name='wma')
 
 
 def _chunks(df: Union[pd.DataFrame, pd.Series],
@@ -246,11 +236,13 @@ def _chunks(df: Union[pd.DataFrame, pd.Series],
     try:
         df_rev = df[col].iloc[::-1]
     except KeyError:
+        logger.exception('Key error in chunks')
         df_rev = df.iloc[::-1]
 
     for i in enumerate(df_rev):
         chunk = df_rev.iloc[i[0]:i[0] + period]
         if len(chunk) != period:
+            logger.info(f'len={len(chunk)} period={period}')
             yield None
         else:
             yield chunk
@@ -460,6 +452,7 @@ def dmi(df: pd.DataFrame, period: int = 14):
     return pd.concat([dir_plus, dir_minus])
 
 
+# noinspection PyTypeChecker
 def bollinger_bands(df: pd.DataFrame,
                     period: int = 30,
                     col: str = pd_utils.ADJ_CLOSE_COL):
