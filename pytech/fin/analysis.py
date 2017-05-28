@@ -221,7 +221,7 @@ def wma(df: pd.DataFrame, period: int = 30,
             wma_.append(None)
 
     wma_.reverse()
-    return pd.Series(wma_, name='wma')
+    return pd.Series(wma_, index=df.index, name='wma')
 
 
 def _chunks(df: Union[pd.DataFrame, pd.Series],
