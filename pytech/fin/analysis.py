@@ -25,7 +25,7 @@ def sma(df: pd.DataFrame,
     sma = df[col].rolling(center=False,
                           window=period,
                           min_periods=period - 1).mean()
-    return sma.dropna()
+    return pd.Series(sma.dropna(), name='sma', index=df.index)
 
 
 def smm(df: pd.DataFrame,
@@ -40,9 +40,10 @@ def smm(df: pd.DataFrame,
     :return: Series containing the simple moving median.
 
     """
-    return df[col].rolling(center=False,
-                           window=period,
-                           min_periods=period - 1).median()
+    temp_series = df[col].rolling(center=False,
+                                  window=period,
+                                  min_periods=period - 1).median()
+    return pd.Series(temp_series, index=df.index, name='smm')
 
 
 def ewma(df: pd.DataFrame, period: int = 50,
@@ -176,7 +177,7 @@ def kama(df: pd.DataFrame, period: int = 20,
                                  iter(df[col].items())):
         try:
             kama_.append(kama_[-1] + smooth[1] * (price[1] - kama_[-1]))
-        except IndexError:
+        except (IndexError, TypeError):
             if pd.notnull(ma[1]):
                 kama_.append(ma[1] + smooth[1] * (price[1] - ma[1]))
             else:
