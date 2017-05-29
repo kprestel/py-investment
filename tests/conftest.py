@@ -24,7 +24,7 @@ def end_date():
     return '2017-01-01'
 
 
-@pytest.fixture(autouse=True)
+# @pytest.fixture(autouse=True)
 def no_requests(monkeypatch):
     """Prevent making requests to yahoo to speed up testing"""
 

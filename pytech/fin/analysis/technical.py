@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def sma(df: pd.DataFrame,
         period: int = 50,
-        col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+        col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Simple moving average
 
@@ -30,7 +30,7 @@ def sma(df: pd.DataFrame,
 
 def smm(df: pd.DataFrame,
         period: int = 50,
-        col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+        col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Compute the simple moving median over a given period.
 
@@ -47,7 +47,7 @@ def smm(df: pd.DataFrame,
 
 
 def ewma(df: pd.DataFrame, period: int = 50,
-         col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+         col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Exponential weighted moving average.
 
@@ -63,7 +63,7 @@ def ewma(df: pd.DataFrame, period: int = 50,
 
 # noinspection PyTypeChecker,PyUnresolvedReferences
 def triple_ewma(df: pd.DataFrame, period: int = 50,
-                col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+                col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Triple Exponential Weighted Moving Average.
 
@@ -86,7 +86,7 @@ def triple_ewma(df: pd.DataFrame, period: int = 50,
 
 
 def triangle_ma(df: pd.DataFrame, period: int = 50,
-                col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+                col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Triangle Moving Average. The SMA of the SMA.
 
@@ -102,7 +102,7 @@ def triangle_ma(df: pd.DataFrame, period: int = 50,
 
 
 def trix(df: pd.DataFrame, period: int = 50,
-         col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+         col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Triple Exponential Moving Average Oscillator (trix)
 
@@ -130,7 +130,7 @@ def trix(df: pd.DataFrame, period: int = 50,
 
 
 def efficiency_ratio(df: pd.DataFrame, period: int = 10,
-                     col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+                     col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Kaufman Efficiency Indicator.
     Oscillates between +100 and -100 where positive is bullish.
@@ -146,7 +146,7 @@ def efficiency_ratio(df: pd.DataFrame, period: int = 10,
 
 
 def kama(df: pd.DataFrame, period: int = 20,
-         col: str = pd_utils.ADJ_CLOSE_COL,
+         col: str = pd_utils.CLOSE_COL,
          efficiency_ratio_periods: int = 10,
          ema_fast: int = 2,
          ema_slow: int = 30) -> pd.Series:
@@ -186,7 +186,7 @@ def kama(df: pd.DataFrame, period: int = 20,
 
 
 def zero_lag_ema(df: pd.DataFrame, period: int = 30,
-                 col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+                 col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Zero Lag Exponential Moving Average.
 
@@ -201,7 +201,7 @@ def zero_lag_ema(df: pd.DataFrame, period: int = 30,
 
 
 def wma(df: pd.DataFrame, period: int = 30,
-        col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+        col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Weighted Moving Average.
 
@@ -224,7 +224,7 @@ def wma(df: pd.DataFrame, period: int = 30,
 
 def _chunks(df: Union[pd.DataFrame, pd.Series],
             period: int,
-            col: str = pd_utils.ADJ_CLOSE_COL):
+            col: str = pd_utils.CLOSE_COL):
     """
     Create `n` chunks based on the number of periods.
 
@@ -313,7 +313,7 @@ def avg_true_range(df: pd.DataFrame, period=14) -> pd.Series:
 
 def smoothed_ma(df: pd.DataFrame,
                 period: int = 30,
-                col: str = pd_utils.ADJ_CLOSE_COL) -> pd.Series:
+                col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Moving average where equal weights are given to historic
     and current prices
@@ -326,7 +326,7 @@ def smoothed_ma(df: pd.DataFrame,
     return pd.Series(ma, index=df.index, name='smoothed_ma')
 
 
-def rsi(df: pd.DataFrame, period: int = 14, col: str = pd_utils.ADJ_CLOSE_COL):
+def rsi(df: pd.DataFrame, period: int = 14, col: str = pd_utils.CLOSE_COL):
     """
     Relative strength indicator.
 
@@ -367,7 +367,7 @@ def macd_signal(df: pd.DataFrame,
                 period_fast: int = 12,
                 period_slow: int = 26,
                 signal: int = 9,
-                col: str = pd_utils.ADJ_CLOSE_COL) -> pd.DataFrame:
+                col: str = pd_utils.CLOSE_COL) -> pd.DataFrame:
     """
     When the MACD falls below the signal line this is a bearish signal,
     and vice versa.
@@ -464,7 +464,7 @@ def dmi(df: pd.DataFrame, period: int = 14):
 # noinspection PyTypeChecker
 def bollinger_bands(df: pd.DataFrame,
                     period: int = 30,
-                    col: str = pd_utils.ADJ_CLOSE_COL):
+                    col: str = pd_utils.CLOSE_COL):
     """
     TODO.
     :param df:

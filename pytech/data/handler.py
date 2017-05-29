@@ -169,7 +169,7 @@ class YahooDataHandler(DataHandler):
         df = pd_utils.rename_bar_cols(df)
         # set index to the date
         df = df.set_index([pd_utils.DATE_COL])
-        self.lib.write(ticker, df, self.CHUNK_SIZE)
+        self.lib.write(ticker, df, chunk_size=self.CHUNK_SIZE)
         return df
 
     @memoize
