@@ -152,6 +152,7 @@ def _from_web(ticker: str,
     """Retrieve data from a web source"""
     try:
         logger.info(f'Making call to {source}')
+        logger.debug(f'Call start date: {start}, end date: {end}')
         df = pdr.DataReader(ticker, data_source=source, start=start,
                             end=end, **kwargs)
         if df.empty:
@@ -196,9 +197,12 @@ def _from_db(ticker: str,
         logger.info(f'Checking DB for ticker: {ticker}')
         df = LIB.read(ticker, chunk_range=chunk_range,
                       filter_data=filter_data, **kwargs)
-        # TODO: open a bug report against arctic...
-    except (NoDataFoundException, KeyError) as e:
+    except NoDataFoundException as e:
         raise DataAccessError(f'No data in DB for ticker: {ticker}') from e
+    except KeyError as e:
+        # TODO: open a bug report against arctic...
+        logger.warning('KeyError thrown by Arctic...')
+        raise DataAccessError(f'Error reading DB for ticker: {ticker}') from e
 
     logger.debug(f'Found ticker: {ticker} in DB.')
 
@@ -220,7 +224,6 @@ def _from_db(ticker: str,
     else:
         upper_df = None
 
-    # df = _concat_dfs(lower_df, upper_df, df)
     return _concat_dfs(lower_df, upper_df, df)
 
 
