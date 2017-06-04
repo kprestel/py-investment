@@ -308,7 +308,7 @@ def avg_true_range(df: pd.DataFrame, period=14) -> pd.Series:
     atr = tr.rolling(center=False,
                      window=period,
                      min_periods=period - 1).mean()
-    return pd.Series(atr, index=df.index[-period:], name='atr').dropna()
+    return pd.Series(atr, name='atr').dropna()
 
 
 def smoothed_ma(df: pd.DataFrame,

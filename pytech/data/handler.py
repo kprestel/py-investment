@@ -6,10 +6,10 @@ from typing import Dict, Iterable, Union
 
 import numpy as np
 import pandas as pd
-import pandas_datareader.data as web
 from arctic.date import DateRange
 from arctic.exceptions import NoDataFoundException
 
+import pytech.data.reader as reader
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent
@@ -45,7 +45,8 @@ class DataHandler(metaclass=ABCMeta):
         """
         self.logger = logging.getLogger(__name__)
         self.events = events
-        self.tickers = tickers
+        self.tickers = []
+        self.tickers.extend(tickers)
         self.ticker_data = {}
         self.latest_ticker_data = {}
         self.continue_backtest = True
@@ -118,14 +119,14 @@ class DataHandler(metaclass=ABCMeta):
         raise NotImplementedError('Must implement _populate_ticker_data()')
 
 
-class YahooDataHandler(DataHandler):
-    DATA_SOURCE = 'yahoo'
-
+class Bars(DataHandler):
     def __init__(self,
                  events: queue.Queue,
                  tickers: Iterable,
                  start_date: dt.datetime,
-                 end_date: dt.datetime):
+                 end_date: dt.datetime,
+                 source: str = 'google'):
+        self.source = source
         super().__init__(events, tickers, start_date, end_date)
 
     def _populate_ticker_data(self):
@@ -136,9 +137,10 @@ class YahooDataHandler(DataHandler):
         comb_index = None
         # only create the DateRange object once.
         date_range = DateRange(start=self.start_date, end=self.end_date)
+        df_dict = self._get_data()
 
         for t in self.tickers:
-            self.ticker_data[t] = self._get_ticker_df(t, date_range)
+            self.ticker_data[t] = df_dict[t]
 
             if comb_index is None:
                 comb_index = self.ticker_data[t].index
@@ -149,31 +151,11 @@ class YahooDataHandler(DataHandler):
 
         for t in self.tickers:
             self.ticker_data[t] = (self.ticker_data[t]
-                                   .reindex(index=comb_index, method='pad')
+                                   # .reindex(index=comb_index, method='pad')
                                    .iterrows())
 
-    def _get_data_from_web(self, ticker: str,
-                           date_range: DateRange = None) -> pd.DataFrame:
-        """Make the network call and write the new df to the DB."""
-        if date_range is not None:
-            start = date_range.start
-            end = date_range.end
-        else:
-            start = self.start_date
-            end = self.end_date
-
-        df = web.DataReader(ticker, self.DATA_SOURCE, start, end)
-        # df = web.get_data_yahoo(ticker, start=start, end=end)
-
-        # TODO: generalize this.
-        df = pd_utils.rename_bar_cols(df)
-        # set index to the date
-        df = df.set_index([pd_utils.DATE_COL])
-        self.lib.write(ticker, df, chunk_size=self.CHUNK_SIZE)
-        return df
-
     @memoize
-    def make_agg_df(self, col: str = pd_utils.ADJ_CLOSE_COL,
+    def make_agg_df(self, col: str = pd_utils.CLOSE_COL,
                     market_ticker: Union[str, None] = 'SPY') -> pd.DataFrame:
         """
         Make a df that contains all of the ticker data and write it the db.
@@ -186,37 +168,30 @@ class YahooDataHandler(DataHandler):
         market. If None is passed then no market_ticker will be used.
         :return: The aggregate data frame.
         """
-        date_range = DateRange(start=self.start_date, end=self.end_date)
         agg_df = pd.DataFrame()
+        if market_ticker is not None and market_ticker not in self.tickers:
+            df_dict = self._get_data((market_ticker,))
+        else:
+            df_dict = self._get_data()
 
         for t in self.tickers:
-            try:
-                temp_df = self.lib.read(t, chunk_range=date_range)
-            except NoDataFoundException:
-                temp_df = self._get_data_from_web(t)
-
+            temp_df = df_dict[t]
             agg_df[t] = temp_df[col]
-
-        if market_ticker is not None and market_ticker not in self.tickers:
-            temp = self._get_ticker_df(market_ticker, date_range)
-            agg_df[market_ticker] = temp[col]
 
         return agg_df
 
-    def _get_ticker_df(self, ticker: str,
-                       chunk_range: DateRange) -> pd.DataFrame:
-        """
-        Helper method to get a :class:``pd.DataFrame`` for a ticker from either
-        the database or the web if the requested ticker is not found in the db.
+    def _get_data(self,
+                  extra_tickers: Iterable = None) -> Dict[str, pd.DataFrame]:
+        if extra_tickers is not None:
+            tickers = self.tickers
+            tickers.extend(extra_tickers)
+        else:
+            tickers = self.tickers
 
-        :param ticker: The ticker to get a df for.
-        :param chunk_range: The time range to get the data for.
-        :return: The data frame.
-        """
-        try:
-            return self.lib.read(ticker, chunk_range=chunk_range)
-        except NoDataFoundException:
-            return self._get_data_from_web(ticker, date_range=chunk_range)
+        return reader.get_data(tickers,
+                               source=self.source,
+                               start=self.start_date,
+                               end=self.end_date)
 
     def _get_new_bar(self, ticker: str):
         """

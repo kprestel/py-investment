@@ -51,7 +51,7 @@ def write_chunks(lib_name, chunk_size='D', remove_ticker=True):
                 # ticker = df.at[0, pd_utils.TICKER_COL]
             except KeyError:
                 raise PyInvestmentKeyError(
-                        'Decorated functions are required to add a column'
+                        'Decorated functions are required to add a column '
                         f'{pd_utils.TICKER_COL} that contains the ticker.')
 
             if remove_ticker:

@@ -3,7 +3,7 @@ from pytest import approx
 import pandas as pd
 import pytech.utils.pandas_utils as pd_utils
 import pytech.utils.dt_utils as dt_utils
-from pytech.data.handler import DataHandler, YahooDataHandler
+from pytech.data.handler import DataHandler, Bars
 
 
 # noinspection PyTypeChecker
@@ -22,7 +22,7 @@ class TestYahooDataHandler(object):
 
     def test_constructor(self, events, ticker_list, start_date, end_date):
         """Test the constructor"""
-        handler = YahooDataHandler(events, ticker_list, start_date, end_date)
+        handler = Bars(events, ticker_list, start_date, end_date)
         assert handler is not None
         handler.update_bars()
 
@@ -37,7 +37,7 @@ class TestYahooDataHandler(object):
         This test tests two days (a day is when update_bars() is called)
         and asserts that the correct values are present for the tickers.
 
-        :param YahooDataHandler yahoo_data_handler:
+        :param Bars yahoo_data_handler:
         """
         assert yahoo_data_handler is not None
         # yahoo_data_handler.update_bars()
@@ -79,7 +79,7 @@ class TestYahooDataHandler(object):
         """
         Test that the latest date returned is correct.
 
-        :param YahooDataHandler yahoo_data_handler:
+        :param Bars yahoo_data_handler:
         """
         test_date = yahoo_data_handler.get_latest_bar_dt('AAPL')
         assert test_date == dt_utils.parse_date('2016-03-10')
@@ -98,7 +98,7 @@ class TestYahooDataHandler(object):
         """
         Test getting the latest bar.
 
-        :param YahooDataHandler yahoo_data_handler:
+        :param Bars yahoo_data_handler:
         :return:
         """
         bar = yahoo_data_handler.get_latest_bar('AAPL')
@@ -112,7 +112,7 @@ class TestYahooDataHandler(object):
         dt = dt_utils.parse_date(bar.name)
         assert dt == dt_utils.parse_date('2016-03-11')
 
-    def test_make_agg_df(self, yahoo_data_handler: YahooDataHandler):
+    def test_make_agg_df(self, yahoo_data_handler: Bars):
         """Test creating the agg df"""
         df = yahoo_data_handler.make_agg_df()
         assert len(df.columns) == len(yahoo_data_handler.tickers)

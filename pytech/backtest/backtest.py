@@ -4,7 +4,7 @@ import queue
 
 import pytech.utils.common_utils as com_utils
 import pytech.utils.dt_utils as dt_utils
-from pytech.data.handler import YahooDataHandler
+from pytech.data.handler import Bars
 from pytech.fin.portfolio import BasicPortfolio
 from pytech.trading.blotter import Blotter
 from pytech.trading.execution import SimpleExecutionHandler
@@ -51,7 +51,7 @@ class Backtest(object):
         self.strategy_cls = strategy
 
         if data_handler is None:
-            self.data_handler_cls = YahooDataHandler
+            self.data_handler_cls = Bars
         else:
             self.data_handler_cls = data_handler
 

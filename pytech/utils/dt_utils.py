@@ -8,6 +8,8 @@ from pandas.tslib import Timestamp
 
 from pytech.utils.decorators import memoize
 
+date_type = Union[dt.date, dt.datetime]
+
 
 @memoize
 def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
@@ -71,6 +73,32 @@ def sanitize_dates(start, end) -> Tuple[dt.datetime, dt.datetime]:
         start = dt.datetime(2010, 1, 1)
 
     if end is None:
-        end = dt.datetime.today()
+        end = prev_weekday(dt.datetime.today())
 
-    return start, end
+    return parse_date(start), parse_date(end)
+
+
+def is_weekday(a_dt: date_type):
+    """
+    True if `dt` is a weekday.
+
+    Monday = 1
+    Sunday = 7
+    """
+    return a_dt.isoweekday() < 6
+
+
+def prev_weekday(a_dt: date_type):
+    """
+    Returns last weekday from a given date.
+
+    If the given date is a weekday it will be returned.
+    """
+    if is_weekday(a_dt):
+        return a_dt
+
+    while a_dt.isoweekday() > 5:
+        a_dt -= dt.timedelta(days=1)
+    return a_dt
+
+

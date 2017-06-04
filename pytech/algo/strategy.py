@@ -101,12 +101,12 @@ class CrossOverStrategy(Strategy):
             signals = pd.DataFrame(bar)
 
             signals['short_mavg'] = (
-                signals[pd_utils.ADJ_CLOSE_COL].rolling(
+                signals[pd_utils.CLOSE_COL].rolling(
                         center=False,
                         window=self.short_window,
                         min_periods=self.short_window - 1).mean())
             signals['long_mavg'] = (
-                signals[pd_utils.ADJ_CLOSE_COL].rolling(
+                signals[pd_utils.CLOSE_COL].rolling(
                         center=False,
                         window=self.long_window,
                         min_periods=self.long_window - 1).mean())

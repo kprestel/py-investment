@@ -110,7 +110,7 @@ class AbstractSignalHandler(metaclass=ABCMeta):
                                  signal.order_type,
                                  signal.stop_price, signal.limit_price)
 
-    def get_correlation_df(self, col: str = pd_utils.ADJ_CLOSE_COL,
+    def get_correlation_df(self, col: str = pd_utils.CLOSE_COL,
                            market_ticker: str = 'SPY') -> pd.DataFrame:
         """
         Get the correlation between all tickers in the universe.

@@ -6,7 +6,7 @@ import pytest
 
 import pytech.trading.blotter as b
 from pytech import TEST_DATA_DIR
-from pytech.data.handler import YahooDataHandler
+from pytech.data.handler import Bars
 from pytech.fin.portfolio import BasicPortfolio
 from pytech.fin.handler import BasicSignalHandler
 from pytech.mongo import ARCTIC_STORE
@@ -83,7 +83,7 @@ def populated_blotter(blotter):
 @pytest.fixture()
 def yahoo_data_handler(events, ticker_list, start_date, end_date):
     """Create a default :class:`YahooDataHandler`"""
-    bars = YahooDataHandler(events, ticker_list, start_date, end_date)
+    bars = Bars(events, ticker_list, start_date, end_date)
     bars.update_bars()
     return bars
 

@@ -208,19 +208,20 @@ def _from_db(ticker: str,
 
     df[pd_utils.TICKER_COL] = ticker
 
-    db_start = df.index.min(axis=1)
-    db_end = df.index.max(axis=1)
+    db_start = dt_utils.parse_date(df.index.min(axis=1))
+    db_end = dt_utils.parse_date(df.index.max(axis=1))
 
     # check that all the requested data is present
     # TODO: deal with days that it is expected that data shouldn't exist.
-    if db_start > start:
+    if db_start > start and dt_utils.is_weekday(start):
+        # db has less data than requested
         lower_df = _from_web(ticker, source, start, db_start - BDay())
     else:
         lower_df = None
 
-    if db_end < end:
-        upper_df = _from_web(ticker, source, start=(db_end + BDay()), end=end)
-
+    if db_end.date() < end.date() and dt_utils.is_weekday(end):
+        # db doesn't have as much data than requested
+        upper_df = _from_web(ticker, source, start=db_end, end=end)
     else:
         upper_df = None
 
@@ -239,10 +240,10 @@ def _concat_dfs(lower_df: pd.DataFrame,
         return df
     elif lower_df is not None and upper_df is None:
         # missing only lower data
-        return pd.concat([df, lower_df], axis=1)
+        return pd.concat([df, lower_df])
     elif lower_df is None and upper_df is not None:
         # missing only upper data
-        return pd.concat([df, upper_df], axis=1)
+        return pd.concat([df, upper_df])
     elif lower_df is not None and upper_df is not None:
         # both missing
         return pd.concat([df, upper_df, lower_df])
