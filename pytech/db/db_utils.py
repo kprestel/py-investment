@@ -12,7 +12,7 @@ import pandas as pd
 #     :return: None, this method only writes to the DB.
 #     """
 #
-#     df = pd.DataFrame(asset.ohlcv)
+#     df = pd.DataFrame(asset.data)
 #     df['asof_date'] = _dt_to_epoch(df['asof_date'])
 #     df['ticker'] = asset.ticker
 #     df.to_sql('universe_ohlcv', con=engine, if_exists='append', index=False)
@@ -56,14 +56,14 @@ def ohlcv_from_sql(asset=None, date_to_load=None):
     # TODO: add option to load only particular cols.
 
     if asset is None and date_to_load is None:
-        sql = 'SELECT * FROM ohlcv'
+        sql = 'SELECT * FROM data'
         params = {}
     elif asset is None and date_to_load is not None:
-        sql = 'SELECT * FROM ohlcv WHERE trade_date = :trade_date'
+        sql = 'SELECT * FROM data WHERE trade_date = :trade_date'
     elif asset is not None and date_to_load is None:
-        sql = 'SELECT * FROM ohlcv WHERE ticker = :ticker'
+        sql = 'SELECT * FROM data WHERE ticker = :ticker'
     elif asset is not None and date_to_load is not None:
-        sql = 'SELECT * FROM ohlcv WHERE ticker = :ticker AND trade_date = :trade_date'
+        sql = 'SELECT * FROM data WHERE ticker = :ticker AND trade_date = :trade_date'
     else:
         raise ValueError('Invalid Arguments')
 

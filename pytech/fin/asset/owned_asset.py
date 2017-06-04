@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 from pandas_datareader import data as web
 
-from pytech.fin.asset import Asset
+from pytech.fin.asset.asset import Asset
 from pytech.utils import dt_utils as dt_utils
 from pytech.utils.enums import Position
 from pytech.trading.trade import Trade
@@ -14,7 +14,7 @@ from pytech.utils.exceptions import NotAnAssetError
 
 class OwnedAsset(object):
     """
-    Contains data that only matters for a :class:`Asset` that is 
+    Contains data that only matters for a :class:`Asset` that is
     in a user's :class:`~pytech.portfolio.Portfolio`.
     """
 
@@ -65,16 +65,16 @@ class OwnedAsset(object):
     @classmethod
     def from_trade(cls, trade, asset_position):
         """
-        Create an owned_asset from a :class:``pytech.trading.trade.Trade``.  
-        This the preferred method to create new ``OwnedStock`` objects, 
-        and :func:``make_trade`` is the preferred way to update an instance of 
+        Create an owned_asset from a :class:``pytech.trading.trade.Trade``.
+        This the preferred method to create new ``OwnedStock`` objects,
+        and :func:``make_trade`` is the preferred way to update an instance of
         :class:`OwnedStock`.
 
-        :param Trade trade: The trade that will create the new instance of 
+        :param Trade trade: The trade that will create the new instance of
         :class:`OwnedStock`.
-        :param Position asset_position: The position that the asset is, 
+        :param Position asset_position: The position that the asset is,
         either **LONG** or **SHORT**.
-        :return: The newly created instance of ``OwnedStock`` to be added 
+        :return: The newly created instance of ``OwnedStock`` to be added
         to the owner's :class:``pytech.fin.portfolio``
         :rtype: OwnedAsset
         """
@@ -128,8 +128,8 @@ class OwnedAsset(object):
 
     def update_total_position_value(self, latest_price, price_date):
         """
-        Set the ``latest_price`` and ``latest_price_time`` and 
-        update the total position's value to reflect the latest 
+        Set the ``latest_price`` and ``latest_price_time`` and
+        update the total position's value to reflect the latest
         market value price.
 
         :param float latest_price:
@@ -147,7 +147,7 @@ class OwnedAsset(object):
 
     def return_on_investment(self):
         """
-        Get the current return on investment for a given 
+        Get the current return on investment for a given
         :class:`OwnedAsset`
         """
         self.update_total_position_value()

@@ -74,7 +74,7 @@ class Asset(metaclass=ABCMeta):
         if not (isinstance(ohlcv, pd.DataFrame) or
                     not isinstance(ohlcv, pd.Series)):
             raise TypeError(
-                    'ohlcv must be a pandas DataFrame or TimeSeries. '
+                    'data must be a pandas DataFrame or TimeSeries. '
                     '{} was provided'.format(type(ohlcv)))
 
         self._ohlcv = ohlcv
@@ -991,7 +991,6 @@ class Stock(Asset):
         if ts is None:
             ts = self.ohlcv
         for chunk in self._chunks(period=period, column=column, ts=ts):
-            # TODO: figure out a better way to handle this. this is better than a catch all except though
             try:
                 wma.append(self._chunked_weighted_moving_average(chunk=chunk,
                                                                 period=period))

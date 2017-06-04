@@ -10,7 +10,7 @@ from pytech.db.connector import DBConnector
 from pytech.db.pytech_db_schema import (PYTECH_DB_TABLE_NAMES,
                                         asset as asset_table,
                                         universe_ohlcv as ohlcv_table)
-from pytech.fin.asset import Asset
+from pytech.fin.asset.asset import Asset
 from pytech.utils.exceptions import AssetNotInUniverseError
 
 
@@ -30,16 +30,16 @@ class Finder(metaclass=ABCMeta):
 
     def __init__(self, engine=None, **kwargs):
         """
-        **ALL** subclasses must call this constructor in the first line of 
+        **ALL** subclasses must call this constructor in the first line of
         their constructor.
 
-        :param engine: An engine with a connection to the database that 
+        :param engine: An engine with a connection to the database that
             contains the data to find.
-            This parameter can either be a SQLAlchemy.engine or a string URI 
-            that can be turned into a SQLAlchemy engine. 
-            If a string is passed in ``**kwargs`` will be passed into the 
+            This parameter can either be a SQLAlchemy.engine or a string URI
+            that can be turned into a SQLAlchemy engine.
+            If a string is passed in ``**kwargs`` will be passed into the
             :func:`sqlalchemy.create_engine` method.
-            Check out the SQLAlchemy docs for more information about 
+            Check out the SQLAlchemy docs for more information about
             possible extra parameters.
         :type engine: :class:`SQLAlchemy.engine` or str
         """
@@ -59,10 +59,10 @@ class Finder(metaclass=ABCMeta):
     @abstractmethod
     def find_instance(self, key):
         """
-        This method should should return **ONE** instance of the class 
+        This method should should return **ONE** instance of the class
         that the :class:`Finder` instance is responsible for finding.
 
-        :param key: This should be the unique identifier for the specific 
+        :param key: This should be the unique identifier for the specific
         instance that is needed.
         :return: The instance of the class requested.
         """
@@ -71,11 +71,11 @@ class Finder(metaclass=ABCMeta):
     @abstractmethod
     def find_all(self):
         """
-        This method should return an iterable containing all instances of the 
+        This method should return an iterable containing all instances of the
         class that the ':class:`Finder` instance is responsible for finding.
 
-        If applicable or possible the return object should be a dictionary 
-        where the key is the ticker corresponding to whatever object is being 
+        If applicable or possible the return object should be a dictionary
+        where the key is the ticker corresponding to whatever object is being
         found and the value should be that object.
 
         :return: dict[ticker -> Asset]
@@ -88,7 +88,7 @@ class Finder(metaclass=ABCMeta):
         """
         Convert one row from a ``SQLAlchemy`` query to a dictionary.
 
-        :param sqlalchmey.RowProxy row: A ``RowProxy`` object that is returned 
+        :param sqlalchmey.RowProxy row: A ``RowProxy`` object that is returned
             from a ``SQLAlchemy`` query.
         :return: The dictionary that is the row.
         :rtype: dict
@@ -111,16 +111,16 @@ class AssetFinder(Finder):
 
     def find_instance(self, key):
         """
-        Find and return an instance of an :class:`Asset` including 
+        Find and return an instance of an :class:`Asset` including
         the OHLCV ``DataFrame``.
 
-        The ``asset_class_dict`` will be used to call the correct constructor 
+        The ``asset_class_dict`` will be used to call the correct constructor
         based on the ``asset_type`` found.
 
         :param str key: The **ticker** of the asset to retrieve.
         :return: The ``Asset`` that corresponds to the ``key``
         :rtype: Asset
-        :raises: AssetNotInUniverseError when an asset cannot be found in the 
+        :raises: AssetNotInUniverseError when an asset cannot be found in the
             database with the requested ``key``.
         """
         asset = self._asset_cache.get(key)
@@ -139,7 +139,7 @@ class AssetFinder(Finder):
             raise AssetNotInUniverseError(ticker=key)
 
         asset_dict = self.row_to_dict(row)
-        asset_dict['ohlcv'] = self.find_ohlcv(ticker=key)
+        asset_dict['data'] = self.find_ohlcv(ticker=key)
 
         asset_type_class = self.asset_class_dict.get(asset_dict['asset_type'],
                                                      Asset)
@@ -147,7 +147,7 @@ class AssetFinder(Finder):
         asset = asset_type_class.from_dict(asset_dict)
 
         # update caches
-        self._asset_cache[asset.ticker] = asset_dict['ohlcv']
+        self._asset_cache[asset.ticker] = asset_dict['data']
         self._asset_cache[asset.ticker] = asset
 
         return asset
@@ -156,7 +156,7 @@ class AssetFinder(Finder):
         """
         Retrieve all :class:`pytech.asset.Asset` in the database as a dictionary.
 
-        :return: A dictionary where the ``key`` = the ticker and the 
+        :return: A dictionary where the ``key`` = the ticker and the
             ``value`` = the :class:`pytech.asset.Asset` instance
         """
         sql = select([self.asset]).where(
@@ -166,7 +166,7 @@ class AssetFinder(Finder):
 
         for row in self.conn.execute(sql).fetchall():
             asset_dict = self.row_to_dict(row)
-            asset_dict['ohlcv'] = self.find_ohlcv(asset_dict['ticker'])
+            asset_dict['data'] = self.find_ohlcv(asset_dict['ticker'])
             asset_type_class = self.asset_class_dict.get(
                     asset_dict['asset_type'], Asset)
             temp_asset = asset_type_class.from_dict(asset_dict)

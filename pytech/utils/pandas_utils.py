@@ -1,6 +1,6 @@
 import pandas as pd
 
-# constants for the expected column names of ALL ohlcv DataFrames
+# constants for the expected column names of ALL data DataFrames
 
 DATE_COL = 'date'
 OPEN_COL = 'open'

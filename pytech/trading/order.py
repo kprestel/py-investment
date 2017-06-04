@@ -13,7 +13,7 @@ from pandas.tseries.offsets import DateOffset
 import pytech.utils.common_utils as utils
 import pytech.utils.dt_utils as dt_utils
 from pytech.backtest.event import SignalEvent
-from pytech.fin.asset import Asset
+from pytech.fin.asset.asset import Asset
 from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
                                 TradeAction)
 from pytech.utils.exceptions import BadOrderParams
@@ -48,9 +48,9 @@ class Order(metaclass=ABCMeta):
         """
         Order constructor
 
-        :param ticker: The ticker for which the order is associated with.  
+        :param ticker: The ticker for which the order is associated with.
             This can either be an instance of an
-            :class:`pytech.fin.ticker.Asset` or a string with of ticker 
+            :class:`pytech.fin.ticker.Asset` or a string with of ticker
             of the ticker. If an ticker is passed in the ticker
             will be taken from it.
         :type ticker: Asset or str
@@ -58,12 +58,12 @@ class Order(metaclass=ABCMeta):
         :param OrderSubType order_subtype: The order subtype to create
         default: :py:class:`pytech.enums.OrderSubType.DAY`
         :param int qty: The amount of shares the order is for.
-        This should be negative if it is a sell order and positive if it is 
+        This should be negative if it is a sell order and positive if it is
         a buy order.
         :param datetime created: The date and time that the order was created
-        :param int max_days_open: The max calendar days that an order can stay 
+        :param int max_days_open: The max calendar days that an order can stay
             open without being cancelled.
-            This parameter is not relevant to Day orders since they will be 
+            This parameter is not relevant to Day orders since they will be
             closed at the end of the day regardless.
             (default: None if the order_type is Day)
             (default: 90 if the order_type is not Day)
@@ -141,7 +141,7 @@ class Order(metaclass=ABCMeta):
     @ticker.setter
     def ticker(self, ticker):
         """
-        If an ticker is passed in then use it otherwise use the 
+        If an ticker is passed in then use it otherwise use the
         string passed in.
         """
 
@@ -154,7 +154,7 @@ class Order(metaclass=ABCMeta):
     @qty.setter
     def qty(self, qty):
         """
-        Ensure qty is an integer and if it is a **sell** order 
+        Ensure qty is an integer and if it is a **sell** order
         qty should be negative.
         """
 
@@ -204,11 +204,11 @@ class Order(metaclass=ABCMeta):
     @abstractmethod
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         """
-        Check if any of the ``order``'s limits have been broken in a way that 
+        Check if any of the ``order``'s limits have been broken in a way that
         would trigger the ``order``.
 
         :param datetime dt: The current datetime.
-        :param float current_price: The current price to check the triggers 
+        :param float current_price: The current price to check the triggers
             against.
         :return: True if the order is triggered otherwise False
         :rtype: bool
@@ -216,11 +216,11 @@ class Order(metaclass=ABCMeta):
 
     def check_order_expiration(self, current_date=datetime.now()):
         """
-        Check if the order should be closed due to passage of time and update 
+        Check if the order should be closed due to passage of time and update
         the order's status.
 
-        :param datetime current_date: This is used to facilitate backtesting, 
-        so that the current date can be mocked in order to accurately 
+        :param datetime current_date: This is used to facilitate backtesting,
+        so that the current date can be mocked in order to accurately
         trigger/cancel orders in the past.
         (default: datetime.now())
         """
@@ -256,11 +256,11 @@ class Order(metaclass=ABCMeta):
 
     def get_available_volume(self, available_volume):
         """
-        Get the available volume to trade.  
-        
+        Get the available volume to trade.
+
         This will the min of open_amount and the assets volume.
 
-        :param int available_volume: The amount of shares available to trade 
+        :param int available_volume: The amount of shares available to trade
             at a given point in time.
         :return: The number of shares available to trade
         :rtype: int
@@ -270,11 +270,11 @@ class Order(metaclass=ABCMeta):
     @classmethod
     def from_signal_event(cls, signal, action):
         """
-        Create an order from a :class:`pytech.backtest.event.SignalEvent`. 
-        
+        Create an order from a :class:`pytech.backtest.event.SignalEvent`.
+
         :param SignalEvent or LongSignalEvent or ShortSignalEvent signal:
         The signal event that triggered the order to be created.
-        :param TradeAction action: The TradeAction that the order is for. 
+        :param TradeAction action: The TradeAction that the order is for.
         :return: A new order
         :rtype: Order
         """
@@ -328,7 +328,7 @@ class LimitOrder(Order):
     @limit_price.setter
     def limit_price(self, limit_price: float) -> None:
         """
-        Convert from a float to a 2 decimal point number that rounds 
+        Convert from a float to a 2 decimal point number that rounds
         favorably based on the trade_action
         """
         pref_round_down = self.action is TradeAction.BUY
@@ -351,12 +351,12 @@ class LimitOrder(Order):
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         """
         Check if the ``order``'s limit price has been broken.
-         
+
         Update the state of the order if it has.
-        
-        :param current_price: 
-        :param dt: 
-        :return: 
+
+        :param current_price:
+        :param dt:
+        :return:
         """
         if self.action is TradeAction.BUY and current_price <= self.limit_price:
             self.limit_reached = True
@@ -398,7 +398,7 @@ class StopOrder(Order):
     @stop_price.setter
     def stop_price(self, stop_price):
         """
-        Convert from a float to a 2 decimal point number that rounds 
+        Convert from a float to a 2 decimal point number that rounds
         favorably based on the trade_action
         """
         pref_round_down = self.action is not TradeAction.BUY
@@ -466,10 +466,10 @@ class StopLimitOrder(StopOrder, LimitOrder):
         Call both the :class:``StopOrder`` and the :class:``LimitOrder``
         :func:``check_triggers`` in order to check if both the stop trigger
         and the limit trigger have been met.
-        
-        :param current_price: 
-        :param dt: 
-        :return: 
+
+        :param current_price:
+        :param dt:
+        :return:
         """
         if not self.stop_reached:
             StopOrder.check_triggers(self, current_price, dt)

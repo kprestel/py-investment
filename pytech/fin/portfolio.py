@@ -9,7 +9,7 @@ import pandas as pd
 import pytech.utils.dt_utils as dt_utils
 from pytech.backtest.event import SignalEvent
 from pytech.data.handler import DataHandler
-from pytech.fin.owned_asset import OwnedAsset
+from pytech.fin.asset.owned_asset import OwnedAsset
 from pytech.mongo import ARCTIC_STORE, PortfolioStore
 from pytech.trading.blotter import Blotter
 from pytech.trading.trade import Trade

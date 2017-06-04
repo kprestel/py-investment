@@ -9,7 +9,7 @@ import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import TradeEvent
 from pytech.data.handler import DataHandler
 from pytech.db.finders import AssetFinder
-from pytech.fin.asset import Asset
+from pytech.fin.asset.asset import Asset
 from pytech.trading.commission import (
     AbstractCommissionModel,
     PerOrderCommissionModel
