@@ -29,11 +29,17 @@ def no_requests(monkeypatch):
     """Prevent making requests to yahoo to speed up testing"""
 
     def patch_requests(ticker, data_source, start, end):
-        return lib.read(ticker)
+        # return lib.read(ticker)
         # return db.read(ticker)
-        # return pd.read_csv(get_test_csv_path(ticker), parse_dates=['Date'])
+        return pd.read_csv(get_test_csv_path(ticker), parse_dates=['Date'])
 
     monkeypatch.setattr('pandas_datareader.data.DataReader', patch_requests)
+
+
+@pytest.fixture(scope='module')
+def aapl_df():
+    """Returns a OHLCV df for Apple."""
+    return lib.read('AAPL')
 
 
 def get_test_csv_path(ticker):

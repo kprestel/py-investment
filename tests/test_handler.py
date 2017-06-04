@@ -102,14 +102,14 @@ class TestYahooDataHandler(object):
         :return:
         """
         bar = yahoo_data_handler.get_latest_bar('AAPL')
-        dt = dt_utils.parse_date(bar[pd_utils.DATE_COL])
+        dt = dt_utils.parse_date(bar.name)
         adj_close = bar[pd_utils.ADJ_CLOSE_COL]
         aapl_adj_close_expected = 99.07551600000001
         assert dt == dt_utils.parse_date('2016-03-10')
         assert adj_close == approx(aapl_adj_close_expected)
         yahoo_data_handler.update_bars()
         bar = yahoo_data_handler.get_latest_bar('AAPL')
-        dt = dt_utils.parse_date(bar[pd_utils.DATE_COL])
+        dt = dt_utils.parse_date(bar.name)
         assert dt == dt_utils.parse_date('2016-03-11')
 
     def test_make_agg_df(self, yahoo_data_handler: YahooDataHandler):

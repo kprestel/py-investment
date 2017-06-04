@@ -3,7 +3,6 @@ from abc import ABCMeta, abstractmethod
 from queue import Queue
 
 import pandas as pd
-from queuelib import queue
 
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent, SignalEvent
@@ -98,18 +97,19 @@ class CrossOverStrategy(Strategy):
                                         event_type=event.event_type)
 
         for ticker in self.ticker_list:
-            bar = self.bars.get_latest_bar_value(ticker,
-                                                 pd_utils.ADJ_CLOSE_COL,
-                                                 n=self.long_window)
+            bar = self.bars.get_latest_bars(ticker, n=self.long_window)
             signals = pd.DataFrame(bar)
 
-            signals['short_mavg'] = pd.rolling_mean(
-                    bar,
-                    self.short_window,
-                    min_periods=1)
-            signals['long_mavg'] = pd.rolling_mean(bar,
-                                                   self.long_window,
-                                                   min_periods=1)
+            signals['short_mavg'] = (
+                signals[pd_utils.ADJ_CLOSE_COL].rolling(
+                        center=False,
+                        window=self.short_window,
+                        min_periods=self.short_window - 1).mean())
+            signals['long_mavg'] = (
+                signals[pd_utils.ADJ_CLOSE_COL].rolling(
+                        center=False,
+                        window=self.long_window,
+                        min_periods=self.long_window - 1).mean())
             short = signals['short_mavg'].tail(1)
             long = signals['long_mavg'].tail(1)
             short = short.iat[0]
@@ -128,7 +128,8 @@ class CrossOverStrategy(Strategy):
                                 action=TradeAction.BUY,
                                 position=Position.LONG))
             elif short < long:
-                self.logger.debug(f'Creating SHORT signal for ticker: {ticker}')
+                self.logger.debug(
+                        f'Creating SHORT signal for ticker: {ticker}')
                 self.events.put(
                         SignalEvent(
                                 ticker,

@@ -122,10 +122,10 @@ class Blotter(object):
 
     def __iter__(self):
         """
-        Iterate over the orders dict as well as the nested orders dict which 
+        Iterate over the orders dict as well as the nested orders dict which
         key=order_id and value=``Order``
-        
-        This means you can iterate over a :class:``Blotter`` instance directly 
+
+        This means you can iterate over a :class:``Blotter`` instance directly
         and access all of the open orders it has.
         """
 
@@ -151,27 +151,27 @@ class Blotter(object):
                     max_days_open: int = 90,
                     **kwargs):
         """
-        Open a new order.  If an open order for the given ``ticker`` already 
-        exists placing a new order will **NOT** change the existing order, 
+        Open a new order.  If an open order for the given ``ticker`` already
+        exists placing a new order will **NOT** change the existing order,
         it will be added to the tuple.
 
-        :param ticker: The ticker of the :py:class:`~ticker.Asset` to place an 
+        :param ticker: The ticker of the :py:class:`~ticker.Asset` to place an
         order for or the ticker of an ticker.
         :type ticker: Asset or str
         :param TradeAction or str action: **BUY** or **SELL**. If this is not
         provided it will be determined based on if ``qty`` is > 0.
         :param OrderType order_type: the type of order
-        :param float stop_price: If creating a stop order this is the 
+        :param float stop_price: If creating a stop order this is the
         stop price that will trigger the ``order``.
-        :param float limit_price: If creating a limit order this is the price 
+        :param float limit_price: If creating a limit order this is the price
         that will trigger the ``order``.
         :param int qty: The number of shares to place an ``order`` for.
         :param datetime date_placed: The date and time the order is created.
         :param OrderSubType order_subtype: (optional) The type of order subtype
             (default: ``OrderSubType.DAY``)
-        :param int max_days_open: Number of days to leave the ``order`` open 
+        :param int max_days_open: Number of days to leave the ``order`` open
         before it expires.
-        :param str order_id: (optional) 
+        :param str order_id: (optional)
         The ID of the :class:`pytech.trading.order.Order`.
         :return: None
         """
@@ -238,7 +238,7 @@ class Blotter(object):
                       **kwargs) -> AnyOrder:
         """
         Figure out what type of order to create based on given parameters.
-        
+
         This is meant to be somewhat of an order factory.
         """
         order_type = OrderType.check_if_valid(order_type)
@@ -271,11 +271,11 @@ class Blotter(object):
 
         :param str order_id: The id of the order to cancel.
         :param ticker: (optional) The ticker that the order is associated with.
-            Although it is not required to provide a ticker, 
+            Although it is not required to provide a ticker,
             it is **strongly** encouraged.
-            By providing a ticker the execution time of this method will 
+            By providing a ticker the execution time of this method will
             increase greatly.
-        :param str reason: (optional) 
+        :param str reason: (optional)
             The reason that the order is being cancelled.
         :return:
         """
@@ -288,12 +288,12 @@ class Blotter(object):
                                     order_type=None,
                                     trade_action=None):
         """
-        Cancel all orders for a given ticker's ticker and then clean up the 
+        Cancel all orders for a given ticker's ticker and then clean up the
         orders dict.
 
         :param str ticker: The ticker of the ticker to cancel all orders for.
         :param str reason: (optional) The reason for canceling the order.
-        :param float lower_price: (optional) Only cancel orders 
+        :param float lower_price: (optional) Only cancel orders
         lower than this price.
         :param float upper_price: (optional) Only cancel orders greater than
         this price.
@@ -328,12 +328,12 @@ class Blotter(object):
                               order: AnyOrder,
                               order_type: OrderType) -> bool:
         """
-        Filter based on :class:``OrderType``. If the ``order`` is not the same 
+        Filter based on :class:``OrderType``. If the ``order`` is not the same
         :class:``OrderType`` as given then it will be filtered out from
         whatever action is being taken on the orders.
-        
+
         :param order: The order to check whether it should be filtered or not.
-        :param order_type: The type of order that the action should be taken 
+        :param order_type: The type of order that the action should be taken
         on.
         :return: True if the order meets the criteria and the action should be
         taken.
@@ -348,10 +348,10 @@ class Blotter(object):
                                 order: AnyOrder,
                                 trade_action: TradeAction):
         """
-        
-        :param order: 
-        :param trade_action: 
-        :return: 
+
+        :param order:
+        :param trade_action:
+        :return:
         """
         if trade_action is None:
             self.logger.debug('Trade action was none. Filtering...')
@@ -364,24 +364,24 @@ class Blotter(object):
                          upper_price: float,
                          lower_price: float) -> bool:
         """
-        Filter based on an upper and lower price and return ``True`` if the 
-        order meets the criteria. Meaning that whatever action is being 
-        taken on orders that match the given criteria should be taken on 
+        Filter based on an upper and lower price and return ``True`` if the
+        order meets the criteria. Meaning that whatever action is being
+        taken on orders that match the given criteria should be taken on
         the given ``order``.
-        
-        If neither ``upper_price`` or ``lower_price`` are given then it is 
-        assumed that orders should be filtered based on price and 
+
+        If neither ``upper_price`` or ``lower_price`` are given then it is
+        assumed that orders should be filtered based on price and
         ``False`` will be returned.
-        
+
         :param order: The order that is being checked if it should be filtered
         or not.
-        :param upper_price: The price that sets the upper limit for the 
-        filtering. Any order with a ``stop_price`` or ``limit_price`` above 
-        this amount **WILL** be filtered out. 
-        :param lower_price: Same as ``upper_price`` but any order with a 
-        ``stop_price`` or ``limit_price`` below this amount will be 
+        :param upper_price: The price that sets the upper limit for the
+        filtering. Any order with a ``stop_price`` or ``limit_price`` above
+        this amount **WILL** be filtered out.
+        :param lower_price: Same as ``upper_price`` but any order with a
+        ``stop_price`` or ``limit_price`` below this amount will be
         filtered out.
-        :return: True if the order meets the criteria and the action should be 
+        :return: True if the order meets the criteria and the action should be
         taken on it.
         """
         if upper_price is None and lower_price is None:
@@ -407,11 +407,11 @@ class Blotter(object):
                          price: float,
                          operator: operator) -> bool:
         """
-        Filter based on stop and limit price. 
-        
-        :param order: 
-        :param price: 
-        :return: 
+        Filter based on stop and limit price.
+
+        :param order:
+        :param price:
+        :return:
         """
         try:
             stop_price = order.stop_price
@@ -433,7 +433,7 @@ class Blotter(object):
 
     def _do_order_cancel(self, order: AnyOrder, reason: str):
         """
-        Cancel any order that is passed to this method and log the appropriate 
+        Cancel any order that is passed to this method and log the appropriate
         message.
         """
         if order.filled > 0:
@@ -452,9 +452,9 @@ class Blotter(object):
 
     def hold_order(self, order):
         """
-        Place an order on hold. 
-        
-        :param order: 
+        Place an order on hold.
+
+        :param order:
         """
         self.orders[order.ticker][order.id].status = OrderStatus.HELD
 
@@ -467,7 +467,7 @@ class Blotter(object):
         Place a hold on all orders for a given ticker's ticker.
 
         :param ticker: The ticker of the ticker to cancel all orders for.
-        :param lower_price: (optional) Only hold orders 
+        :param lower_price: (optional) Only hold orders
         lower than this price.
         :param upper_price: (optional) Only hold orders greater than
         this price.
@@ -483,14 +483,14 @@ class Blotter(object):
 
     def reject_order(self, order_id, ticker=None, reason=''):
         """
-        Mark an order as rejected. A rejected order is functionally the same as 
-        a canceled order but an order being marked rejected is typically 
-        involuntary or unexpected and comes from the broker. 
-        Another case that an order will be rejected is if when the order 
+        Mark an order as rejected. A rejected order is functionally the same as
+        a canceled order but an order being marked rejected is typically
+        involuntary or unexpected and comes from the broker.
+        Another case that an order will be rejected is if when the order
         is being executed the owner does not have enough cash to fully execute it.
 
         :param str order_id: The id of the order being rejected.
-        :param str ticker: (optional) 
+        :param str ticker: (optional)
             The ticker associated with the order being rejected.
         :param str reason: (optional) The reason the order was rejected.
         :return:
@@ -504,13 +504,13 @@ class Blotter(object):
 
     def check_order_triggers(self):
         """
-        Check if any order has been triggered and if they have execute the 
+        Check if any order has been triggered and if they have execute the
         trade and then clean up closed orders.
         """
         for order_id, order in self:
             # should this be looking the close column?
             bar = self.bars.get_latest_bar(order.ticker)
-            dt = bar[pd_utils.DATE_COL]
+            dt = bar.name
             current_price = bar[pd_utils.ADJ_CLOSE_COL]
             # available_volume = bar[pd_utils.VOL_COL]
             # check_triggers returns a boolean indicating if it is triggered.
@@ -527,17 +527,17 @@ class Blotter(object):
         """
         Buy or sell an ticker from the ticker universe.
 
-        :param volume: 
-        :param order: 
+        :param volume:
+        :param order:
         :param float price_per_share: the cost per share in the trade
-        :param datetime trade_date: The date and time that the trade is 
+        :param datetime trade_date: The date and time that the trade is
             taking place.
-        :return: ``order`` if the order is no longer open so it can be removed 
-            from the ``portfolio`` order dict 
+        :return: ``order`` if the order is no longer open so it can be removed
+            from the ``portfolio`` order dict
             and ``None`` if the order is still open
         :rtype: Order or None
 
-        This method will add the ticker to the :py:class:``Portfolio`` ticker 
+        This method will add the ticker to the :py:class:``Portfolio`` ticker
         dict and update the db to reflect the trade.
 
         Valid **action** parameter values are:

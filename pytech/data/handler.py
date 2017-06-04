@@ -163,10 +163,13 @@ class YahooDataHandler(DataHandler):
             end = self.end_date
 
         df = web.DataReader(ticker, self.DATA_SOURCE, start, end)
+        # df = web.get_data_yahoo(ticker, start=start, end=end)
 
         # TODO: generalize this.
         df = pd_utils.rename_bar_cols(df)
-        self.lib.write(ticker, df, self.CHUNK_SIZE)
+        # set index to the date
+        df = df.set_index([pd_utils.DATE_COL])
+        self.lib.write(ticker, df, chunk_size=self.CHUNK_SIZE)
         return df
 
     @memoize
@@ -263,7 +266,7 @@ class YahooDataHandler(DataHandler):
                     f'Could not find {ticker} in latest_ticker_data')
             raise
         else:
-            return dt_utils.parse_date(bars_list[-1][pd_utils.DATE_COL])
+            return dt_utils.parse_date(bars_list[-1].name)
 
     def get_latest_bar_value(self, ticker, val_type, n=1):
         """

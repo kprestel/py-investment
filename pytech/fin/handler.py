@@ -105,7 +105,9 @@ class AbstractSignalHandler(metaclass=ABCMeta):
                     f'Cannot exit from a position that is not owned. '
                     f'Owned qty is 0 for ticker: {signal.ticker}.')
 
-        self.blotter.place_order(signal.ticker, qty, action, signal.order_type,
+        self.blotter.place_order(signal.ticker,
+                                 qty, action,
+                                 signal.order_type,
                                  signal.stop_price, signal.limit_price)
 
     def get_correlation_df(self, col: str = pd_utils.ADJ_CLOSE_COL,

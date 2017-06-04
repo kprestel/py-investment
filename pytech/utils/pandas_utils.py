@@ -9,6 +9,7 @@ LOW_COL = 'low'
 CLOSE_COL = 'close'
 ADJ_CLOSE_COL = 'adj_close'
 VOL_COL = 'volume'
+TICKER_COL = 'ticker'
 
 REQUIRED_COLS = frozenset({
     DATE_COL,
@@ -23,7 +24,7 @@ REQUIRED_COLS = frozenset({
 
 def rename_bar_cols(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Rename the default return columns from Yahoo to the format that the 
+    Rename the default return columns from Yahoo to the format that the
     DB expects.
 
     :param DataFrame df: The ``DataFrame`` that needs the columns renamed.

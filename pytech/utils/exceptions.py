@@ -1,6 +1,8 @@
 """
 Hold exceptions used throughout the package
 """
+from arctic.exceptions import NoDataFoundException
+from pandas_datareader._utils import RemoteDataError
 
 
 class PyInvestmentError(Exception):
@@ -25,9 +27,9 @@ class PyInvestmentError(Exception):
 
 class AssetExistsError(PyInvestmentError):
     """
-    Raised when a :class:``Asset`` is trying to be inserted into either 
-    :class:``AssetUniverse`` or :class:``Portfolio`` 
-    and already is in the table. In the event this exception is raised the 
+    Raised when a :class:``Asset`` is trying to be inserted into either
+    :class:``AssetUniverse`` or :class:``Portfolio``
+    and already is in the table. In the event this exception is raised the
     ticker should be updated to whatever the new attributes are.
     """
     msg = 'Asset with ticker: {ticker} already exists.'
@@ -35,7 +37,7 @@ class AssetExistsError(PyInvestmentError):
 
 class AssetNotInUniverseError(PyInvestmentError):
     """
-    Raised when an :class:``Asset`` that is not the 
+    Raised when an :class:``Asset`` that is not the
     the :class:``AssetUniverse`` is traded.
     """
     msg = 'Could not locate an ticker with the ticker: {ticker}.'
@@ -43,7 +45,7 @@ class AssetNotInUniverseError(PyInvestmentError):
 
 class NotAnAssetError(TypeError, PyInvestmentError):
     """
-    Raised when a subclass of :class:``Asset`` is required 
+    Raised when a subclass of :class:``Asset`` is required
     but another object is provided
     """
     msg = ('ticker must be an instance of a subclass of the Asset class. '
@@ -52,7 +54,7 @@ class NotAnAssetError(TypeError, PyInvestmentError):
 
 class NotAPortfolioError(TypeError, PyInvestmentError):
     """
-    Raised when a :class:``Portfolio`` is required 
+    Raised when a :class:``Portfolio`` is required
     but another object is provided
     """
     msg = ('portfolio must be an instance of the portfolio class. '
@@ -61,7 +63,7 @@ class NotAPortfolioError(TypeError, PyInvestmentError):
 
 class InsufficientFundsError(PyInvestmentError):
     """
-    Raised when a trade is attempted but there is not sufficient funds to 
+    Raised when a trade is attempted but there is not sufficient funds to
     execute the trade.
     """
     msg = 'Insufficient funds to execute trade for ticker: {ticker}'
@@ -95,7 +97,7 @@ class InvalidOrderTypeError(ValueError, PyInvestmentError):
 
 class InvalidOrderTypeParameters(ValueError, PyInvestmentError):
     """
-    Raised when an :class:``pytech.order.Order`` 
+    Raised when an :class:``pytech.order.Order``
     constructor args are not logically correct.
     """
     msg = ''
@@ -109,7 +111,7 @@ class InvalidOrderSubTypeError(ValueError, PyInvestmentError):
 
 class UntriggeredTradeError(PyInvestmentError):
     """
-    Raised when a :class:``pytech.order.Trade`` is made from an order 
+    Raised when a :class:``pytech.order.Trade`` is made from an order
     that has not been triggered
     """
     msg = 'The order being traded has not been triggered yet. order: {order}'
@@ -117,7 +119,7 @@ class UntriggeredTradeError(PyInvestmentError):
 
 class NotABlotterError(TypeError, PyInvestmentError):
     """
-    Raised when a :py:class:`pytech.blot.Blotter` is expected but a different 
+    Raised when a :py:class:`pytech.blot.Blotter` is expected but a different
     type is provided
     """
     msg = 'blot must be an instance of Blotter. {blot} was provided.'
@@ -146,3 +148,19 @@ class BadOrderParams(TypeError, PyInvestmentError):
 class TradeControlViolation(PyInvestmentError):
     msg = ('Order for {qty} shares of {ticker} at {dt} violates trading '
            'constraint {constraint}')
+
+
+class InvalidStoreError(TypeError, PyInvestmentError):
+    msg = 'Store required: {required}, Store provided: {provided}'
+
+
+class PyInvestmentKeyError(KeyError, PyInvestmentError):
+    """Wrapper around the KeyError"""
+
+
+class DataAccessError(NoDataFoundException, RemoteDataError,
+                      PyInvestmentError):
+    """
+    Raised when data is requested. Wraps Arctic and Pandas web reader
+    exceptions.
+    """
