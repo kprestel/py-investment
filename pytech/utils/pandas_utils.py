@@ -52,31 +52,3 @@ def roll(df: pd.DataFrame, window: int):
         yield pd.DataFrame(df.values[i:window + i, :],
                            df.index[i:i + window],
                            df.columns)
-    # roll_array = np.dstack(
-    #         [df.values[i:i + window, :] for i in
-    #          range(len(df.index) - window + 1)]).T
-    #
-    # da = xr.DataArray(roll_array, coords=[df.index[window - 1:],
-    #                                       df.columns,
-    #                                       pd.Index(range(window),
-    #                                                name='roll')])
-    # # print(p.T.groupby('roll'))
-    # # d = p.to_pandas().to_frame().unstack().T.groupby(level=0)
-    #
-    # panel = pd.Panel(roll_array,
-    #                  items=df.index[window - 1:],
-    #                  major_axis=df.columns,
-    #                  minor_axis=pd.Index(range(window),
-    #                                      name='roll'))
-    # # d = p.to_dataframe('test')
-    # # # i = [df.columns, pd.Index(range(window))]
-    # # # d = d.set_index(pd.MultiIndex.from_tuples(list(zip(*i))))
-    # # print(p)
-    # # print(d.index)
-    # #
-    # print(da.to_pandas().to_frame().unstack().index)
-    # print(panel.to_frame().unstack().index)
-    # # # print(d)
-    # # print(panel)
-    # # return da.to_pandas().to_frame().unstack().T.groupby(level=0)
-    # return panel.to_frame().unstack().T.groupby(level=0)

@@ -21,7 +21,7 @@ def start_date():
 
 @pytest.fixture()
 def end_date():
-    return '2017-01-01'
+    return '2017-06-09'
 
 
 # @pytest.fixture(autouse=True)

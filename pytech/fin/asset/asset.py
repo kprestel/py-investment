@@ -15,14 +15,15 @@ from pytech.utils.decorators import memoize
 def _calc_beta(df: pd.DataFrame) -> pd.Series:
     """
     Calculates beta given a :class:`pd.DataFrame`.
-    It is expected that the df has the stock returns are in column 0 and the
-    market returns in column 1.
+    It is expected that the df has the stock returns are in column 1 and the
+    market returns in column 0.
     """
-    x = df.values[:, [1]]
+    x = df.values[:, [0]]
     # noinspection PyUnresolvedReferences
     x = np.concatenate([np.ones_like(x), x], axis=1)
-    beta = np.linalg.pinv(x.T.dot(x)).dot(x.T).dot(df.values[:, 0:])
-    return pd.Series(beta[1][0])
+    beta = np.linalg.pinv(x.T.dot(x)).dot(x.T).dot(df.values[:, 1:])
+    return pd.Series(beta[1], df.columns[1:], name=df.index[-1])
+    # return pd.Series(beta[1][0])
 
 
 class Asset(metaclass=ABCMeta):
@@ -122,11 +123,18 @@ class Stock(Asset):
         return d[self.ticker]
 
     # noinspection PyTypeChecker
-    def calculate_beta(self, col=pd_utils.CLOSE_COL) -> pd.DataFrame:
-        stock_pct_change = self.data[col].pct_change()
-        mkt_pct_change = self.market.data[col].pct_change()
-        df = pd.concat([stock_pct_change, mkt_pct_change], axis=1)
-        rolling = pd_utils.roll(df, 12)
-        betas = pd.concat([_calc_beta(sdf) for sdf in pd_utils.roll(df, 12)],
-                          axis=1).T
+    def rolling_beta(self, col=pd_utils.CLOSE_COL,
+                     window: int = 180) -> pd.DataFrame:
+        """
+        Calculate the rolling beta over a given window.
+
+        :param col: The column to use to get the returns.
+        :param window: The window to use to calculate the rolling beta (days)
+        :return: A DataFrame with the betas.
+        """
+        stock_pct_change = pd.DataFrame(self.data[col].pct_change())
+        mkt_pct_change = pd.DataFrame(self.market.data[col].pct_change())
+        df = pd.concat([mkt_pct_change, stock_pct_change], axis=1)
+        betas = pd.concat([_calc_beta(sdf)
+                           for sdf in pd_utils.roll(df, window)], axis=1).T
         return betas
