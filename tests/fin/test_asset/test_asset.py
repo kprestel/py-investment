@@ -12,4 +12,4 @@ class TestStock(object):
     def test_calculate_beta(self, start_date, end_date):
         test = Stock('FB', start_date, end_date)
         beta = test.calculate_beta()
-        assert 0.8821683029866105 == pytest.approx(beta)
+        assert 0.850435931024109 == pytest.approx(beta.iloc[-1])

@@ -18,16 +18,11 @@ def _calc_beta(df: pd.DataFrame) -> pd.Series:
     It is expected that the df has the stock returns are in column 0 and the
     market returns in column 1.
     """
-    # numpy array
-    # df = df.to_pandas()
-    # print(df)
     x = df.values[:, [1]]
     # noinspection PyUnresolvedReferences
     x = np.concatenate([np.ones_like(x), x], axis=1)
     beta = np.linalg.pinv(x.T.dot(x)).dot(x.T).dot(df.values[:, 0:])
-    beta_series = pd.Series(beta[1], name='beta')
-    print(beta_series)
-    return beta[1][0]
+    return pd.Series(beta[1][0])
 
 
 class Asset(metaclass=ABCMeta):
@@ -126,13 +121,12 @@ class Stock(Asset):
                             self.start_date, self.end_date)
         return d[self.ticker]
 
-    def calculate_beta(self, col=pd_utils.CLOSE_COL):
+    # noinspection PyTypeChecker
+    def calculate_beta(self, col=pd_utils.CLOSE_COL) -> pd.DataFrame:
         stock_pct_change = self.data[col].pct_change()
         mkt_pct_change = self.market.data[col].pct_change()
         df = pd.concat([stock_pct_change, mkt_pct_change], axis=1)
         rolling = pd_utils.roll(df, 12)
-        # return rolling.apply(_calc_beta)
-        # noinspection PyTypeChecker
-        df.dropna(inplace=True)
-        beta = _calc_beta(df)
-        return beta
+        betas = pd.concat([_calc_beta(sdf) for sdf in pd_utils.roll(df, 12)],
+                          axis=1).T
+        return betas
