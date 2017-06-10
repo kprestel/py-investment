@@ -2,13 +2,29 @@ import datetime as dt
 import logging
 from abc import ABCMeta, abstractmethod
 
+import numpy as np
 import pandas as pd
 
 import pytech.data.reader as reader
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
-from pytech.utils.decorators import memoize
 from pytech.fin.market_data.market import Market
+from pytech.utils.decorators import memoize
+
+
+def _calc_beta(df: pd.DataFrame):
+    """
+    Calculates beta given a :class:`pd.DataFrame`.
+    It is expected that the df has the stock returns are in column 0 and the
+    market returns in column 1.
+    """
+    df.dropna(inplace=True)
+    np_array = df.values
+    stock = np_array[:, 0]
+    market = np_array[:, 1]
+    covar = np.cov(stock, market)
+    beta = covar[0, 1] / covar[1, 1]
+    return beta
 
 
 class Asset(metaclass=ABCMeta):
@@ -110,9 +126,7 @@ class Stock(Asset):
     def calculate_beta(self, col=pd_utils.CLOSE_COL):
         stock_pct_change = self.data[col].pct_change()
         mkt_pct_change = self.market.data[col].pct_change()
-
-        covar = mkt_pct_change.cov(stock_pct_change)
-        print(covar)
-        variance = self.market.data[col].var()
-        print(variance)
-        return covar / variance
+        df = pd.concat([stock_pct_change, mkt_pct_change], axis=1)
+        # noinspection PyTypeChecker
+        beta = _calc_beta(df)
+        return beta
