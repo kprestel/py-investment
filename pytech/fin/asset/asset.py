@@ -12,27 +12,22 @@ from pytech.fin.market_data.market import Market
 from pytech.utils.decorators import memoize
 
 
-def _calc_beta(df: pd.DataFrame):
+def _calc_beta(df: pd.DataFrame) -> pd.Series:
     """
     Calculates beta given a :class:`pd.DataFrame`.
     It is expected that the df has the stock returns are in column 0 and the
     market returns in column 1.
     """
-    df.dropna(inplace=True)
+    # numpy array
+    # df = df.to_pandas()
+    # print(df)
     x = df.values[:, [1]]
-    print(x)
+    # noinspection PyUnresolvedReferences
     x = np.concatenate([np.ones_like(x), x], axis=1)
-    print(x)
-    b = np.linalg.pinv(x.T.dot(x)).dot(x.T).dot(df.values[:, 0:])
-    print(b)
-    bs = pd.Series(b[1], df.columns[0:], name='beta')
-    np_array = df.values
-    stock = np_array[:, 0]
-    market = np_array[:, 1]
-    covar = np.cov(stock, market)
-    beta = covar[0, 1] / covar[1, 1]
-    print(bs)
-    return beta
+    beta = np.linalg.pinv(x.T.dot(x)).dot(x.T).dot(df.values[:, 0:])
+    beta_series = pd.Series(beta[1], name='beta')
+    print(beta_series)
+    return beta[1][0]
 
 
 class Asset(metaclass=ABCMeta):
@@ -135,7 +130,9 @@ class Stock(Asset):
         stock_pct_change = self.data[col].pct_change()
         mkt_pct_change = self.market.data[col].pct_change()
         df = pd.concat([stock_pct_change, mkt_pct_change], axis=1)
-        pd_utils.roll(df, 12)
+        rolling = pd_utils.roll(df, 12)
+        # return rolling.apply(_calc_beta)
         # noinspection PyTypeChecker
+        df.dropna(inplace=True)
         beta = _calc_beta(df)
         return beta

@@ -46,18 +46,14 @@ def rename_bar_cols(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def roll(df: pd.DataFrame, w: int):
+def roll(df: pd.DataFrame, window: int):
     df.dropna(inplace=True)
     roll_array = np.dstack(
-            [df.values[i:i + w, :] for i in range(len(df.index) - w + 1)]).T
-    p = xr.DataArray(roll_array, coords=[df.index[w - 1:],
+            [df.values[i:i + window, :] for i in
+             range(len(df.index) - window + 1)]).T
+    p = xr.DataArray(roll_array, coords=[df.index[window - 1:],
                                          df.columns,
-                                         pd.Index(range(w), name='roll')])
+                                         pd.Index(range(window), name='roll')])
     grouped = p.T.groupby('roll')
-    # d = p.to_pandas().to_frame().unstack().T.groupby(level=0)
-    #
-    # panel = pd.Panel(roll_array,
-    #                  items=df.index[w - 1:],
-    #                  major_axis=df.columns,
-    #                  minor_axis=pd.Index(range(w), name='roll'))
+    # grouped = p.T.rolling(date=1)
     return grouped
