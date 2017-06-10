@@ -19,11 +19,19 @@ def _calc_beta(df: pd.DataFrame):
     market returns in column 1.
     """
     df.dropna(inplace=True)
+    x = df.values[:, [1]]
+    print(x)
+    x = np.concatenate([np.ones_like(x), x], axis=1)
+    print(x)
+    b = np.linalg.pinv(x.T.dot(x)).dot(x.T).dot(df.values[:, 0:])
+    print(b)
+    bs = pd.Series(b[1], df.columns[0:], name='beta')
     np_array = df.values
     stock = np_array[:, 0]
     market = np_array[:, 1]
     covar = np.cov(stock, market)
     beta = covar[0, 1] / covar[1, 1]
+    print(bs)
     return beta
 
 
@@ -127,6 +135,7 @@ class Stock(Asset):
         stock_pct_change = self.data[col].pct_change()
         mkt_pct_change = self.market.data[col].pct_change()
         df = pd.concat([stock_pct_change, mkt_pct_change], axis=1)
+        pd_utils.roll(df, 12)
         # noinspection PyTypeChecker
         beta = _calc_beta(df)
         return beta

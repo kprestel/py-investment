@@ -1,4 +1,6 @@
+import numpy as np
 import pandas as pd
+import xarray as xr
 
 # constants for the expected column names of ALL data DataFrames
 
@@ -42,3 +44,20 @@ def rename_bar_cols(df: pd.DataFrame) -> pd.DataFrame:
         'Adj Close': ADJ_CLOSE_COL,
         'Volume': VOL_COL
     })
+
+
+def roll(df: pd.DataFrame, w: int):
+    df.dropna(inplace=True)
+    roll_array = np.dstack(
+            [df.values[i:i + w, :] for i in range(len(df.index) - w + 1)]).T
+    p = xr.DataArray(roll_array, coords=[df.index[w - 1:],
+                                         df.columns,
+                                         pd.Index(range(w), name='roll')])
+    grouped = p.T.groupby('roll')
+    # d = p.to_pandas().to_frame().unstack().T.groupby(level=0)
+    #
+    # panel = pd.Panel(roll_array,
+    #                  items=df.index[w - 1:],
+    #                  major_axis=df.columns,
+    #                  minor_axis=pd.Index(range(w), name='roll'))
+    return grouped

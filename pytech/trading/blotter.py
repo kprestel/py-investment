@@ -8,7 +8,6 @@ from typing import Dict, Union
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import TradeEvent
 from pytech.data.handler import DataHandler
-from pytech.db.finders import AssetFinder
 from pytech.fin.asset.asset import Asset
 from pytech.trading.commission import (
     AbstractCommissionModel,
@@ -32,7 +31,6 @@ class Blotter(object):
     """Holds and interacts with all orders."""
 
     # Type hints
-    asset_finder: AssetFinder
     orders: Dict[str, AnyOrder]
     events: queue.Queue
     current_dt = datetime
@@ -40,11 +38,9 @@ class Blotter(object):
 
     def __init__(self,
                  events,
-                 asset_finder=None,
                  commission_model=None,
                  max_shares=None):
         self.logger = logging.getLogger(__name__)
-        self.asset_finder = asset_finder
         # dict of all orders. key=ticker of the asset, value=the order.
         self.orders = {}
         # keep a record of all past trades.
@@ -83,19 +79,6 @@ class Blotter(object):
         else:
             raise TypeError(f'bars must be an instance of DataHandler. '
                             f'{type(data_handler)} was provided')
-
-    @property
-    def asset_finder(self):
-        return self._asset_finder
-
-    @asset_finder.setter
-    def asset_finder(self, asset_finder):
-        if asset_finder is not None and isinstance(asset_finder, AssetFinder):
-            self._asset_finder = asset_finder
-        elif asset_finder is None:
-            self._asset_finder = AssetFinder()
-        else:
-            raise NotAFinderError(finder=type(asset_finder))
 
     def __getitem__(self, key) -> Order:
         """Get an order from the orders dict."""
