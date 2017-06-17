@@ -250,3 +250,7 @@ def _concat_dfs(lower_df: pd.DataFrame,
         return pd.concat([df, upper_df, lower_df])
     else:
         return df
+
+
+def get_symbols():
+    yield LIB.list_symbols()

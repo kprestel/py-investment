@@ -129,7 +129,7 @@ class Stock(Asset):
         :return: A DataFrame with the betas.
         """
         stock_pct_change = pd.DataFrame(self.df[col].pct_change())
-        mkt_pct_change = pd.DataFrame(self.market.data[col].pct_change())
+        mkt_pct_change = pd.DataFrame(self.market.market[col].pct_change())
         df: pd.DataFrame = pd.concat([mkt_pct_change, stock_pct_change],
                                      axis=1)
         betas = pd.concat([_calc_beta(sdf)
