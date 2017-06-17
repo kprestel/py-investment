@@ -129,7 +129,8 @@ def trix(df: pd.DataFrame, period: int = 50,
     return emwa_three.pct_change(periods=1).dropna()
 
 
-def efficiency_ratio(df: pd.DataFrame, period: int = 10,
+def efficiency_ratio(df: pd.DataFrame,
+                     period: int = 10,
                      col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Kaufman Efficiency Indicator.
@@ -145,7 +146,8 @@ def efficiency_ratio(df: pd.DataFrame, period: int = 10,
     return pd.Series(change / vol).dropna()
 
 
-def kama(df: pd.DataFrame, period: int = 20,
+def kama(df: pd.DataFrame,
+         period: int = 20,
          col: str = pd_utils.CLOSE_COL,
          efficiency_ratio_periods: int = 10,
          ema_fast: int = 2,

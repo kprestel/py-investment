@@ -4,7 +4,7 @@ database to be accessed later.
 """
 import datetime as dt
 import logging
-from typing import Dict, Iterable, Union, Optional
+from typing import Dict, Iterable, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,7 @@ from pandas_datareader._utils import RemoteDataError
 
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
+from pytech.mongo.barstore import BarStore
 from pytech.mongo import ARCTIC_STORE
 from pytech.utils.decorators import write_chunks
 from pytech.utils.exceptions import DataAccessError
@@ -31,7 +32,7 @@ FRED = 'fred'
 FAMA_FRENCH = 'famafrench'
 
 LIB_NAME = 'pytech.bars'
-LIB = ARCTIC_STORE[LIB_NAME]  # Type: BarStore
+LIB: BarStore = ARCTIC_STORE[LIB_NAME]
 
 
 def get_data(tickers: ticker_input,

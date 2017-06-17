@@ -9,7 +9,9 @@ import pytech.data.reader as reader
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
 from pytech.fin.market_data.market import Market
-from pytech.utils.decorators import memoize
+from pytech.utils.decorators import memoize, write_chunks
+
+BETA_STORE = 'pytech.beta'
 
 
 def _calc_beta(df: pd.DataFrame) -> pd.Series:
@@ -23,7 +25,6 @@ def _calc_beta(df: pd.DataFrame) -> pd.Series:
     x = np.concatenate([np.ones_like(x), x], axis=1)
     beta = np.linalg.pinv(x.T.dot(x)).dot(x.T).dot(df.values[:, 1:])
     return pd.Series(beta[1], df.columns[1:], name=df.index[-1])
-    # return pd.Series(beta[1][0])
 
 
 class Asset(metaclass=ABCMeta):
@@ -61,25 +62,20 @@ class Asset(metaclass=ABCMeta):
                              end_date=self.end_date)
 
         if self.start_date >= self.end_date:
-            raise ValueError(
-                    'start_date must be older than end_date. '
-                    'start_date: {} end_date: {}'.format(
-                            str(start_date),
-                            str(end_date)))
+            raise ValueError('start_date must be older than end_date. '
+                             f'start_date: {start_date} end_date: {end_date}.')
 
     @property
-    def data(self):
+    def df(self):
         return self.get_data()
 
-    @data.setter
-    def data(self, ohlcv):
-        if not (isinstance(ohlcv, pd.DataFrame) or
-                    not isinstance(ohlcv, pd.Series)):
-            raise TypeError(
-                    'data must be a pandas DataFrame or TimeSeries. '
-                    '{} was provided'.format(type(ohlcv)))
-
-        self._ohlcv = ohlcv
+    @df.setter
+    def df(self, ohlcv):
+        if isinstance(ohlcv, pd.DataFrame) or isinstance(ohlcv, pd.Series):
+            self._ohlcv = ohlcv
+        else:
+            raise TypeError('data must be a pandas DataFrame or Series. '
+                            f'{type(ohlcv)} was provided.')
 
     @classmethod
     def get_subclass_dict(cls, subclass_dict=None):
@@ -122,9 +118,9 @@ class Stock(Asset):
                             self.start_date, self.end_date)
         return d[self.ticker]
 
-    # noinspection PyTypeChecker
+    @write_chunks(BETA_STORE)
     def rolling_beta(self, col=pd_utils.CLOSE_COL,
-                     window: int = 180) -> pd.DataFrame:
+                     window: int = 30) -> pd.DataFrame:
         """
         Calculate the rolling beta over a given window.
 
@@ -132,9 +128,11 @@ class Stock(Asset):
         :param window: The window to use to calculate the rolling beta (days)
         :return: A DataFrame with the betas.
         """
-        stock_pct_change = pd.DataFrame(self.data[col].pct_change())
+        stock_pct_change = pd.DataFrame(self.df[col].pct_change())
         mkt_pct_change = pd.DataFrame(self.market.data[col].pct_change())
-        df = pd.concat([mkt_pct_change, stock_pct_change], axis=1)
+        df: pd.DataFrame = pd.concat([mkt_pct_change, stock_pct_change],
+                                     axis=1)
         betas = pd.concat([_calc_beta(sdf)
                            for sdf in pd_utils.roll(df, window)], axis=1).T
+        betas['ticker'] = self.ticker
         return betas

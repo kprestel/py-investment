@@ -39,7 +39,8 @@ def write_chunks(lib_name, chunk_size='D', remove_ticker=True):
         * Y = Years
 
     :param remove_ticker: If true the ticker column will be deleted before the
-        :class:`pd.DataFrame` is returned, otherwise it will remain.
+        :class:`pd.DataFrame` is returned, otherwise it will remain which is
+        going to use more memory than required.
     :return: The output of the original function.
     """
     def wrapper(f):
@@ -58,6 +59,14 @@ def write_chunks(lib_name, chunk_size='D', remove_ticker=True):
             if remove_ticker:
                 # should this be saved?
                 df.drop(pd_utils.TICKER_COL, axis=1, inplace=True)
+
+            # this is a work around for a flaw in the the arctic DateChunker.
+            if 'date' not in df.columns or 'date' not in df.index.names:
+                if df.index.dtype == pd.to_datetime(['2017']).dtype:
+                    df.index.name = 'date'
+                else:
+                    raise ValueError('df must be datetime indexed or have a'
+                                     'column named "date".')
 
             if lib_name not in ARCTIC_STORE.list_libraries():
                 # create the lib if it does not already exist
