@@ -11,13 +11,10 @@ from pandas_datareader import data as web
 from scrapy.crawler import CrawlerRunner
 from scrapy.utils.log import configure_logging
 from scrapy.utils.project import get_project_settings
-from sqlalchemy.exc import OperationalError
 from twisted.internet import reactor
 
-import pytech.db.db_utils as db
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
-from pytech.base import Base
 from pytech.crawler.spiders.edgar import EdgarSpider
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)

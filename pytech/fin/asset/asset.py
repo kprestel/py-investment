@@ -118,6 +118,9 @@ class Stock(Asset):
                             self.start_date, self.end_date)
         return d[self.ticker]
 
+    def last_price(self, col=pd_utils.CLOSE_COL):
+        return self.df[col][-1]
+
     @write_chunks(BETA_STORE)
     def rolling_beta(self, col=pd_utils.CLOSE_COL,
                      window: int = 30) -> pd.DataFrame:
@@ -128,7 +131,7 @@ class Stock(Asset):
         :param window: The window to use to calculate the rolling beta (days)
         :return: A DataFrame with the betas.
         """
-        stock_pct_change = pd.DataFrame(self.df[col].pct_change())
+        stock_pct_change = pd.DataFrame(self.returns(col))
         mkt_pct_change = pd.DataFrame(self.market.market[col].pct_change())
         df: pd.DataFrame = pd.concat([mkt_pct_change, stock_pct_change],
                                      axis=1)
@@ -136,3 +139,20 @@ class Stock(Asset):
                            for sdf in pd_utils.roll(df, window)], axis=1).T
         betas['ticker'] = self.ticker
         return betas
+
+    def returns(self, col=pd_utils.CLOSE_COL) -> pd.Series:
+        return self.df[col].pct_change()
+
+    def avg_return(self, col=pd_utils.CLOSE_COL):
+        ret = self.returns(col).mean()[-1]
+        return ret * 252
+
+    def cagr(self, col=pd_utils.CLOSE_COL):
+        """Compounding annual growth rate."""
+        days = (self.df.index[-1] - self.df.index[0]).days
+        return ((self.df[col][-1] / self.df[col][1]) ** (365.0 / days)) - 1
+
+    def std(self, col=pd_utils.CLOSE_COL):
+        """Standard deviation of returns"""
+        return self.returns(col).std() * np.sqrt(252)
+

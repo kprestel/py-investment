@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 import pytech.trading.blotter as b
+from fin.asset.asset import Stock
 from pytech import TEST_DATA_DIR
 from pytech.data.handler import Bars
 from pytech.fin.portfolio import BasicPortfolio
@@ -100,3 +101,13 @@ def basic_portfolio(events, yahoo_data_handler, start_date, populated_blotter):
 def basic_signal_handler(basic_portfolio):
     """Return a BasicSignalHandler to be used in testing."""
     return BasicSignalHandler(basic_portfolio)
+
+
+@pytest.fixture()
+def aapl(start_date, end_date):
+    return Stock('AAPL', start_date, end_date)
+
+
+@pytest.fixture()
+def fb(start_date, end_date):
+    return Stock('FB', start_date, end_date)
