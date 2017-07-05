@@ -80,11 +80,14 @@ class Asset(metaclass=ABCMeta):
     @classmethod
     def get_subclass_dict(cls, subclass_dict=None):
         """
-        Get a dictionary of subclasses for :class:`Asset` where the key is the string name of the class and the value
-        is the actual class reference.
+        Get a dictionary of subclasses for :class:`Asset` where the key is
+        the string name of the class and the value is the actual class
+        reference.
 
-        :param dict subclass_dict: This is used for recursion to maintain the subclass_dict through each call.
-        :return: A dictionary where the key is the string name of the subclass and the value is the reference to the class
+        :param dict subclass_dict: This is used for recursion to maintain the
+            subclass_dict through each call.
+        :return: A dictionary where the key is the string name of the
+            subclass and the value is the reference to the class
         :rtype: dict
         """
 
@@ -122,7 +125,8 @@ class Stock(Asset):
         return self.df[col][-1]
 
     @write_chunks(BETA_STORE)
-    def rolling_beta(self, col=pd_utils.CLOSE_COL,
+    def rolling_beta(self,
+                     col=pd_utils.CLOSE_COL,
                      window: int = 30) -> pd.DataFrame:
         """
         Calculate the rolling beta over a given window.
@@ -153,6 +157,5 @@ class Stock(Asset):
         return ((self.df[col][-1] / self.df[col][1]) ** (365.0 / days)) - 1
 
     def std(self, col=pd_utils.CLOSE_COL):
-        """Standard deviation of returns"""
+        """Standard deviation of returns, *annualized*."""
         return self.returns(col).std() * np.sqrt(252)
-

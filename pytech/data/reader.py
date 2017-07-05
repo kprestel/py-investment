@@ -254,3 +254,16 @@ def _concat_dfs(lower_df: pd.DataFrame,
 
 def get_symbols():
     yield LIB.list_symbols()
+
+
+def load_from_csv(path: str,
+                  start: dt.datetime = None,
+                  end: dt.datetime = None) -> None:
+    """
+    Load a list of tickers from a CSV, and download the data for the
+    requested period.
+
+    :param path: The path to the CSV file.
+    :param start: The start date to use for the data download.
+    :param end: The end date to use for the data download.
+    """

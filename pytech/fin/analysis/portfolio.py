@@ -33,7 +33,7 @@ def solve_frontier(returns: np.array,
     assets = len(returns)
 
     for r in np.linespace(returns.min, returns.max):
-        # equal weights
+        # equal weights)
         weights = np.ones([assets]) / assets
         b_ = [(0, 1) for _ in range(assets)]
         c_ = ({'type': 'eq', 'func': lambda weights: sum(weights) - 1.0})
@@ -68,9 +68,12 @@ def solve_weights(returns: np.array,
     base_weights = np.ones([assets]) / assets
     b_ = [(-1, 1) for _ in range(assets)]
     c_ = ({'type': 'eq', 'func': lambda weights: sum(weights) - 1.0})
-    optimized = minimize(fitness, base_weights, (returns, covar, rf),
+    optimized = minimize(fitness,
+                         base_weights,
+                         (returns, covar, rf),
                          method='SLSQP',
-                         constraints=c_, bounds=b_)
+                         constraints=c_,
+                         bounds=b_)
     if not optimized.success:
         raise BaseException(optimized.message)
     else:
