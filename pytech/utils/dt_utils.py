@@ -3,6 +3,8 @@ from typing import Tuple, Union
 
 import pandas as pd
 from dateutil import tz
+import pytz
+import pandas_market_calendars as mcal
 from pandas.core.dtypes.inference import is_number
 from pandas.tslib import Timestamp
 
@@ -10,6 +12,7 @@ from pytech.utils.decorators import memoize
 
 date_type = Union[dt.date, dt.datetime]
 
+NYSE = mcal.get_calendar('NYSE')
 
 @memoize
 def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
@@ -23,11 +26,11 @@ def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
     if isinstance(date_to_parse, dt.date) and not isinstance(date_to_parse,
                                                              dt.datetime):
         raise TypeError(
-                'date must be a datetime object. {} was provided'.format(
-                        type(date_to_parse)))
+                f'date must be a datetime object. {type(date_to_parse)} '
+                f'was provided')
     elif isinstance(date_to_parse, Timestamp):
         if date_to_parse.tz is None:
-            return date_to_parse.tz_localize('UTC')
+            return date_to_parse.replace(tzinfo=pytz.UTC)
         else:
             return date_to_parse
     elif isinstance(date_to_parse, dt.datetime):
@@ -63,29 +66,32 @@ def sanitize_dates(start, end) -> Tuple[dt.datetime, dt.datetime]:
     if is_number(start):
         # treat ints as a year
         start = dt.datetime(start, 1, 1)
-    start = pd.to_datetime(start)
+    start = pd.to_datetime(start, utc=True)
 
     if is_number(end):
         end = dt.datetime(end, 1, 1)
-    end = pd.to_datetime(end)
+    end = pd.to_datetime(end, utc=True)
 
     if start is None:
-        start = dt.datetime(2010, 1, 1)
+        start = dt.datetime(2010, 1, 1, tzinfo=pytz.UTC)
 
     if end is None:
-        end = prev_weekday(dt.datetime.today())
+        end = dt.datetime.today()
+        end = end.replace(tzinfo=pytz.UTC)
+        end = prev_weekday(end)
 
-    return parse_date(start), parse_date(end)
+    # return parse_date(start), parse_date(end)
+    return start, end
 
 
-def is_weekday(a_dt: date_type):
+def is_trade_day(a_dt: date_type):
     """
     True if `dt` is a weekday.
 
     Monday = 1
     Sunday = 7
     """
-    return a_dt.isoweekday() < 6
+    return a_dt.isoweekday() < 6 and a_dt.date() not in NYSE.holidays().holidays
 
 
 def prev_weekday(a_dt: date_type):
@@ -94,7 +100,7 @@ def prev_weekday(a_dt: date_type):
 
     If the given date is a weekday it will be returned.
     """
-    if is_weekday(a_dt):
+    if is_trade_day(a_dt):
         return a_dt
 
     while a_dt.isoweekday() > 5:

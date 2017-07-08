@@ -1,5 +1,8 @@
 import uuid
 import logging
+from typing import Iterable
+
+import collections
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +13,7 @@ def make_id():
 
 def iterable_to_set(iterable):
     """
-    Take an iterable and turn it into a set to ensure that there are no 
+    Take an iterable and turn it into a set to ensure that there are no
     duplicate entries.
 
     :param iterable: Any iterable object who's contents is hashable.
@@ -19,6 +22,13 @@ def iterable_to_set(iterable):
     """
     try:
         return set(iterable)
-    except TypeError as e:
-        logger.exception('iterable must be an iterable with hashable contents!')
-        raise e
+    except TypeError:
+        logger.exception('iterable must be an iterable with hashable '
+                         'contents!')
+        raise
+
+
+def tail(n: int, iterable: Iterable):
+    """Return an iterator over the last `n` items"""
+    return iter(collections.deque(iterable, maxlen=n))
+

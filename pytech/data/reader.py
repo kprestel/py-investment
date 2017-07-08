@@ -152,12 +152,13 @@ def _from_web(ticker: str,
               **kwargs) -> Optional[pd.DataFrame]:
     """Retrieve data from a web source"""
     try:
-        logger.info(f'Making call to {source}')
-        logger.debug(f'Call start date: {start}, end date: {end}')
+        logger.info(f'Making call to {source}. Start date: {start},'
+                    f'End date: {end}')
         df = pdr.DataReader(ticker, data_source=source, start=start,
                             end=end, **kwargs)
         if df.empty:
-            return None
+            logger.warning('df retrieved was empty.')
+            return df
     except RemoteDataError as e:
         logger.warning(f'Error occurred getting data from {source}')
         raise DataAccessError from e
@@ -214,13 +215,13 @@ def _from_db(ticker: str,
 
     # check that all the requested data is present
     # TODO: deal with days that it is expected that data shouldn't exist.
-    if db_start > start and dt_utils.is_weekday(start):
+    if db_start > start and dt_utils.is_trade_day(start):
         # db has less data than requested
         lower_df = _from_web(ticker, source, start, db_start - BDay())
     else:
         lower_df = None
 
-    if db_end.date() < end.date() and dt_utils.is_weekday(end):
+    if db_end.date() < end.date() and dt_utils.is_trade_day(end):
         # db doesn't have as much data than requested
         upper_df = _from_web(ticker, source, start=db_end, end=end)
     else:
@@ -231,7 +232,7 @@ def _from_db(ticker: str,
 
 def _concat_dfs(lower_df: pd.DataFrame,
                 upper_df: pd.DataFrame,
-                df: pd.DataFrame):
+                df: pd.DataFrame) -> pd.DataFrame:
     """
     Helper method to concat the missing data frames, where `df` is the original
     df.
@@ -241,19 +242,20 @@ def _concat_dfs(lower_df: pd.DataFrame,
         return df
     elif lower_df is not None and upper_df is None:
         # missing only lower data
-        return pd.concat([df, lower_df])
+        return pd.DataFrame(pd.concat([df, lower_df]))
     elif lower_df is None and upper_df is not None:
         # missing only upper data
-        return pd.concat([df, upper_df])
+        return pd.DataFrame(pd.concat([df, upper_df]))
     elif lower_df is not None and upper_df is not None:
         # both missing
-        return pd.concat([df, upper_df, lower_df])
+        return pd.DataFrame(pd.concat([df, upper_df, lower_df]))
     else:
         return df
 
 
 def get_symbols():
-    yield LIB.list_symbols()
+    for s in LIB.list_symbols():
+        yield s
 
 
 def load_from_csv(path: str,

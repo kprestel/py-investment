@@ -24,7 +24,7 @@ def test_sanitize_dates(start, end, start_expected, end_expected):
     (dt.datetime(2017, 1, 18), True)
 ])
 def test_is_weekday(adate, expected):
-    assert dt_utils.is_weekday(adate) == expected
+    assert dt_utils.is_trade_day(adate) == expected
 
 
 @pytest.mark.parametrize('adate,expected', [
