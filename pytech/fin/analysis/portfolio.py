@@ -41,8 +41,8 @@ class EfficientFrontier(object):
 
     def __call__(self):
         expected_returns, covars = self._returns_covar()
-        self.logger.debug(f'returns: {expected_returns},\n'
-                          f'covars: \n{covars}')
+        # self.logger.debug(f'returns: {expected_returns},\n'
+        #                   f'covars: \n{covars}')
         return self._optimize_frontier(expected_returns, covars)
 
     def _load_data(self) -> List[float]:
@@ -56,7 +56,7 @@ class EfficientFrontier(object):
 
         # noinspection PyTypeChecker
         for t in self.tickers:
-            df = reader.get_data(t)[t]
+            df = reader.get_data(t, columns=[pd_utils.CLOSE_COL])
             prices = list(df[pd_utils.CLOSE_COL])
             num_prices = len(prices)
             if max_prices is None or num_prices < max_prices:
@@ -224,3 +224,8 @@ def _var(weights, covar):
 
 def _mean_var(weights, returns, covar):
     return _mean(weights, returns), _var(weights, covar)
+
+
+if __name__ == '__main__':
+    f = EfficientFrontier()
+    r = f()

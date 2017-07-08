@@ -16,8 +16,8 @@ from pandas_datareader._utils import RemoteDataError
 
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
-from pytech.mongo.barstore import BarStore
 from pytech.mongo import ARCTIC_STORE
+from pytech.mongo.barstore import BarStore
 from pytech.utils.decorators import write_chunks
 from pytech.utils.exceptions import DataAccessError
 
@@ -41,7 +41,7 @@ def get_data(tickers: ticker_input,
              end: dt.datetime = None,
              check_db: bool = True,
              filter_data: bool = True,
-             **kwargs) -> Dict[str, pd.DataFrame]:
+             **kwargs) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
     """
     Get data and create a :class:`pd.DataFrame` from it.
 
@@ -69,10 +69,8 @@ def get_data(tickers: ticker_input,
 
     if isinstance(tickers, str):
         try:
-            return {
-                tickers: _single_get_data(tickers, source, start, end,
-                                          check_db, filter_data, **kwargs)
-            }
+            return _single_get_data(tickers, source, start, end,
+                                    check_db, filter_data, **kwargs)
         except DataAccessError as e:
             raise DataAccessError(
                     f'Could not get data for ticker: {tickers}') from e
@@ -121,7 +119,6 @@ def _mult_tickers_get_data(tickers: Iterable,
     return stocks
 
 
-@write_chunks('pytech.bars')
 def _single_get_data(ticker: str,
                      source: str,
                      start: dt.datetime,
@@ -145,6 +142,7 @@ def _single_get_data(ticker: str,
         raise DataAccessError from e
 
 
+@write_chunks('pytech.bars')
 def _from_web(ticker: str,
               source: str,
               start: dt.datetime,
@@ -207,8 +205,6 @@ def _from_db(ticker: str,
         raise DataAccessError(f'Error reading DB for ticker: {ticker}') from e
 
     logger.debug(f'Found ticker: {ticker} in DB.')
-
-    df[pd_utils.TICKER_COL] = ticker
 
     db_start = dt_utils.parse_date(df.index.min(axis=1))
     db_end = dt_utils.parse_date(df.index.max(axis=1))

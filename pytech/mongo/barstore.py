@@ -22,7 +22,7 @@ class BarStore(ChunkStore):
         super().__init__(arctic_lib)
         self.logger.info(f'BarStore collection name: {arctic_lib.get_name()}')
 
-    @mongo_retry
+    # @mongo_retry
     def read(self, symbol: str,
              chunk_range: pd.DatetimeIndex or DateRange = None,
              filter_data=True,
@@ -83,7 +83,7 @@ class BarStore(ChunkStore):
         """
         return super().delete(symbol, chunk_range, audit)
 
-    @mongo_retry
+    # @mongo_retry
     def update(self, symbol: str,
                item: pd.DataFrame or pd.Series,
                metadata: Any = None,
