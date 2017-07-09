@@ -22,6 +22,8 @@ class AutoNumber(Enum):
             return None
         elif isinstance(value, cls):
             return value
+        elif hasattr(value, 'name'):
+            value = getattr(value, 'name')
         for name, member in cls.__members__.items():
             if member.name == value.upper():
                 return member

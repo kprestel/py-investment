@@ -17,12 +17,21 @@ class EfficientFrontier(object):
     prices: List[float]
     rf: float
 
-    def __init__(self, tickers: List[str] = None, rf: float = None):
+    def __init__(self, tickers: List[str] = None,
+                 rf: float = None,
+                 asset_lib_name: str = 'pytech.bars',
+                 market_lib_name: str = 'pytech.market'):
         self.logger = logging.getLogger(__name__)
+        self.asset_lib_name = asset_lib_name
+        self.market_lib_name = market_lib_name
+        self.market_reader = reader.BarReader(self.market_lib_name)
+        self.asset_reader = reader.BarReader(self.asset_lib_name)
+
         if tickers is None:
             self.tickers = []
         else:
             self.tickers = tickers
+
         self.prices = self._load_data()
         # TODO make this a property and set it if its None
         self.rf = rf
@@ -48,7 +57,7 @@ class EfficientFrontier(object):
     def _load_data(self) -> List[float]:
         """Loads the data and updates `tickers` if needed."""
         if not self.tickers:
-            for x in reader.get_symbols():
+            for x in self.asset_reader.get_symbols():
                 self.tickers.append(x)
 
         tmp_prices_out = []
@@ -56,7 +65,7 @@ class EfficientFrontier(object):
 
         # noinspection PyTypeChecker
         for t in self.tickers:
-            df = reader.get_data(t, columns=[pd_utils.CLOSE_COL])
+            df = self.asset_reader.get_data(t, columns=[pd_utils.CLOSE_COL])
             prices = list(df[pd_utils.CLOSE_COL])
             num_prices = len(prices)
             if max_prices is None or num_prices < max_prices:
@@ -184,9 +193,7 @@ class _FrontierResult(object):
         return (f'Weights: \n{df.T}\n'
                 f'Covariances: \n{c}')
 
-    def plot(self, asset_color: str = 'black',
-             frontier_color: str = 'black',
-             frontier_label: str = 'Frontier'):
+    def plot(self, frontier_label: str = 'Frontier'):
         plt.style.use('ggplot')
         plt.scatter([self.covar[i, i] ** .5
                      for i in range(len(self.tickers))],

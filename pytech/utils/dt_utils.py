@@ -8,13 +8,12 @@ import pandas_market_calendars as mcal
 from pandas.core.dtypes.inference import is_number
 from pandas.tslib import Timestamp
 
-from pytech.utils.decorators import memoize
 
 date_type = Union[dt.date, dt.datetime]
 
 NYSE = mcal.get_calendar('NYSE')
 
-@memoize
+
 def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
     """
     Converts strings or datetime objects to UTC timestamps.

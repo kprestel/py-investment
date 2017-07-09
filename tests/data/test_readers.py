@@ -1,10 +1,11 @@
 # noinspection PyUnresolvedReferences
 import pytest
-import pytech.data.reader as reader
-import datetime as dt
+
+from data.reader import BarReader
 
 
 def test_get_data():
+    reader = BarReader('pytech.bars')
     test = reader.get_data('GOOG')
     for k, v in test.items():
         print(f'k:{k}, v:{v}')

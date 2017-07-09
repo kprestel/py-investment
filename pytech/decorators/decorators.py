@@ -4,9 +4,9 @@ from arctic import arctic
 
 from arctic.chunkstore.chunkstore import ChunkStore
 
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils as utils
 from pytech.mongo import ARCTIC_STORE, BarStore
-from pytech.utils.exceptions import InvalidStoreError, PyInvestmentKeyError
+from utils.exceptions import InvalidStoreError, PyInvestmentKeyError
 from pandas.tseries.offsets import BDay
 
 
@@ -49,16 +49,16 @@ def write_chunks(lib_name, chunk_size='D', remove_ticker=True):
             df = f(*args, **kwargs)
             try:
                 # TODO: make this use the fast scalar getter
-                ticker = df[pd_utils.TICKER_COL][0]
+                ticker = df[utils.TICKER_COL][0]
                 # ticker = df.at[0, pd_utils.TICKER_COL]
             except KeyError:
                 raise PyInvestmentKeyError(
                         'Decorated functions are required to add a column '
-                        f'{pd_utils.TICKER_COL} that contains the ticker.')
+                        f'{utils.TICKER_COL} that contains the ticker.')
 
             if remove_ticker:
                 # should this be saved?
-                df.drop(pd_utils.TICKER_COL, axis=1, inplace=True)
+                df.drop(utils.TICKER_COL, axis=1, inplace=True)
 
             # this is a work around for a flaw in the the arctic DateChunker.
             if 'date' not in df.columns or 'date' not in df.index.names:

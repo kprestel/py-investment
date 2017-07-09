@@ -1,9 +1,8 @@
 import datetime as dt
-
 import itertools
 
-import pytech.data.reader as reader
-import pytech.utils.dt_utils as dt_utils
+import pytech.utils as utils
+from pytech.data.reader import BarReader
 
 
 class Market(object):
@@ -16,17 +15,22 @@ class Market(object):
     def __init__(self, ticker: str = 'SPY',
                  source: str = 'google',
                  start_date: dt.datetime = None,
-                 end_date: dt.datetime = None):
+                 end_date: dt.datetime = None,
+                 lib_name: str = 'pytech.market'):
         if self._shared_state is None:
             self._shared_state = self.__dict__
-            start_date, end_date = dt_utils.sanitize_dates(start_date,
-                                                           end_date)
+            start_date, end_date = utils.dt_utils.sanitize_dates(start_date,
+                                                                 end_date)
             self.ticker = ticker
             self.start_date = start_date
             self.end_date = end_date
-            self.market = reader.get_data(self.ticker, source,
-                                          self.start_date,
-                                          self.end_date)[ticker]
+            self.lib_name = lib_name
+            self.reader = BarReader(lib_name)
+            self.source = source
+            self.market = self.reader.get_data(self.ticker,
+                                               self.source,
+                                               self.start_date,
+                                               self.end_date)
         else:
             self.__dict__ = self._shared_state
 
@@ -38,14 +42,15 @@ class BondBasket(object):
     LIBOR = ['USDONTD156N', 'USD1MTD156N', 'USD1WKD156N',
              'USD3MTD156N', 'USD6MTD156N', 'USD12MTD156N']
     ALL = itertools.chain(US_TBONDS, US_TBILLS, LIBOR)
+    SOURCE = 'fred'
     _shared_state = None
 
     def __init__(self, start_date: dt.datetime = None,
                  end_date: dt.datetime = None):
         if self._shared_state is None:
             self._shared_state = self.__dict__
-            start_date, end_date = dt_utils.sanitize_dates(start_date,
-                                                           end_date)
+            start_date, end_date = utils.dt_utils.sanitize_dates(start_date,
+                                                                 end_date)
             self.start_date = start_date
             self.end_date = end_date
 

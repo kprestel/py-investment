@@ -4,7 +4,7 @@ database to be accessed later.
 """
 import datetime as dt
 import logging
-from typing import Dict, Iterable, Optional, Union
+from typing import Dict, Iterable, Union
 
 import numpy as np
 import pandas as pd
@@ -16,9 +16,9 @@ from pandas_datareader._utils import RemoteDataError
 
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
+from decorators.decorators import write_chunks
 from pytech.mongo import ARCTIC_STORE
 from pytech.mongo.barstore import BarStore
-from pytech.utils.decorators import write_chunks
 from pytech.utils.exceptions import DataAccessError
 
 logger = logging.getLogger(__name__)
@@ -35,195 +35,218 @@ LIB_NAME = 'pytech.bars'
 LIB: BarStore = ARCTIC_STORE[LIB_NAME]
 
 
-def get_data(tickers: ticker_input,
-             source: str = GOOGLE,
-             start: dt.datetime = None,
-             end: dt.datetime = None,
-             check_db: bool = True,
-             filter_data: bool = True,
-             **kwargs) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
-    """
-    Get data and create a :class:`pd.DataFrame` from it.
+class BarReader(object):
+    """Read and write data from the DB and the web."""
 
-    :param tickers: The ticker(s) that data will be retrieved for.
-    :param source: The data source.  Options:
+    def __init__(self, lib_name: str):
+        self.lib_name = lib_name
 
-        * yahoo
-        * google
-        * fred
-        * famafrench
-        * db
-        * anything else pandas_datareader supports
+        if lib_name not in ARCTIC_STORE.list_libraries():
+            # create the lib if it does not already exist
+            ARCTIC_STORE.initialize_library(lib_name,
+                                            BarStore.LIBRARY_TYPE)
 
-    :param start: Left boundary for range.
-        defaults to 1/1/2010.
-    :param end: Right boundary for range.
-        defaults to today.
-    :param check_db: Check the database first before making network call.
-    :param filter_data: Filter data from the DB. Only used if `check_db` is
-        `True`.
-    :param kwargs: kwargs are passed blindly to `pandas_datareader`
-    :return: A `dict[ticker, DataFrame]`.
-    """
-    start, end = dt_utils.sanitize_dates(start, end)
+        self.lib = ARCTIC_STORE[self.lib_name]
 
-    if isinstance(tickers, str):
-        try:
-            return _single_get_data(tickers, source, start, end,
-                                    check_db, filter_data, **kwargs)
-        except DataAccessError as e:
-            raise DataAccessError(
-                    f'Could not get data for ticker: {tickers}') from e
-    else:
-        if isinstance(tickers, pd.DataFrame):
-            input_df = tickers
-            tickers = tickers.index
-        try:
-            return _mult_tickers_get_data(tickers, source, start, end,
-                                          check_db, filter_data, **kwargs)
-        except DataAccessError as e:
-            raise e
+    def get_data(self,
+                 tickers: ticker_input,
+                 source: str = GOOGLE,
+                 start: dt.datetime = None,
+                 end: dt.datetime = None,
+                 check_db: bool = True,
+                 filter_data: bool = True,
+                 **kwargs) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
+        """
+        Get data and create a :class:`pd.DataFrame` from it.
 
+        :param tickers: The ticker(s) that data will be retrieved for.
+        :param source: The data source.  Options:
 
-def _mult_tickers_get_data(tickers: Iterable,
-                           source: str,
-                           start: dt.datetime,
-                           end: dt.datetime,
-                           check_db: bool,
-                           filter_data: bool,
-                           **kwargs) -> Dict[str, pd.DataFrame]:
-    """Download data for multiple tickers."""
-    stocks = {}
-    failed = []
-    passed = []
+            * yahoo
+            * google
+            * fred
+            * famafrench
+            * db
+            * anything else pandas_datareader supports
 
-    for t in tickers:
-        try:
-            stocks[t] = _single_get_data(t, source, start, end,
-                                         check_db, filter_data, **kwargs)
-            passed.append(t)
-        except DataAccessError:
-            failed.append(t)
+        :param start: Left boundary for range.
+            defaults to 1/1/2010.
+        :param end: Right boundary for range.
+            defaults to today.
+        :param check_db: Check the database first before making network call.
+        :param filter_data: Filter data from the DB. Only used if `check_db` is
+            `True`.
+        :param kwargs: kwargs are passed blindly to `pandas_datareader`
+        :return: A `dict[ticker, DataFrame]`.
+        """
+        start, end = dt_utils.sanitize_dates(start, end)
 
-    if len(passed) == 0:
-        raise DataAccessError('No data could be retrieved.')
-
-    if len(stocks) > 0 and len(failed) > 0 and len(passed) > 0:
-        df_na = stocks[passed[0]].copy()
-        df_na[:] = np.nan
-        for t in failed:
-            logger.warning(f'No data could be retrieved for ticker: {t}, '
-                           f'replacing with NaN.')
-            stocks[t] = df_na
-
-    return stocks
-
-
-def _single_get_data(ticker: str,
-                     source: str,
-                     start: dt.datetime,
-                     end: dt.datetime,
-                     check_db: bool,
-                     filter_data: bool,
-                     **kwargs):
-    """Do the get data method for a single ticker."""
-    if check_db:
-        try:
-            return _from_db(ticker, source, start, end, filter_data, **kwargs)
-        except DataAccessError:
-            # don't raise, try to make the network call
-            logger.info(f'Ticker: {ticker} not found in DB.')
-
-    try:
-        return _from_web(ticker, source, start, end, **kwargs)
-    except DataAccessError as e:
-        logger.warning(
-                f'Error getting data from {source} for ticker: {ticker}')
-        raise DataAccessError from e
-
-
-@write_chunks('pytech.bars')
-def _from_web(ticker: str,
-              source: str,
-              start: dt.datetime,
-              end: dt.datetime,
-              **kwargs) -> Optional[pd.DataFrame]:
-    """Retrieve data from a web source"""
-    try:
-        logger.info(f'Making call to {source}. Start date: {start},'
-                    f'End date: {end}')
-        df = pdr.DataReader(ticker, data_source=source, start=start,
-                            end=end, **kwargs)
-        if df.empty:
-            logger.warning('df retrieved was empty.')
-            return df
-    except RemoteDataError as e:
-        logger.warning(f'Error occurred getting data from {source}')
-        raise DataAccessError from e
-    else:
-        df = pd_utils.rename_bar_cols(df)
-        df[pd_utils.TICKER_COL] = ticker
-
-        if source == YAHOO:
-            # yahoo doesn't set the index :(
-            df = df.set_index([pd_utils.DATE_COL])
+        if isinstance(tickers, str):
+            try:
+                return self._single_get_data(tickers, source, start, end,
+                                             check_db, filter_data, **kwargs)
+            except DataAccessError as e:
+                raise DataAccessError(
+                        f'Could not get data for ticker: {tickers}') from e
         else:
-            df.index.name = pd_utils.DATE_COL
+            if isinstance(tickers, pd.DataFrame):
+                tickers = tickers.index
+            try:
+                return self._mult_tickers_get_data(tickers, source, start, end,
+                                                   check_db, filter_data,
+                                                   **kwargs)
+            except DataAccessError as e:
+                raise e
 
-        return df
+    def _mult_tickers_get_data(self,
+                               tickers: Iterable,
+                               source: str,
+                               start: dt.datetime,
+                               end: dt.datetime,
+                               check_db: bool,
+                               filter_data: bool,
+                               **kwargs) -> Dict[str, pd.DataFrame]:
+        """Download data for multiple tickers."""
+        stocks = {}
+        failed = []
+        passed = []
 
+        for t in tickers:
+            try:
+                stocks[t] = self._single_get_data(t, source, start, end,
+                                                  check_db, filter_data,
+                                                  **kwargs)
+                passed.append(t)
+            except DataAccessError:
+                failed.append(t)
 
-def _from_db(ticker: str,
-             source: str,
-             start: dt.datetime,
-             end: dt.datetime,
-             filter_data: bool = True,
-             **kwargs) -> pd.DataFrame:
-    """
-    Try to read data from the DB.
+        if len(passed) == 0:
+            raise DataAccessError('No data could be retrieved.')
 
-    :param ticker: The ticker to retrieve from the DB.
-    :param source: Only used if there there is not enough data in the DB.
-    :param start: The start of the range.
-    :param end: The end of the range.
-    :param filter_data: Passed to the read method.
-    :param kwargs: Passed to the read method.
-    :return: The data frame.
-    :raises: NoDataFoundException if no data is found for the given ticker.
-    """
-    chunk_range = DateRange(start=start, end=end)
+        if len(stocks) > 0 and len(failed) > 0 and len(passed) > 0:
+            df_na = stocks[passed[0]].copy()
+            df_na[:] = np.nan
+            for t in failed:
+                logger.warning(f'No data could be retrieved for ticker: {t}, '
+                               f'replacing with NaN.')
+                stocks[t] = df_na
 
-    try:
-        logger.info(f'Checking DB for ticker: {ticker}')
-        df = LIB.read(ticker, chunk_range=chunk_range,
-                      filter_data=filter_data, **kwargs)
-    except NoDataFoundException as e:
-        raise DataAccessError(f'No data in DB for ticker: {ticker}') from e
-    except KeyError as e:
-        # TODO: open a bug report against arctic...
-        logger.warning('KeyError thrown by Arctic...')
-        raise DataAccessError(f'Error reading DB for ticker: {ticker}') from e
+        return stocks
 
-    logger.debug(f'Found ticker: {ticker} in DB.')
+    def _single_get_data(self,
+                         ticker: str,
+                         source: str,
+                         start: dt.datetime,
+                         end: dt.datetime,
+                         check_db: bool,
+                         filter_data: bool,
+                         **kwargs):
+        """Do the get data method for a single ticker."""
+        if check_db:
+            try:
+                return self._from_db(ticker, source, start, end,
+                                     filter_data, **kwargs)
+            except DataAccessError:
+                # don't raise, try to make the network call
+                logger.info(f'Ticker: {ticker} not found in DB.')
 
-    db_start = dt_utils.parse_date(df.index.min(axis=1))
-    db_end = dt_utils.parse_date(df.index.max(axis=1))
+        try:
+            return self._from_web(ticker, source, start, end, **kwargs)
+        except DataAccessError:
+            logger.warning(f'Error getting data from {source} '
+                           f'for ticker: {ticker}')
+            raise
 
-    # check that all the requested data is present
-    # TODO: deal with days that it is expected that data shouldn't exist.
-    if db_start > start and dt_utils.is_trade_day(start):
-        # db has less data than requested
-        lower_df = _from_web(ticker, source, start, db_start - BDay())
-    else:
-        lower_df = None
+    @write_chunks('pytech.bars')
+    def _from_web(self,
+                  ticker: str,
+                  source: str,
+                  start: dt.datetime,
+                  end: dt.datetime,
+                  **kwargs) -> pd.DataFrame:
+        """Retrieve data from a web source"""
+        _ = kwargs.pop('columns', None)
 
-    if db_end.date() < end.date() and dt_utils.is_trade_day(end):
-        # db doesn't have as much data than requested
-        upper_df = _from_web(ticker, source, start=db_end, end=end)
-    else:
-        upper_df = None
+        try:
+            logger.info(f'Making call to {source}. Start date: {start},'
+                        f'End date: {end}')
+            df = pdr.DataReader(ticker, data_source=source, start=start,
+                                end=end, **kwargs)
+            if df.empty:
+                logger.warning('df retrieved was empty.')
+                return df
+        except RemoteDataError as e:
+            logger.warning(f'Error occurred getting data from {source}')
+            raise DataAccessError from e
+        else:
+            df = pd_utils.rename_bar_cols(df)
+            df[pd_utils.TICKER_COL] = ticker
 
-    return _concat_dfs(lower_df, upper_df, df)
+            if source == YAHOO:
+                # yahoo doesn't set the index :(
+                df = df.set_index([pd_utils.DATE_COL])
+            else:
+                df.index.name = pd_utils.DATE_COL
+
+            return df
+
+    def _from_db(self,
+                 ticker: str,
+                 source: str,
+                 start: dt.datetime,
+                 end: dt.datetime,
+                 filter_data: bool = True,
+                 **kwargs) -> pd.DataFrame:
+        """
+        Try to read data from the DB.
+
+        :param ticker: The ticker to retrieve from the DB.
+        :param source: Only used if there there is not enough data in the DB.
+        :param start: The start of the range.
+        :param end: The end of the range.
+        :param filter_data: Passed to the read method.
+        :param kwargs: Passed to the read method.
+        :return: The data frame.
+        :raises: NoDataFoundException if no data is found for the given ticker.
+        """
+        chunk_range = DateRange(start=start, end=end)
+
+        try:
+            logger.info(f'Checking DB for ticker: {ticker}')
+            df = self.lib.read(ticker, chunk_range=chunk_range,
+                               filter_data=filter_data, **kwargs)
+        except NoDataFoundException as e:
+            raise DataAccessError(f'No data in DB for ticker: {ticker}') from e
+        except KeyError as e:
+            # TODO: open a bug report against arctic...
+            logger.warning('KeyError thrown by Arctic...', e)
+            raise DataAccessError(
+                    f'Error reading DB for ticker: {ticker}') from e
+
+        logger.debug(f'Found ticker: {ticker} in DB.')
+
+        db_start = dt_utils.parse_date(df.index.min(axis=1))
+        db_end = dt_utils.parse_date(df.index.max(axis=1))
+
+        # check that all the requested data is present
+        # TODO: deal with days that it is expected that data shouldn't exist.
+        if db_start > start and dt_utils.is_trade_day(start):
+            # db has less data than requested
+            lower_df = self._from_web(ticker, source, start, db_start - BDay())
+        else:
+            lower_df = None
+
+        if db_end.date() < end.date() and dt_utils.is_trade_day(end):
+            # db doesn't have as much data than requested
+            upper_df = self._from_web(ticker, source, start=db_end, end=end)
+        else:
+            upper_df = None
+
+        return _concat_dfs(lower_df, upper_df, df)
+
+    def get_symbols(self):
+        for s in self.lib.list_symbols():
+            yield s
 
 
 def _concat_dfs(lower_df: pd.DataFrame,
@@ -247,11 +270,6 @@ def _concat_dfs(lower_df: pd.DataFrame,
         return pd.DataFrame(pd.concat([df, upper_df, lower_df]))
     else:
         return df
-
-
-def get_symbols():
-    for s in LIB.list_symbols():
-        yield s
 
 
 def load_from_csv(path: str,

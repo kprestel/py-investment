@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 import pandas as pd
 from arctic.chunkstore._chunker import Chunker
@@ -8,7 +8,7 @@ from arctic.chunkstore.date_chunker import DateChunker
 from arctic.date import DateRange
 from arctic.decorators import mongo_retry
 
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils as utils
 
 
 class BarStore(ChunkStore):
@@ -38,7 +38,12 @@ class BarStore(ChunkStore):
         :param kwargs:
         :return:
         """
-        return super().read(symbol, chunk_range, filter_data, **kwargs)
+        cols = kwargs.pop('columns', None)
+        if cols is not None and not isinstance(cols, list):
+            cols = list(cols)
+
+        return super().read(symbol, chunk_range, filter_data, columns=cols,
+                            **kwargs)
 
     @mongo_retry
     def write(self, symbol: str,
@@ -66,7 +71,7 @@ class BarStore(ChunkStore):
                             f'{type(item)} was provided')
 
         # ensure that the column names are correct before writing it.
-        item = pd_utils.rename_bar_cols(item)
+        item = utils.rename_bar_cols(item)
 
         return super().write(symbol, item, metadata, chunker, audit, **kwargs)
 
@@ -87,7 +92,7 @@ class BarStore(ChunkStore):
     def update(self, symbol: str,
                item: pd.DataFrame or pd.Series,
                metadata: Any = None,
-               chunk_range: pd.DatetimeIndex or DateRange = None,
+               chunk_range: Union[pd.DatetimeIndex, DateRange] = None,
                upsert: bool = False,
                audit: Dict[Any, Any] = None,
                **kwargs) -> None:

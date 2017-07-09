@@ -7,25 +7,14 @@ from typing import Dict, Iterable, Union
 import numpy as np
 import pandas as pd
 from arctic.date import DateRange
-from arctic.exceptions import NoDataFoundException
 
-import pytech.data.reader as reader
-import pytech.utils.dt_utils as dt_utils
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils as utils
+from decorators.decorators import memoize
 from pytech.backtest.event import MarketEvent
-# import pytech.db.db as db
-from pytech.mongo import ARCTIC_STORE, BarStore
-from pytech.utils.decorators import memoize
+from pytech.data.reader import BarReader
 
 
 class DataHandler(metaclass=ABCMeta):
-    # Type hints
-    events: queue.Queue
-    tickers: Iterable
-    start_date: dt.datetime
-    end_date: dt.datetime
-    ticker_data: Dict[str, pd.DataFrame]
-    lib: BarStore
 
     CHUNK_SIZE = 'D'
 
@@ -33,7 +22,9 @@ class DataHandler(metaclass=ABCMeta):
                  events: queue.Queue,
                  tickers: Iterable,
                  start_date: dt.datetime,
-                 end_date: dt.datetime):
+                 end_date: dt.datetime,
+                 asset_lib_name: str = 'pytech.bars',
+                 market_lib_name: str = 'pytech.market'):
         """
         All child classes MUST call this constructor.
 
@@ -42,6 +33,10 @@ class DataHandler(metaclass=ABCMeta):
         universe or all the assets that will available to be traded.
         :param start_date: The start of the sim.
         :param end_date: The end of the sim.
+        :param asset_lib_name: The name of the mongo library where asset
+            bars are stored. Defaults to *pytech.bars*
+        :param market_lib_name: The name of the mongo library where market
+            bars are stored. Defaults to *pytech.market*
         """
         self.logger = logging.getLogger(__name__)
         self.events = events
@@ -50,9 +45,12 @@ class DataHandler(metaclass=ABCMeta):
         self.ticker_data = {}
         self.latest_ticker_data = {}
         self.continue_backtest = True
-        self.start_date = dt_utils.parse_date(start_date)
-        self.end_date = dt_utils.parse_date(end_date)
-        self.lib = ARCTIC_STORE['pytech.bars']
+        self.start_date = utils.parse_date(start_date)
+        self.end_date = utils.parse_date(end_date)
+        self.asset_lib_name = asset_lib_name
+        self.market_lib_name = market_lib_name
+        self.asset_reader = BarReader(asset_lib_name)
+        self.market_reader = BarReader(market_lib_name)
         self._populate_ticker_data()
 
     @abstractmethod
@@ -125,9 +123,12 @@ class Bars(DataHandler):
                  tickers: Iterable,
                  start_date: dt.datetime,
                  end_date: dt.datetime,
-                 source: str = 'google'):
+                 source: str = 'google',
+                 asset_lib_name: str = 'pytech.bars',
+                 market_lib_name: str = 'pytech.market'):
         self.source = source
-        super().__init__(events, tickers, start_date, end_date)
+        super().__init__(events, tickers, start_date, end_date,
+                         asset_lib_name, market_lib_name)
 
     def _populate_ticker_data(self):
         """
@@ -150,12 +151,10 @@ class Bars(DataHandler):
             self.latest_ticker_data[t] = []
 
         for t in self.tickers:
-            self.ticker_data[t] = (self.ticker_data[t]
-                                   # .reindex(index=comb_index, method='pad')
-                                   .iterrows())
+            self.ticker_data[t] = (self.ticker_data[t].iterrows())
 
     @memoize
-    def make_agg_df(self, col: str = pd_utils.CLOSE_COL,
+    def make_agg_df(self, col: str = utils.CLOSE_COL,
                     market_ticker: Union[str, None] = 'SPY') -> pd.DataFrame:
         """
         Make a df that contains all of the ticker data and write it the db.
@@ -170,9 +169,9 @@ class Bars(DataHandler):
         """
         agg_df = pd.DataFrame()
         if market_ticker is not None and market_ticker not in self.tickers:
-            df_dict = self._get_data((market_ticker,))
+            df_dict = self.market_reader.get_data(market_ticker, columns=col)
         else:
-            df_dict = self._get_data()
+            df_dict = self._get_data(columns=col)
 
         for t in self.tickers:
             temp_df = df_dict[t]
@@ -181,17 +180,25 @@ class Bars(DataHandler):
         return agg_df
 
     def _get_data(self,
-                  extra_tickers: Iterable = None) -> Dict[str, pd.DataFrame]:
-        if extra_tickers is not None:
+                  tickers: Iterable[str] = None,
+                  **kwargs) -> Dict[str, pd.DataFrame]:
+        """
+        Get the data.
+
+        :param tickers: any extra tickers to get data fro.
+        :return:
+        """
+        if tickers is not None:
             tickers = self.tickers
-            tickers.extend(extra_tickers)
+            tickers.extend(tickers)
         else:
             tickers = self.tickers
 
-        return reader.get_data(tickers,
-                               source=self.source,
-                               start=self.start_date,
-                               end=self.end_date)
+        return self.asset_reader.get_data(tickers,
+                                          source=self.source,
+                                          start=self.start_date,
+                                          end=self.end_date,
+                                          **kwargs)
 
     def _get_new_bar(self, ticker: str):
         """
@@ -241,7 +248,7 @@ class Bars(DataHandler):
                     f'Could not find {ticker} in latest_ticker_data')
             raise
         else:
-            return dt_utils.parse_date(bars_list[-1].name)
+            return utils.dt_utils.parse_date(bars_list[-1].name)
 
     def get_latest_bar_value(self, ticker, val_type, n=1):
         """

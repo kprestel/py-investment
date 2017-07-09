@@ -5,7 +5,7 @@ import queue
 from datetime import datetime
 from typing import Dict, Union
 
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils as utils
 from pytech.backtest.event import TradeEvent
 from pytech.data.handler import DataHandler
 from pytech.fin.asset.asset import Asset
@@ -18,11 +18,11 @@ from pytech.trading.order import (
     StopLimitOrder, StopOrder, get_order_types
 )
 from pytech.trading.trade import Trade
-from pytech.utils.enums import (
+from utils.enums import (
     OrderStatus, OrderSubType, OrderType,
     TradeAction
 )
-from pytech.utils.exceptions import NotAFinderError
+from utils.exceptions import NotAFinderError
 
 AnyOrder = get_order_types()
 
@@ -182,11 +182,11 @@ class Blotter(object):
 
         if is_limit_order and limit_price is None:
             curr_price = self.bars.get_latest_bar_value(ticker,
-                                                        pd_utils.ADJ_CLOSE_COL)
+                                                        utils.ADJ_CLOSE_COL)
             limit_price = curr_price * self.limit_pct_buffer
         elif is_stop_order and stop_price is None:
             curr_price = self.bars.get_latest_bar_value(ticker,
-                                                        pd_utils.ADJ_CLOSE_COL)
+                                                        utils.ADJ_CLOSE_COL)
             stop_price = curr_price * self.stop_pct_buffer
 
         if date_placed is None:
@@ -217,7 +217,7 @@ class Blotter(object):
                       ticker: str,
                       action: TradeAction,
                       qty: int,
-                      order_type: OrderType or str,
+                      order_type: Union[OrderType, str],
                       **kwargs) -> AnyOrder:
         """
         Figure out what type of order to create based on given parameters.
@@ -494,7 +494,7 @@ class Blotter(object):
             # should this be looking the close column?
             bar = self.bars.get_latest_bar(order.ticker)
             dt = bar.name
-            current_price = bar[pd_utils.ADJ_CLOSE_COL]
+            current_price = bar[utils.CLOSE_COL]
             # available_volume = bar[pd_utils.VOL_COL]
             # check_triggers returns a boolean indicating if it is triggered.
             if order.check_triggers(dt=dt, current_price=current_price):

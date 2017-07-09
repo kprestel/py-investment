@@ -5,11 +5,10 @@ from abc import ABCMeta, abstractmethod
 import numpy as np
 import pandas as pd
 
-import pytech.data.reader as reader
-import pytech.utils.dt_utils as dt_utils
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils as utils
+from decorators.decorators import memoize, write_chunks
+from pytech.data.reader import BarReader
 from pytech.fin.market_data.market import Market
-from pytech.utils.decorators import memoize, write_chunks
 
 BETA_STORE = 'pytech.beta'
 
@@ -54,7 +53,7 @@ class Asset(metaclass=ABCMeta):
         self.asset_type = self.__class__.__name__
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        start_date, end_date = dt_utils.sanitize_dates(start_date, end_date)
+        start_date, end_date = utils.sanitize_dates(start_date, end_date)
 
         self.start_date = start_date
         self.end_date = end_date
@@ -111,22 +110,24 @@ class Asset(metaclass=ABCMeta):
 
 class Stock(Asset):
     def __init__(self, ticker: str, start_date: dt.datetime,
-                 end_date: dt.datetime, source: str = 'google'):
+                 end_date: dt.datetime, source: str = 'google',
+                 lib_name: str = 'pytech.bars'):
         self.source = source
+        self.reader = BarReader(lib_name)
+        self.lib_name = lib_name
         super().__init__(ticker, start_date, end_date)
 
     @memoize
     def get_data(self) -> pd.DataFrame:
-        d = reader.get_data(self.ticker, self.source,
-                            self.start_date, self.end_date)
-        return d[self.ticker]
+        return self.reader.get_data(self.ticker, self.source,
+                                    self.start_date, self.end_date)
 
-    def last_price(self, col=pd_utils.CLOSE_COL):
+    def last_price(self, col=utils.CLOSE_COL):
         return self.df[col][-1]
 
     @write_chunks(BETA_STORE)
     def rolling_beta(self,
-                     col=pd_utils.CLOSE_COL,
+                     col=utils.CLOSE_COL,
                      window: int = 30) -> pd.DataFrame:
         """
         Calculate the rolling beta over a given window.
@@ -140,22 +141,22 @@ class Stock(Asset):
         df: pd.DataFrame = pd.concat([mkt_pct_change, stock_pct_change],
                                      axis=1)
         betas = pd.concat([_calc_beta(sdf)
-                           for sdf in pd_utils.roll(df, window)], axis=1).T
+                           for sdf in utils.roll(df, window)], axis=1).T
         betas['ticker'] = self.ticker
         return betas
 
-    def returns(self, col=pd_utils.CLOSE_COL) -> pd.Series:
+    def returns(self, col=utils.CLOSE_COL) -> pd.Series:
         return self.df[col].pct_change()
 
-    def avg_return(self, col=pd_utils.CLOSE_COL):
-        ret = self.returns(col).mean()[-1]
+    def avg_return(self, col=utils.CLOSE_COL):
+        ret = self.returns(col).mean()
         return ret * 252
 
-    def cagr(self, col=pd_utils.CLOSE_COL):
+    def cagr(self, col=utils.CLOSE_COL):
         """Compounding annual growth rate."""
         days = (self.df.index[-1] - self.df.index[0]).days
         return ((self.df[col][-1] / self.df[col][1]) ** (365.0 / days)) - 1
 
-    def std(self, col=pd_utils.CLOSE_COL):
+    def std(self, col=utils.CLOSE_COL):
         """Standard deviation of returns, *annualized*."""
         return self.returns(col).std() * np.sqrt(252)
