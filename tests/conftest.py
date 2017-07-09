@@ -51,8 +51,9 @@ def get_test_csv_path(ticker):
 
 @pytest.fixture()
 def ticker_list():
-    return {'AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST',
-            'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL'}
+    return {'AAPL', 'MSFT', 'CVS'}
+    # return {'AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST',
+    #         'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL'}
 
 
 @pytest.fixture()

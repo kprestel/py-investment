@@ -86,3 +86,21 @@ def write_chunks(lib_name, chunk_size='D', remove_ticker=True):
         return eval_and_write
     return wrapper
 
+
+class lazy_property(object):
+    """
+    Used for lazy evaluation of an obj attr.
+
+    Property should represent non-mutable data, as it replaces itself.
+    """
+
+    def __init__(self, f):
+        self.f = f
+        self.func_name = f.__name__
+
+    def __get__(self, obj, cls):
+        if obj is None:
+            return None
+        val = self.f(obj)
+        setattr(obj, self.func_name, val)
+        return val

@@ -193,7 +193,8 @@ class _FrontierResult(object):
         return (f'Weights: \n{df.T}\n'
                 f'Covariances: \n{c}')
 
-    def plot(self, frontier_label: str = 'Frontier'):
+    def plot(self, frontier_label: str = 'Frontier',
+             auto_plot: bool = False):
         plt.style.use('ggplot')
         plt.scatter([self.covar[i, i] ** .5
                      for i in range(len(self.tickers))],
@@ -218,7 +219,10 @@ class _FrontierResult(object):
         plt.grid(True)
         plt.xlabel('variance')
         plt.ylabel('mean')
-        plt.show()
+        if auto_plot:
+            plt.show()
+        else:
+            return plt.gcf()
 
 
 def _mean(weights, returns):

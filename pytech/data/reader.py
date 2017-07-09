@@ -31,9 +31,6 @@ GOOGLE = 'google'
 FRED = 'fred'
 FAMA_FRENCH = 'famafrench'
 
-LIB_NAME = 'pytech.bars'
-LIB: BarStore = ARCTIC_STORE[LIB_NAME]
-
 
 class BarReader(object):
     """Read and write data from the DB and the web."""

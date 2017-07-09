@@ -9,7 +9,7 @@ import pandas as pd
 from arctic.date import DateRange
 
 import pytech.utils as utils
-from decorators.decorators import memoize
+from decorators.decorators import memoize, lazy_property
 from pytech.backtest.event import MarketEvent
 from pytech.data.reader import BarReader
 
@@ -20,7 +20,7 @@ class DataHandler(metaclass=ABCMeta):
 
     def __init__(self,
                  events: queue.Queue,
-                 tickers: Iterable,
+                 tickers: Iterable[str],
                  start_date: dt.datetime,
                  end_date: dt.datetime,
                  asset_lib_name: str = 'pytech.bars',
@@ -42,7 +42,7 @@ class DataHandler(metaclass=ABCMeta):
         self.events = events
         self.tickers = []
         self.tickers.extend(tickers)
-        self.ticker_data = {}
+        # self._ticker_data = {}
         self.latest_ticker_data = {}
         self.continue_backtest = True
         self.start_date = utils.parse_date(start_date)
@@ -51,7 +51,11 @@ class DataHandler(metaclass=ABCMeta):
         self.market_lib_name = market_lib_name
         self.asset_reader = BarReader(asset_lib_name)
         self.market_reader = BarReader(market_lib_name)
-        self._populate_ticker_data()
+        # self._populate_ticker_data()
+
+    @lazy_property
+    def ticker_data(self):
+        yield self._populate_ticker_data()
 
     @abstractmethod
     def get_latest_bar(self, ticker: str):
@@ -136,22 +140,23 @@ class Bars(DataHandler):
         df as the value and the ticker as the key.
         """
         comb_index = None
-        # only create the DateRange object once.
-        date_range = DateRange(start=self.start_date, end=self.end_date)
         df_dict = self._get_data()
+        out = {}
 
         for t in self.tickers:
-            self.ticker_data[t] = df_dict[t]
+            out[t] = df_dict[t]
 
+            # TODO needed?
             if comb_index is None:
-                comb_index = self.ticker_data[t].index
+                comb_index = out[t].index
             else:
-                comb_index.union(self.ticker_data[t].index)
+                comb_index.union(out[t].index)
 
             self.latest_ticker_data[t] = []
 
         for t in self.tickers:
-            self.ticker_data[t] = (self.ticker_data[t].iterrows())
+            yield out[t].iterrows()
+            # self.ticker_data[t] = (self.ticker_data[t].iterrows())
 
     @memoize
     def make_agg_df(self, col: str = utils.CLOSE_COL,
@@ -185,7 +190,7 @@ class Bars(DataHandler):
         """
         Get the data.
 
-        :param tickers: any extra tickers to get data fro.
+        :param tickers: any extra tickers to get data for.
         :return:
         """
         if tickers is not None:
@@ -206,6 +211,7 @@ class Bars(DataHandler):
 
         :return: bar
         """
+        # yield from self.ticker_data
         for bar in self.ticker_data[ticker]:
             yield bar
 

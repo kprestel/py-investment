@@ -22,7 +22,6 @@ from utils.enums import (
     OrderStatus, OrderSubType, OrderType,
     TradeAction
 )
-from utils.exceptions import NotAFinderError
 
 AnyOrder = get_order_types()
 
