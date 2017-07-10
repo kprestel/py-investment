@@ -55,7 +55,7 @@ class DataHandler(metaclass=ABCMeta):
 
     @lazy_property
     def ticker_data(self):
-        yield self._populate_ticker_data()
+        return self._populate_ticker_data()
 
     @abstractmethod
     def get_latest_bar(self, ticker: str):
@@ -155,8 +155,9 @@ class Bars(DataHandler):
             self.latest_ticker_data[t] = []
 
         for t in self.tickers:
-            yield out[t].iterrows()
+            out[t] = out[t].iterrows()
             # self.ticker_data[t] = (self.ticker_data[t].iterrows())
+        return out
 
     @memoize
     def make_agg_df(self, col: str = utils.CLOSE_COL,
