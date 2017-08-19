@@ -23,8 +23,23 @@ def memoize(obj):
 
     return memoizer
 
+def optional_arg_decorator(fn):
+    """Used to **only** to wrap decorators that take optional arguments."""
+    def wrapped_decorator(*args):
+        if len(args) == 1 and callable(args[0]):
+            return fn(args[0])
 
-def write_chunks(lib_name, chunk_size='D', remove_ticker=True):
+        else:
+            def real_decorator(decoratee):
+                return fn(decoratee, *args)
+
+            return real_decorator
+
+    return wrapped_decorator
+
+
+@optional_arg_decorator
+def write_chunks(chunk_size='D', remove_ticker=True):
     """
     Used to wrap functions that return :class:`pd.DataFrame`s and writes the
     output to a :class:`ChunkStore`. It is required that the the wrapped
@@ -46,7 +61,7 @@ def write_chunks(lib_name, chunk_size='D', remove_ticker=True):
     def wrapper(f):
         @wraps(f)
         def eval_and_write(*args, **kwargs):
-            df = f(*args, **kwargs)
+            df, lib_name = f(*args, **kwargs)
             try:
                 # TODO: make this use the fast scalar getter
                 ticker = df[utils.TICKER_COL][0]

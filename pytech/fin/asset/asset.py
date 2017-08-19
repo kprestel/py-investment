@@ -1,6 +1,7 @@
 import datetime as dt
 import logging
 from abc import ABCMeta, abstractmethod
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -125,10 +126,10 @@ class Stock(Asset):
     def last_price(self, col=utils.CLOSE_COL):
         return self.df[col][-1]
 
-    @write_chunks(BETA_STORE)
+    @write_chunks
     def rolling_beta(self,
                      col=utils.CLOSE_COL,
-                     window: int = 30) -> pd.DataFrame:
+                     window: int = 30) -> Tuple[pd.DataFrame, str]:
         """
         Calculate the rolling beta over a given window.
 
@@ -143,7 +144,7 @@ class Stock(Asset):
         betas = pd.concat([_calc_beta(sdf)
                            for sdf in utils.roll(df, window)], axis=1).T
         betas['ticker'] = self.ticker
-        return betas
+        return betas, BETA_STORE
 
     def returns(self, col=utils.CLOSE_COL) -> pd.Series:
         return self.df[col].pct_change()

@@ -1,10 +1,6 @@
-import math
-
 import numpy as np
 import pandas as pd
 import pymc3 as pm
-
-import pytech.utils.pandas_utils as pd_utils
 
 
 def monte_carlo(mu: float, vol: float, days: int, start_price: float,
@@ -39,6 +35,7 @@ def monte_carlo(mu: float, vol: float, days: int, start_price: float,
     return np.mean(result)
 
 
+# noinspection PyTypeChecker
 def _vol_model(df: pd.DataFrame):
     with pm.Model() as model:
         nu = pm.Exponential('nu', 1. / 10, testval=5.)

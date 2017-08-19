@@ -4,7 +4,7 @@ database to be accessed later.
 """
 import datetime as dt
 import logging
-from typing import Dict, Iterable, Union
+from typing import Dict, Iterable, Union, Tuple
 
 import numpy as np
 import pandas as pd
@@ -154,13 +154,13 @@ class BarReader(object):
                            f'for ticker: {ticker}')
             raise
 
-    @write_chunks('pytech.bars')
+    @write_chunks
     def _from_web(self,
                   ticker: str,
                   source: str,
                   start: dt.datetime,
                   end: dt.datetime,
-                  **kwargs) -> pd.DataFrame:
+                  **kwargs) -> Tuple[pd.DataFrame, str]:
         """Retrieve data from a web source"""
         _ = kwargs.pop('columns', None)
 
@@ -185,7 +185,7 @@ class BarReader(object):
             else:
                 df.index.name = pd_utils.DATE_COL
 
-            return df
+            return df, self.lib_name
 
     def _from_db(self,
                  ticker: str,
@@ -229,13 +229,14 @@ class BarReader(object):
         # TODO: deal with days that it is expected that data shouldn't exist.
         if db_start > start and dt_utils.is_trade_day(start):
             # db has less data than requested
-            lower_df = self._from_web(ticker, source, start, db_start - BDay())
+            lower_df, _ = self._from_web(ticker, source, start,
+                                         db_start - BDay())
         else:
             lower_df = None
 
         if db_end.date() < end.date() and dt_utils.is_trade_day(end):
             # db doesn't have as much data than requested
-            upper_df = self._from_web(ticker, source, start=db_end, end=end)
+            upper_df, _ = self._from_web(ticker, source, start=db_end, end=end)
         else:
             upper_df = None
 
