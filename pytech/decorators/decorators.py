@@ -1,6 +1,5 @@
 from functools import wraps
 import pandas as pd
-from arctic import arctic
 
 from arctic.chunkstore.chunkstore import ChunkStore
 
@@ -23,8 +22,10 @@ def memoize(obj):
 
     return memoizer
 
+
 def optional_arg_decorator(fn):
     """Used to **only** to wrap decorators that take optional arguments."""
+
     def wrapped_decorator(*args):
         if len(args) == 1 and callable(args[0]):
             return fn(args[0])
@@ -58,6 +59,7 @@ def write_chunks(chunk_size='D', remove_ticker=True):
         going to use more memory than required.
     :return: The output of the original function.
     """
+
     def wrapper(f):
         @wraps(f)
         def eval_and_write(*args, **kwargs):
@@ -68,8 +70,8 @@ def write_chunks(chunk_size='D', remove_ticker=True):
                 # ticker = df.at[0, pd_utils.TICKER_COL]
             except KeyError:
                 raise PyInvestmentKeyError(
-                        'Decorated functions are required to add a column '
-                        f'{utils.TICKER_COL} that contains the ticker.')
+                    'Decorated functions are required to add a column '
+                    f'{utils.TICKER_COL} that contains the ticker.')
 
             if remove_ticker:
                 # should this be saved?
@@ -98,7 +100,9 @@ def write_chunks(chunk_size='D', remove_ticker=True):
 
             df.index.freq = BDay()
             return df
+
         return eval_and_write
+
     return wrapper
 
 

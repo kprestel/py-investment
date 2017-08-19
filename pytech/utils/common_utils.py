@@ -1,3 +1,6 @@
+"""
+Collection of functions and classes that can be used anywhere.
+"""
 import uuid
 import logging
 from typing import Iterable
@@ -32,3 +35,10 @@ def tail(n: int, iterable: Iterable):
     """Return an iterator over the last `n` items"""
     return iter(collections.deque(iterable, maxlen=n))
 
+
+class Borg(object):
+    """A mixin class to make an object act like a singleton"""
+    _shared_state = {}
+
+    def __init__(self):
+        self.__dict__ = self._shared_state

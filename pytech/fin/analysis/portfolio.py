@@ -13,9 +13,6 @@ from utils.common_utils import tail
 
 class EfficientFrontier(object):
     """Calculate the optimal portfolio based on the Efficient Frontier"""
-    tickers: List[str]
-    prices: List[float]
-    rf: float
 
     def __init__(self, tickers: List[str] = None,
                  rf: float = None,
@@ -33,7 +30,6 @@ class EfficientFrontier(object):
             self.tickers = tickers
 
         self.prices = self._load_data()
-        # TODO make this a property and set it if its None
         self.rf = rf
 
     @property
