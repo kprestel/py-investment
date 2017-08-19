@@ -45,7 +45,7 @@ def _vol_model(df: pd.DataFrame):
         r = pm.StudentT('r', nu, lam=1 / vol_process,
                         observed=df)
     with model:
-        trace = pm.sample(20000, njobs=6)
+        trace = pm.sample(20000)
     return trace
 
 

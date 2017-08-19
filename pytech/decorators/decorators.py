@@ -5,7 +5,7 @@ from arctic.chunkstore.chunkstore import ChunkStore
 
 import pytech.utils as utils
 from pytech.mongo import ARCTIC_STORE, BarStore
-from utils.exceptions import InvalidStoreError, PyInvestmentKeyError
+from pytech.utils.exceptions import InvalidStoreError, PyInvestmentKeyError
 from pandas.tseries.offsets import BDay
 
 
@@ -39,7 +39,6 @@ def optional_arg_decorator(fn):
     return wrapped_decorator
 
 
-@optional_arg_decorator
 def write_chunks(chunk_size='D', remove_ticker=True):
     """
     Used to wrap functions that return :class:`pd.DataFrame`s and writes the

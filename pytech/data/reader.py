@@ -16,7 +16,7 @@ from pandas_datareader._utils import RemoteDataError
 
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
-from decorators.decorators import write_chunks
+from pytech.decorators.decorators import write_chunks
 from pytech.mongo import ARCTIC_STORE
 from pytech.mongo.barstore import BarStore
 from pytech.utils.exceptions import DataAccessError
@@ -154,7 +154,7 @@ class BarReader(object):
                            f'for ticker: {ticker}')
             raise
 
-    @write_chunks
+    @write_chunks()
     def _from_web(self,
                   ticker: str,
                   source: str,
@@ -236,7 +236,7 @@ class BarReader(object):
 
         if db_end.date() < end.date() and dt_utils.is_trade_day(end):
             # db doesn't have as much data than requested
-            upper_df, _ = self._from_web(ticker, source, start=db_end, end=end)
+            upper_df, _ = self._from_web(ticker, source, db_end, end)
         else:
             upper_df = None
 

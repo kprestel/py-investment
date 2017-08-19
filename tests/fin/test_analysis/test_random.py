@@ -3,6 +3,7 @@ import pytest
 
 from fin.asset.asset import Stock
 import pytech.fin.analysis.random as rand
+import pymc3 as pm
 
 
 def test_monte_carlo(fb: Stock):
@@ -16,3 +17,8 @@ def test_monte_carlo(fb: Stock):
     print(output)
 
 
+
+@pytest.skip('not a test.')
+def test_vol_model(fb: Stock):
+    trace = rand._vol_model(fb.get_data()['close'])
+    print(trace)
