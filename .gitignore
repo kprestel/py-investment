@@ -116,3 +116,7 @@ test/sample_data/
 /tests/sample_data/
 pytech/resources/
 pyenv_3.6/
+pytech/source/_static/
+pytech/source/_templates/
+tests/fin/resources/
+tests/resources/

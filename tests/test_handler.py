@@ -115,4 +115,11 @@ class TestYahooDataHandler(object):
     def test_make_agg_df(self, yahoo_data_handler: Bars):
         """Test creating the agg df"""
         df = yahoo_data_handler.make_agg_df()
-        assert len(df.columns) == len(yahoo_data_handler.tickers)
+
+        if 'SPY' not in yahoo_data_handler.tickers:
+            # it is expected for there to be 1 more column if the market
+            # ticker isn't in the data_handler
+            assert len(df.columns) == len(yahoo_data_handler.tickers) + 1
+        else:
+            assert len(df.columns) == len(yahoo_data_handler.tickers)
+

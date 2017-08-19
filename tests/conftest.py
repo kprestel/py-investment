@@ -15,12 +15,12 @@ from pytech.mongo import ARCTIC_STORE
 lib = ARCTIC_STORE['pytech.bars']
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def start_date():
     return '2016-03-10'
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def end_date():
     return '2017-06-09'
 
@@ -49,14 +49,14 @@ def get_test_csv_path(ticker):
     return TEST_DATA_DIR + os.sep + '{}.csv'.format(ticker)
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def ticker_list():
-    return {'AAPL', 'MSFT', 'CVS'}
+    return {'AAPL', 'MSFT', 'CVS', 'FB'}
     # return {'AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST',
     #         'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL'}
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def events():
     return queue.Queue()
 
@@ -80,7 +80,6 @@ def populated_blotter(blotter):
                         order_id='four')
 
     return blotter
-
 
 @pytest.fixture()
 def yahoo_data_handler(events, ticker_list, start_date, end_date):

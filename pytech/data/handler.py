@@ -134,7 +134,7 @@ class Bars(DataHandler):
         super().__init__(events, tickers, start_date, end_date,
                          asset_lib_name, market_lib_name)
 
-    def _populate_ticker_data(self):
+    def _populate_ticker_data(self) -> Dict[str, Iterable[pd.Series]]:
         """
         Populate the ticker_data dict with a pandas OHLCV
         df as the value and the ticker as the key.
@@ -174,10 +174,12 @@ class Bars(DataHandler):
         :return: The aggregate data frame.
         """
         agg_df = pd.DataFrame()
+        df_dict = self._get_data()
+
         if market_ticker is not None and market_ticker not in self.tickers:
-            df_dict = self.market_reader.get_data(market_ticker, columns=col)
-        else:
-            df_dict = self._get_data(columns=col)
+            # get the market data if it has not already been fetched
+            market_df = self.market_reader.get_data(market_ticker, columns=col)
+            agg_df[market_ticker] = market_df[col]
 
         for t in self.tickers:
             temp_df = df_dict[t]
@@ -185,6 +187,7 @@ class Bars(DataHandler):
 
         return agg_df
 
+    @memoize
     def _get_data(self,
                   tickers: Iterable[str] = None,
                   **kwargs) -> Dict[str, pd.DataFrame]:
