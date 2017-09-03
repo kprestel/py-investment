@@ -6,7 +6,6 @@ from typing import Dict, Iterable, Union
 
 import numpy as np
 import pandas as pd
-from arctic.date import DateRange
 
 import pytech.utils as utils
 from pytech.decorators.decorators import memoize, lazy_property
