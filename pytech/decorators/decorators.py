@@ -7,6 +7,7 @@ import pytech.utils as utils
 from pytech.mongo import ARCTIC_STORE, BarStore
 from pytech.utils.exceptions import InvalidStoreError, PyInvestmentKeyError
 from pandas.tseries.offsets import BDay
+from pytech.data._holders import DfLibName
 
 
 def memoize(obj):
@@ -62,7 +63,9 @@ def write_chunks(chunk_size='D', remove_ticker=True):
     def wrapper(f):
         @wraps(f)
         def eval_and_write(*args, **kwargs):
-            df, lib_name = f(*args, **kwargs)
+            df_lib_name = f(*args, **kwargs)
+            df = df_lib_name.df
+            lib_name = df_lib_name.lib_name
             try:
                 # TODO: make this use the fast scalar getter
                 ticker = df[utils.TICKER_COL][0]
@@ -98,7 +101,7 @@ def write_chunks(chunk_size='D', remove_ticker=True):
                 lib.update(ticker, df, chunk_size=chunk_size, upsert=True)
 
             df.index.freq = BDay()
-            return df
+            return DfLibName(df, lib_name)
 
         return eval_and_write
 

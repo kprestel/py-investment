@@ -20,11 +20,13 @@ from pytech.decorators.decorators import write_chunks
 from pytech.mongo import ARCTIC_STORE
 from pytech.mongo.barstore import BarStore
 from pytech.utils.exceptions import DataAccessError
+from pytech.data._holders import DfLibName
 
 logger = logging.getLogger(__name__)
 
 ticker_input = Union[Iterable, str, pd.DataFrame]
 range_type = Union[pd.DatetimeIndex, DateRange]
+
 
 YAHOO = 'yahoo'
 GOOGLE = 'google'
@@ -80,8 +82,10 @@ class BarReader(object):
 
         if isinstance(tickers, str):
             try:
-                return self._single_get_data(tickers, source, start, end,
-                                             check_db, filter_data, **kwargs)
+                df_lib_name = self._single_get_data(tickers, source, start,
+                                                    end, check_db, filter_data,
+                                                    **kwargs)
+                return df_lib_name.df
             except DataAccessError as e:
                 raise DataAccessError(
                         f'Could not get data for ticker: {tickers}') from e
@@ -110,9 +114,10 @@ class BarReader(object):
 
         for t in tickers:
             try:
-                stocks[t] = self._single_get_data(t, source, start, end,
+                df_lib_name = self._single_get_data(t, source, start, end,
                                                   check_db, filter_data,
                                                   **kwargs)
+                stocks[t] = df_lib_name.df
                 passed.append(t)
             except DataAccessError:
                 failed.append(t)
@@ -160,7 +165,7 @@ class BarReader(object):
                   source: str,
                   start: dt.datetime,
                   end: dt.datetime,
-                  **kwargs) -> Tuple[pd.DataFrame, str]:
+                  **kwargs) -> DfLibName:
         """Retrieve data from a web source"""
         _ = kwargs.pop('columns', None)
 
@@ -171,7 +176,8 @@ class BarReader(object):
                                 end=end, **kwargs)
             if df.empty:
                 logger.warning('df retrieved was empty.')
-                return df
+                # the string should be ignored anyway
+                return DfLibName(df, lib_name=self.lib_name)
         except RemoteDataError as e:
             logger.warning(f'Error occurred getting data from {source}')
             raise DataAccessError from e
@@ -185,7 +191,7 @@ class BarReader(object):
             else:
                 df.index.name = pd_utils.DATE_COL
 
-            return df, self.lib_name
+            return DfLibName(df, lib_name=self.lib_name)
 
     def _from_db(self,
                  ticker: str,
@@ -193,7 +199,7 @@ class BarReader(object):
                  start: dt.datetime,
                  end: dt.datetime,
                  filter_data: bool = True,
-                 **kwargs) -> pd.DataFrame:
+                 **kwargs) -> DfLibName:
         """
         Try to read data from the DB.
 
@@ -229,18 +235,21 @@ class BarReader(object):
         # TODO: deal with days that it is expected that data shouldn't exist.
         if db_start > start and dt_utils.is_trade_day(start):
             # db has less data than requested
-            lower_df, _ = self._from_web(ticker, source, start,
-                                         db_start - BDay())
+            lower_df_lib_name = self._from_web(ticker, source, start,
+                                               db_start - BDay())
+            lower_df = lower_df_lib_name.df
         else:
             lower_df = None
 
         if db_end.date() < end.date() and dt_utils.is_trade_day(end):
             # db doesn't have as much data than requested
-            upper_df, _ = self._from_web(ticker, source, db_end, end)
+            upper_df_lib_name = self._from_web(ticker, source, db_end, end)
+            upper_df = upper_df_lib_name.df
         else:
             upper_df = None
 
-        return _concat_dfs(lower_df, upper_df, df)
+        new_df = _concat_dfs(lower_df, upper_df, df)
+        return DfLibName(new_df, self.lib_name)
 
     def get_symbols(self):
         for s in self.lib.list_symbols():

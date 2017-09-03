@@ -18,7 +18,7 @@ def test_monte_carlo(fb: Stock):
 
 
 
-@pytest.skip('not a test.')
+@pytest.mark.skip('not a test.')
 def test_vol_model(fb: Stock):
     trace = rand._vol_model(fb.get_data()['close'])
     print(trace)

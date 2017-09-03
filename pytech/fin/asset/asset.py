@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 import pytech.utils as utils
+from data._holders import DfLibName
 from pytech.decorators.decorators import memoize, write_chunks
 from pytech.data.reader import BarReader
 from pytech.fin.market_data.market import Market
@@ -127,9 +128,9 @@ class Stock(Asset):
         return self.df[col][-1]
 
     @write_chunks()
-    def rolling_beta(self,
+    def _rolling_beta(self,
                      col=utils.CLOSE_COL,
-                     window: int = 30) -> Tuple[pd.DataFrame, str]:
+                     window: int = 30) -> DfLibName:
         """
         Calculate the rolling beta over a given window.
 
@@ -144,7 +145,22 @@ class Stock(Asset):
         betas = pd.concat([_calc_beta(sdf)
                            for sdf in utils.roll(df, window)], axis=1).T
         betas['ticker'] = self.ticker
-        return betas, BETA_STORE
+        return DfLibName(betas, BETA_STORE)
+
+    def rolling_beta(self,
+                      col=utils.CLOSE_COL,
+                      window: int = 30) -> pd.DataFrame:
+        """
+        Calculate the rolling beta over a given window.
+
+        This is a wrapper around `_rolling_beta` to return just a dataframe.
+
+        :param col: The column to use to get the returns.
+        :param window: The window to use to calculate the rolling beta (days)
+        :return: A DataFrame with the betas.
+        """
+        df_lib_name = self._rolling_beta(col, window)
+        return df_lib_name.df
 
     def returns(self, col=utils.CLOSE_COL) -> pd.Series:
         return self.df[col].pct_change()

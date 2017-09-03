@@ -17,10 +17,4 @@ try:
 except OSError:
     pass
 
-# DATABASE_LOCATION = join(RESOURCE_DIR, 'pytech.sqlite')
-# cs = 'sqlite+pysqlite:///{}'.format(DATABASE_LOCATION)
-# engine = create_engine(cs, connect_args={'check_same_thread':False}, poolclass=StaticPool)
-
-# Session must be created before importing the other classes.
-# Session = sessionmaker(bind=engine)
 logging.basicConfig(level=logging.DEBUG)
