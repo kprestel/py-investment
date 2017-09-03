@@ -90,7 +90,17 @@ class Backtest(object):
                                             self.initial_capital)
         self.execution_handler = self.execution_handler_cls(self.events)
 
-    def _run(self):
+    def pre_run_hook(self):
+        """
+        Override this function if you wish you change the configuration
+        of the backtest before running.
+
+        This method gets called in ``run``.
+        """
+
+
+    def run(self):
+        self.pre_run_hook()
         iterations = 0
 
         while True:
@@ -117,8 +127,7 @@ class Backtest(object):
                         self._process_event(event)
 
     def _process_event(self, event):
-        self.logger.debug(
-                f'Processing {event.event_type}')
+        self.logger.debug(f'Processing {event.event_type}')
 
         if event.event_type is EventType.MARKET:
             self.strategy.generate_signals(event)

@@ -3,7 +3,10 @@ Collection of functions and classes that can be used anywhere.
 """
 import uuid
 import logging
-from typing import Iterable
+from typing import (
+    Iterable,
+    Any
+)
 
 import collections
 
@@ -13,6 +16,9 @@ logger = logging.getLogger(__name__)
 def make_id():
     return uuid.uuid4().hex
 
+
+def is_iterable(obj: Any) -> bool:
+    return not isinstance(obj, str) and isinstance(obj, collections.Iterable)
 
 def iterable_to_set(iterable):
     """

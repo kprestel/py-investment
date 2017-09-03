@@ -1,21 +1,35 @@
 import logging
 import queue
-from abc import ABCMeta, abstractmethod
+from abc import (
+    ABCMeta,
+    abstractmethod
+)
 from datetime import datetime
-from typing import Dict, List
+from typing import (
+    Dict,
+    List,
+    Iterable
+)
 
 import pandas as pd
 
-import pytech.utils.dt_utils as dt_utils
+import pytech.utils as utils
 from pytech.backtest.event import SignalEvent
 from pytech.data.handler import DataHandler
 from pytech.fin.asset.owned_asset import OwnedAsset
-from pytech.mongo import ARCTIC_STORE, PortfolioStore
-from pytech.trading.blotter import Blotter
+from pytech.mongo import (
+    ARCTIC_STORE,
+    PortfolioStore
+)
+from pytech.trading.blotter import (
+    Blotter,
+    AnyOrder
+)
 from pytech.trading.trade import Trade
-from pytech.utils import pandas_utils as pd_utils
 from pytech.utils.enums import (
-    EventType, Position, SignalType,
+    EventType,
+    Position,
+    SignalType,
     TradeAction
 )
 from pytech.utils.exceptions import (
@@ -62,7 +76,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.bars = data_handler
         self.events = events
         self.blotter = blotter
-        self.start_date = dt_utils.parse_date(start_date)
+        self.start_date = utils.parse_date(start_date)
         self.initial_capital = initial_capital
         self.cash = initial_capital
         self.ticker_list = self.bars.tickers
@@ -75,6 +89,21 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.lib = ARCTIC_STORE['pytech.portfolio']
         self.positions_df = pd.DataFrame()
         self.raise_on_warnings = raise_on_warnings
+        self._signal_handlers = None
+
+    @property
+    def signal_handlers(self):
+        return self._signal_handlers
+
+    @signal_handlers.setter
+    def signal_handlers(self, val: Iterable):
+        if val is None:
+            self._signal_handlers = []
+        elif utils.is_iterable(val):
+            self._signal_handlers = val
+        else:
+            raise TypeError('signal_handlers must be an iterable. '
+                            f'{type(val)} was given.')
 
     @property
     def total_value(self):
@@ -185,9 +214,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         try:
             return self.owned_assets[ticker].total_position_value
         except KeyError:
-            self.logger.exception(
-                    f'Ticker: {ticker} is not currently owned.')
-            raise
+            raise KeyError(f'Ticker: {ticker} is not currently owned.')
 
     def update_timeindex(self, event):
         """
@@ -239,7 +266,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
             else:
                 shares_owned = owned_asset.shares_owned
                 adj_close = self.bars.get_latest_bar_value(ticker,
-                                                           pd_utils.ADJ_CLOSE_COL)
+                                                           utils.ADJ_CLOSE_COL)
                 market_value = shares_owned * adj_close
                 owned_asset.update_total_position_value(adj_close, latest_dt)
 
@@ -293,8 +320,8 @@ class BasicPortfolio(AbstractPortfolio):
         in all shares being sold.
         """
         owned_asset = self.owned_assets[trade.ticker]
-        updated_asset = owned_asset.make_trade(
-                trade.qty, trade.avg_price_per_share)
+        updated_asset = owned_asset.make_trade(trade.qty,
+                                               trade.avg_price_per_share)
 
         if updated_asset is None:
             del self.owned_assets[trade.ticker]
@@ -322,129 +349,32 @@ class BasicPortfolio(AbstractPortfolio):
                 self._update_from_trade(trade)
             else:
                 self.logger.warning(
-                        'Insufficient funds available to execute trade for '
-                        f'ticker: {order.ticker}')
+                    'Insufficient funds available to execute trade for '
+                    f'ticker: {order.ticker}')
                 if self.raise_on_warnings:
                     raise InsufficientFundsError(ticker=order.ticker)
 
-    def update_signal(self, event: SignalEvent):
+    def update_signal(self, event: SignalEvent) -> None:
         if event.event_type is EventType.SIGNAL:
-            self._process_signal(event)
+            triggered_orders = self.blotter.check_order_triggers()
+            self._process_signal(event, triggered_orders)
             # self.balancer(self, event)
-            self.blotter.check_order_triggers()
             # self.events.put(self.generate_naive_order(event))
         else:
             raise InvalidEventTypeError(
-                    expected=type(EventType.SIGNAL),
-                    event_type=type(event.event_type))
+                expected=type(EventType.SIGNAL),
+                event_type=type(event.event_type))
 
-    def _process_signal(self, signal: SignalEvent):
+    def _process_signal(self, signal: SignalEvent,
+                        triggered_orders: List[AnyOrder]) -> None:
         """
         Call different methods depending on the type of signal received.
 
         :param signal:
         :return:
         """
-        if signal.signal_type is SignalType.EXIT:
-            self._handle_exit_signal(signal)
-        elif signal.signal_type is SignalType.CANCEL:
-            self._handle_cancel_signal(signal)
-        elif signal.signal_type is SignalType.HOLD:
-            self._handle_hold_signal(signal)
-        elif signal.signal_type is SignalType.TRADE:
-            self._handle_trade_signal(signal)
-        elif signal.signal_type is SignalType.LONG:
-            self._handle_long_signal(signal)
-        elif signal.signal_type is SignalType.SHORT:
-            self._handle_short_signal(signal)
-        else:
-            raise InvalidSignalTypeError(signal_type=type(signal.signal_type))
-
-    def _handle_trade_signal(self, signal: SignalEvent):
-        """
-        Process a new trade signal and take the appropriate action.
-
-        This could include opening a new order or taking no action at all.
-
-        :param signal: The trade signal.
-        :return:
-        """
-        try:
-            if signal.position is SignalType.LONG:
-                self._handle_long_signal(signal)
-            elif signal.position is SignalType.SHORT:
-                self._handle_short_signal(signal)
-            else:
-                # default always to general trade signals.
-                self._handle_general_trade_signal(signal)
-        except AttributeError:
-            self._handle_general_trade_signal(signal)
-
-    def _handle_exit_signal(self, signal: SignalEvent):
-        """
-        Create an order that will close out the position in the signal.
-
-        :param signal:
-        :return:
-        """
-        qty = self.owned_assets[signal.ticker].shares_owned
-
-        if qty > 0:
-            action = TradeAction.SELL
-        elif qty < 0:
-            action = TradeAction.BUY
-        else:
-            raise ValueError(
-                    f'Cannot exit from a position that is not owned.'
-                    f'Owned qty is 0 for ticker: {signal.ticker}.')
-
-        self.blotter.place_order(signal.ticker, qty, action, signal.order_type,
-                                 signal.stop_price, signal.limit_price)
-
-    def _handle_cancel_signal(self, signal: SignalEvent):
-        """
-        Cancel all open orders for the asset in the signal.
-
-        :param signal:
-        """
-        self.blotter.cancel_all_orders_for_asset(signal.ticker,
-                                                 upper_price=signal.upper_price,
-                                                 lower_price=signal.lower_price,
-                                                 order_type=signal.order_type,
-                                                 trade_action=signal.action)
-
-    def _handle_hold_signal(self, signal: SignalEvent):
-        """
-        Place all open orders for the asset in the signal on hold.
-
-        :param signal:
-        :return:
-        """
-        self.blotter.hold_all_orders_for_asset(signal.ticker)
-
-    def _handle_long_signal(self, signal):
-        """
-        Handle a long signal by placing an order to **BUY**.
-
-        :param LongSignalEvent or SignalEvent signal:
-        :return:
-        """
-
-    def _handle_short_signal(self, signal):
-        """
-        Handle a short signal.
-
-        :param ShortSignalEvent or SignalEvent signal:
-        :return:
-        """
-
-    def _handle_general_trade_signal(self, signal: SignalEvent):
-        """
-        Handle an ambiguous trade signal, meaning a trade signal that is
-        not explicitly defined as **LONG** or **SHORT**.  This most often means
-        defaulting to whatever :class:``Balancer`` the portfolio has
-        implemented.
-        """
+        for handler in self.signal_handlers:
+            handler.handle_signal(self, signal, triggered_orders)
 
 
 class Portfolio(object):
@@ -512,7 +442,8 @@ class Portfolio(object):
         Check if the portfolio has enough liquidity to actually make the trade. This method should be called before
         executing any trade.
 
-        :param float avg_price_per_share: The price per share in the trade **AFTER** commission has been applied.
+        :param float avg_price_per_share: The price per share in the trade
+            **AFTER** commission has been applied.
         :param int qty: The amount of shares to be traded.
         :return: True if there is enough cash to make the trade or if qty is negative indicating a sale.
         """

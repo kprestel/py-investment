@@ -32,3 +32,12 @@ def test_borg():
     assert borg2.test == 'bar'
     assert borg.test == 'bar'
 
+
+@pytest.mark.parametrize('input, expected',
+                          [('foo', False),
+                           (['foo', 'bar'], True),
+                           (12, False),
+                           (('xyz',), True)])
+def test_is_iterable(input, expected):
+    assert utils.is_iterable(input) == expected
+

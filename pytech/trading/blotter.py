@@ -3,7 +3,11 @@ import logging
 import operator
 import queue
 from datetime import datetime
-from typing import Dict, Union
+from typing import (
+    Dict,
+    Union,
+    List
+)
 
 import pytech.utils as utils
 from pytech.backtest.event import TradeEvent
@@ -14,12 +18,18 @@ from pytech.trading.commission import (
     PerOrderCommissionModel
 )
 from pytech.trading.order import (
-    LimitOrder, MarketOrder, Order,
-    StopLimitOrder, StopOrder, get_order_types
+    LimitOrder,
+    MarketOrder,
+    Order,
+    StopLimitOrder,
+    StopOrder,
+    get_order_types
 )
 from pytech.trading.trade import Trade
 from pytech.utils.enums import (
-    OrderStatus, OrderSubType, OrderType,
+    OrderStatus,
+    OrderSubType,
+    OrderType,
     TradeAction
 )
 
@@ -59,9 +69,9 @@ class Blotter(object):
             self.commission_model = commission_model
         else:
             raise TypeError(
-                    'commission_model must be a subclass of '
-                    'AbstractCommissionModel. {} was provided'
-                        .format(type(commission_model))
+                f'commission_model must be a subclass of '
+                f'AbstractCommissionModel. '
+                f'{type(commission_model)} was provided'
             )
 
     @property
@@ -300,7 +310,8 @@ class Blotter(object):
             return True
         elif self._filter_on_trade_action(order, trade_action):
             return True
-        elif self._filter_on_price(order, upper_price=upper_price,
+        elif self._filter_on_price(order,
+                                   upper_price=upper_price,
                                    lower_price=lower_price):
             return True
         else:
@@ -481,14 +492,15 @@ class Blotter(object):
         self._find_order(order_id, ticker).reject(reason)
 
         self.logger.warning(
-                f'Order id: {order_id} for ticker: {ticker} '
-                f'was rejected because: {reason}')
+            f'Order id: {order_id} for ticker: {ticker} '
+            f'was rejected because: {reason}')
 
-    def check_order_triggers(self):
+    def check_order_triggers(self) -> List[AnyOrder]:
         """
         Check if any order has been triggered and if they have execute the
         trade and then clean up closed orders.
         """
+        triggered_orders = []
         for order_id, order in self:
             # should this be looking the close column?
             bar = self.bars.get_latest_bar(order.ticker)
@@ -497,9 +509,10 @@ class Blotter(object):
             # available_volume = bar[pd_utils.VOL_COL]
             # check_triggers returns a boolean indicating if it is triggered.
             if order.check_triggers(dt=dt, current_price=current_price):
-                self.events.put(
-                        TradeEvent(order_id, current_price, order.qty, dt)
-                )
+                self.events.put(TradeEvent(order_id, current_price,
+                                           order.qty, dt))
+                triggered_orders.append(order)
+        return triggered_orders
 
     def make_trade(self,
                    order: AnyOrder,
@@ -532,9 +545,9 @@ class Blotter(object):
         commission_cost = self.commission_model.calculate(order,
                                                           price_per_share)
         available_volume = order.get_available_volume(volume)
-        avg_price_per_share = (
-            ((price_per_share * available_volume) + commission_cost)
-            / available_volume)
+        avg_price_per_share = _avg_price_per_share(price_per_share,
+                                                   available_volume,
+                                                   commission_cost)
 
         order.commission += commission_cost
 
@@ -556,3 +569,10 @@ class Blotter(object):
                     open_orders[ticker] = order
 
         self.orders = open_orders
+
+
+def _avg_price_per_share(price_per_share: float, volume: float,
+                         commission: float) -> float:
+    """Calculate the average price per share."""
+    total_cost = price_per_share * volume + commission
+    return total_cost / volume

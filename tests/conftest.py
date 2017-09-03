@@ -5,11 +5,11 @@ import pandas as pd
 import pytest
 
 import pytech.trading.blotter as b
-from pytech.fin.asset.asset import Stock
+from fin.portfolio.handler import BasicSignalHandler
 from pytech import TEST_DATA_DIR
 from pytech.data.handler import Bars
+from pytech.fin.asset.asset import Stock
 from pytech.fin.portfolio import BasicPortfolio
-from pytech.fin.handler import BasicSignalHandler
 from pytech.mongo import ARCTIC_STORE
 
 lib = ARCTIC_STORE['pytech.bars']

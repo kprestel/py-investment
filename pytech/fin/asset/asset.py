@@ -10,7 +10,7 @@ import pytech.utils as utils
 from pytech.data._holders import DfLibName
 from pytech.decorators.decorators import memoize, write_chunks
 from pytech.data.reader import BarReader
-from pytech.fin.market_data.market import Market
+from pytech.fin.market.market import Market
 
 BETA_STORE = 'pytech.beta'
 

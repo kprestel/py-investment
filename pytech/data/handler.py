@@ -1,20 +1,30 @@
 import datetime as dt
 import logging
 import queue
-from abc import ABCMeta, abstractmethod
-from typing import Dict, Iterable, Union
+from abc import (
+    ABCMeta,
+    abstractmethod
+)
+from typing import (
+    Dict,
+    Iterable,
+    Union,
+    List
+)
 
 import numpy as np
 import pandas as pd
 
 import pytech.utils as utils
-from pytech.decorators.decorators import memoize, lazy_property
+from pytech.decorators.decorators import (
+    memoize,
+    lazy_property
+)
 from pytech.backtest.event import MarketEvent
 from pytech.data.reader import BarReader
 
 
 class DataHandler(metaclass=ABCMeta):
-
     CHUNK_SIZE = 'D'
 
     def __init__(self,
@@ -218,14 +228,12 @@ class Bars(DataHandler):
         for bar in self.ticker_data[ticker]:
             yield bar
 
-    def get_latest_bar(self, ticker: str):
+    def get_latest_bar(self, ticker: str) -> List[pd.DataFrame]:
 
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            self.logger.exception(
-                    f'{ticker} is not available in the given data set.')
-            raise
+            raise KeyError(f'{ticker} is not available in the given data set.')
         else:
             return bars_list[-1]
 
@@ -243,9 +251,7 @@ class Bars(DataHandler):
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            self.logger.exception(
-                    f'Could not find {ticker} in latest_ticker_data')
-            raise
+            raise KeyError(f'Could not find {ticker} in latest_ticker_data')
         else:
             return bars_list[-n:]
 
@@ -253,33 +259,39 @@ class Bars(DataHandler):
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            self.logger.exception(
-                    f'Could not find {ticker} in latest_ticker_data')
-            raise
+            raise KeyError(f'Could not find {ticker} in latest_ticker_data')
         else:
-            return utils.dt_utils.parse_date(bars_list[-1].name)
+            return utils.parse_date(bars_list[-1].name)
 
-    def get_latest_bar_value(self, ticker, val_type, n=1):
+    def get_latest_bar_value(self, ticker, col, n=1):
         """
-        Get the last ``n`` bars but return a series containing only the
+        Get the last ``n`` bars but return an array containing only the
         ``val_type`` requested.
 
         :param str ticker: The ticker of the asset for which the bars are
         needed.
-        :param val_type:
-        :param n:
+        :param col: the column to get the values for.
+        :param n: the number of bars of data to get.
         :return:
         """
         try:
             bars_list = self.get_latest_bars(ticker, n)
         except KeyError:
-            self.logger.exception(
-                    f'Could not find {ticker} in latest_ticker_data')
-            raise
-        else:
-            return np.array([getattr(bar, val_type) for bar in bars_list])
+            raise KeyError(f'Could not find {ticker} in latest_ticker_data')
 
-    def update_bars(self):
+        # ADJ_CLOSE is only in data from yahoo
+        if hasattr(bars_list[-1], col):
+            return np.array([getattr(bar, col) for bar in bars_list])
+        elif col == utils.ADJ_CLOSE_COL and hasattr(bars_list[-1],
+                                                    utils.CLOSE_COL):
+            self.logger.warning(f'{col} was requested but was not found.'
+                                f'using {utils.CLOSE_COL} instead.')
+            return np.array(
+                [getattr(bar, utils.CLOSE_COL) for bar in bars_list])
+        else:
+            raise ValueError(f'{col} does not exist in bars.')
+
+    def update_bars(self) -> None:
         for ticker in self.tickers:
             try:
                 bar = next(self._get_new_bar(ticker))

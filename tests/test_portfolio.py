@@ -1,5 +1,6 @@
 from pytech.backtest.event import MarketEvent
-from pytech.fin.portfolio import BasicPortfolio, Portfolio
+from pytech.fin.portfolio import BasicPortfolio
+from pytech.fin.portfolio.portfolio import Portfolio
 
 
 class TestPortfolio(object):
@@ -26,8 +27,8 @@ class TestBasicPortfolio(object):
     def test_update_timeindex(self, basic_portfolio):
         """
         Test updating the time index.
-        
-        :param BasicPortfolio basic_portfolio: 
+
+        :param BasicPortfolio basic_portfolio:
         """
         basic_portfolio.update_timeindex(MarketEvent())
         assert basic_portfolio.owned_assets == {}
