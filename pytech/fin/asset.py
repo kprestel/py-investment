@@ -8,6 +8,7 @@ from multiprocessing import Process
 import numpy as np
 import pandas as pd
 from pandas_datareader import data as web
+from pytech.crawler.spiders.edgar import EdgarSpider
 from scrapy.crawler import CrawlerRunner
 from scrapy.utils.log import configure_logging
 from scrapy.utils.project import get_project_settings
@@ -15,7 +16,6 @@ from twisted.internet import reactor
 
 import pytech.utils.dt_utils as dt_utils
 import pytech.utils.pandas_utils as pd_utils
-from pytech.crawler.spiders.edgar import EdgarSpider
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
