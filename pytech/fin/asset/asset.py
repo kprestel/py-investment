@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 import pytech.utils as utils
-from data._holders import DfLibName
+from pytech.data._holders import DfLibName
 from pytech.decorators.decorators import memoize, write_chunks
 from pytech.data.reader import BarReader
 from pytech.fin.market_data.market import Market

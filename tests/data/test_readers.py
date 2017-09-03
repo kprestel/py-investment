@@ -1,7 +1,7 @@
 # noinspection PyUnresolvedReferences
 import pytest
 
-from data.reader import BarReader
+from pytech.data.reader import BarReader
 
 
 def test_get_data():

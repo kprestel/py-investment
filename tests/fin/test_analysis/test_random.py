@@ -1,7 +1,7 @@
 # noinspection PyUnresolvedReferences
 import pytest
 
-from fin.asset.asset import Stock
+from pytech.fin.asset.asset import Stock
 import pytech.fin.analysis.random as rand
 import pymc3 as pm
 

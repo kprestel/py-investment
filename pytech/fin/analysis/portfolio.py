@@ -8,7 +8,7 @@ from scipy.optimize import OptimizeResult, minimize
 
 import pytech.data.reader as reader
 import pytech.utils.pandas_utils as pd_utils
-from utils.common_utils import tail
+from pytech.utils.common_utils import tail
 
 
 class EfficientFrontier(object):

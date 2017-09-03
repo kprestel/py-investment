@@ -18,7 +18,7 @@ from pytech.trading.order import (
     StopLimitOrder, StopOrder, get_order_types
 )
 from pytech.trading.trade import Trade
-from utils.enums import (
+from pytech.utils.enums import (
     OrderStatus, OrderSubType, OrderType,
     TradeAction
 )
