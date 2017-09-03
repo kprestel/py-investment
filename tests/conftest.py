@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import pytech.trading.blotter as b
-from fin.asset.asset import Stock
+from pytech.fin.asset.asset import Stock
 from pytech import TEST_DATA_DIR
 from pytech.data.handler import Bars
 from pytech.fin.portfolio import BasicPortfolio
