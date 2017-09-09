@@ -284,7 +284,7 @@ class Bars(DataHandler):
             return np.array([getattr(bar, col) for bar in bars_list])
         elif col == utils.ADJ_CLOSE_COL and hasattr(bars_list[-1],
                                                     utils.CLOSE_COL):
-            self.logger.warning(f'{col} was requested but was not found.'
+            self.logger.warning(f'{col} was requested but was not found, '
                                 f'using {utils.CLOSE_COL} instead.')
             return np.array(
                 [getattr(bar, utils.CLOSE_COL) for bar in bars_list])

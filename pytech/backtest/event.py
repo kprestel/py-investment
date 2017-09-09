@@ -1,11 +1,23 @@
 import datetime
 import logging
-from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, Union
+from abc import (
+    ABCMeta,
+    abstractmethod
+)
+from typing import (
+    Any,
+    Dict,
+    Union
+)
 
 import pytech.utils.dt_utils as dt_utils
-from pytech.utils.enums import (EventType, OrderType, Position, SignalType,
-                                TradeAction)
+from pytech.utils.enums import (
+    EventType,
+    OrderType,
+    Position,
+    SignalType,
+    TradeAction
+)
 
 
 class Event(metaclass=ABCMeta):
@@ -66,29 +78,33 @@ class SignalEvent(Event):
                  **kwargs):
         """
         Base SignalEvent constructor.
-        
+
         Basic rules:
-            - If stop and limit price are ``None`` a :class:`MarketOrder`
+            * If stop and limit price are ``None`` a :class:`MarketOrder`
             will be created.
-            - If only stop price is provided a :class:`StopOrder` would be
+
+            * If only stop price is provided a :class:`StopOrder` would be
             created.
-            - If only limit price is provided a :class:`LimitOrder` would be
+
+            * If only limit price is provided a :class:`LimitOrder` would be
             created.
-            - If both stop and limit price are provided a 
+
+            * If both stop and limit price are provided a
             :class:`StopLimitOrder` will be created
-            - If ``signal_type`` is simply ``TRADE`` then it could be 
-            considered ``LONG`` of ``SHORT`` it is up to the portfolio 
+
+            * If ``signal_type`` is simply ``TRADE`` then it could be
+            considered ``LONG`` of ``SHORT`` it is up to the portfolio
             to determine this.
-            
-        :param upper_price: 
-        :param lower_price: 
-        :param position: 
-        :param action: 
-        :param limit_price: 
-        :param stop_price: 
-        :param target_price: 
-        :param strength: 
-        :param order_type: 
+
+        :param upper_price:
+        :param lower_price:
+        :param position:
+        :param action:
+        :param limit_price:
+        :param stop_price:
+        :param target_price:
+        :param strength:
+        :param order_type:
         :class:`StopLimitOrder` would be created.
         - ``target_price`` and ``strength`` **DO NOT** have any sort of
         :param ticker: The ticker to create the signal for.
@@ -117,8 +133,7 @@ class SignalEvent(Event):
             self.position = None
 
         if order_type is OrderType.MARKET:
-            # try to determine what kind of order to place based on stop and
-            # limit prices given
+            # try to determine what kind of order to place
             if stop_price is None and limit_price is not None:
                 order_type = OrderType.LIMIT
             elif stop_price is not None and limit_price is None:
@@ -129,7 +144,7 @@ class SignalEvent(Event):
                 order_type = OrderType.MARKET
                 # Typically a Market order is not desirable so we warn on it.
                 self.logger.warning(
-                        'Creating a SignalEvent with a Market order type.')
+                    'Creating a SignalEvent with a Market order type.')
 
         self.order_type = OrderType.check_if_valid(order_type)
 
@@ -170,10 +185,10 @@ class TradeSignalEvent(SignalEvent):
 
 class TradeEvent(Event):
     """
-    Handles the event of actually executing an order and sending it to a broker 
+    Handles the event of actually executing an order and sending it to a broker
     for execution/filling.
 
-    This event should only be created in the event that an :class:`Order` 
+    This event should only be created in the event that an :class:`Order`
     is triggered.
     """
 
@@ -195,7 +210,7 @@ class TradeEvent(Event):
 
 class FillEvent(Event):
     """
-    Handles the event of a broker actually filling the order and returning 
+    Handles the event of a broker actually filling the order and returning
     either cash or the asset.
     """
 
