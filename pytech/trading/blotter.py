@@ -32,6 +32,7 @@ from pytech.utils.enums import (
     OrderType,
     TradeAction
 )
+from trading.controls import TradingControl
 
 AnyOrder = get_order_types()
 
@@ -39,29 +40,30 @@ AnyOrder = get_order_types()
 class Blotter(object):
     """Holds and interacts with all orders."""
 
-    # Type hints
-    orders: Dict[str, AnyOrder]
-    events: queue.Queue
-    current_dt = datetime
-    commission_model: AbstractCommissionModel.__subclasses__()
-
     def __init__(self,
                  events,
                  commission_model=None,
-                 max_shares=None):
+                 max_shares=None,
+                 limit_pct_buffer: float = 1.02,
+                 stop_pct_buffer: float = .98,
+                 controls: List[TradingControl] = None):
         self.logger = logging.getLogger(__name__)
         # dict of all orders. key=ticker of the asset, value=the order.
-        self.orders = {}
+        self.orders: Dict[str, AnyOrder] = {}
         # keep a record of all past trades.
         self.trades = []
-        self.current_dt = None
+        self.current_dt: datetime = None
         # events queue
-        self.events = events
+        self.events: queue.Queue = events
         self.bars = None
         self.max_shares = max_shares or int(1e+11)
         # how much an auto generated limit price will be over the market price.
-        self.limit_pct_buffer = 1.02
-        self.stop_pct_buffer = .98
+        self.limit_pct_buffer = limit_pct_buffer or 1.02
+        self.stop_pct_buffer = stop_pct_buffer or .98
+        if controls is None:
+            self.controls = []
+        else:
+            self.controls = controls
 
         if commission_model is None:
             self.commission_model = PerOrderCommissionModel()
@@ -120,7 +122,6 @@ class Blotter(object):
         This means you can iterate over a :class:``Blotter`` instance directly
         and access all of the open orders it has.
         """
-
         def do_iter(orders_dict):
             for k, v in orders_dict.items():
                 if isinstance(v, collections.Mapping):

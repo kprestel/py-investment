@@ -145,11 +145,6 @@ class BadOrderParams(TypeError, PyInvestmentError):
     msg = 'Attempted to place an order with a {order_type} of {price}'
 
 
-class TradeControlViolation(PyInvestmentError):
-    msg = ('Order for {qty} shares of {ticker} at {dt} violates trading '
-           'constraint {constraint}')
-
-
 class InvalidStoreError(TypeError, PyInvestmentError):
     msg = 'Store required: {required}, Store provided: {provided}'
 
@@ -164,3 +159,9 @@ class DataAccessError(NoDataFoundException, RemoteDataError,
     Raised when data is requested. Wraps Arctic and Pandas web reader
     exceptions.
     """
+
+
+class TradingControlViolation(PyInvestmentError):
+    """Raised when a trading control is violated."""
+    msg = ('Order for {qty} shares of {ticker} at {datetime} violates trading'
+           'control {control}.')

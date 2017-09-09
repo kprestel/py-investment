@@ -1,17 +1,17 @@
 import logging
 import queue
+from datetime import datetime
+from typing import (
+    Dict,
+    Iterable,
+    List
+)
+
+import pandas as pd
 from abc import (
     ABCMeta,
     abstractmethod
 )
-from datetime import datetime
-from typing import (
-    Dict,
-    List,
-    Iterable
-)
-
-import pandas as pd
 
 import pytech.utils as utils
 from pytech.backtest.event import SignalEvent
@@ -22,20 +22,18 @@ from pytech.mongo import (
     PortfolioStore
 )
 from pytech.trading.blotter import (
-    Blotter,
-    AnyOrder
+    AnyOrder,
+    Blotter
 )
 from pytech.trading.trade import Trade
 from pytech.utils.enums import (
     EventType,
     Position,
-    SignalType,
     TradeAction
 )
 from pytech.utils.exceptions import (
     InsufficientFundsError,
-    InvalidEventTypeError,
-    InvalidSignalTypeError
+    InvalidEventTypeError
 )
 
 logger = logging.getLogger(__name__)
@@ -52,13 +50,6 @@ class AbstractPortfolio(metaclass=ABCMeta):
     Child portfolio classes must also call super().__init__() in order to set
     the class up correctly.
     """
-    bars: DataHandler
-    events: queue.Queue
-    blotter: Blotter
-    start_date: datetime
-    ticker_list: List[str]
-    owned_assets: Dict[str, OwnedAsset]
-    lib: PortfolioStore
 
     # stores all of the ticks portfolio position.
     POSITION_COLLECTION = 'portfolio'
@@ -73,22 +64,22 @@ class AbstractPortfolio(metaclass=ABCMeta):
                  initial_capital: float = 100000.00,
                  raise_on_warnings=False):
         self.logger = logging.getLogger(__name__)
-        self.bars = data_handler
-        self.events = events
-        self.blotter = blotter
-        self.start_date = utils.parse_date(start_date)
-        self.initial_capital = initial_capital
-        self.cash = initial_capital
-        self.ticker_list = self.bars.tickers
-        self.owned_assets = {}
+        self.bars: DataHandler = data_handler
+        self.events: queue.Queue = events
+        self.blotter: Blotter = blotter
+        self.start_date: datetime = utils.parse_date(start_date)
+        self.initial_capital: float = initial_capital
+        self.cash: float = initial_capital
+        self.ticker_list: List[str] = self.bars.tickers
+        self.owned_assets: Dict[str, OwnedAsset] = {}
         # holdings = mv
         self.all_holdings_mv = self._construct_all_holdings()
         # positions = qty
         self.all_positions_qty = self._construct_all_positions()
-        self.total_commission = 0.0
-        self.lib = ARCTIC_STORE['pytech.portfolio']
-        self.positions_df = pd.DataFrame()
-        self.raise_on_warnings = raise_on_warnings
+        self.total_commission: float = 0.0
+        self.lib: PortfolioStore = ARCTIC_STORE['pytech.portfolio']
+        self.positions_df: pd.DataFrame = pd.DataFrame()
+        self.raise_on_warnings: bool = raise_on_warnings
         self._signal_handlers = None
 
     @property
@@ -215,6 +206,27 @@ class AbstractPortfolio(metaclass=ABCMeta):
             return self.owned_assets[ticker].total_position_value
         except KeyError:
             raise KeyError(f'Ticker: {ticker} is not currently owned.')
+
+    def current_weights(self, include_cash: bool) -> Dict[str, float]:
+        """
+        Create a dictionary of the `portfolio`'s current weights at single
+        point in time.
+
+        :param include_cash: if cash should be included in determining the
+        weights.
+        :return: a dict with the key=ticker and value=weight.
+        """
+        weights = {}
+        if include_cash:
+            total_mv = self.total_value
+            weights['cash'] = self.cash / total_mv
+        else:
+            total_mv = self.total_asset_mv
+
+        for ticker, asset in self.owned_assets.items():
+            weights[ticker] = asset.total_position_value / total_mv
+
+        return weights
 
     def update_timeindex(self, event):
         """

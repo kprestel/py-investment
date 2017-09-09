@@ -18,11 +18,11 @@ class AbstractBalancer(metaclass=ABCMeta):
                  *args, **kwargs):
         """
         Constructor for :class:`AbstractBalancer`.
-        
-        :param allow_market_orders: If `True` then `EXIT` signals will be 
+
+        :param allow_market_orders: If `True` then `EXIT` signals will be
         allowed to execute as a market order.
-        :param args: 
-        :param kwargs: 
+        :param args:
+        :param kwargs:
         """
         self.logger = logging.getLogger(__name__)
         self.allow_market_orders = allow_market_orders
@@ -37,18 +37,18 @@ class AbstractBalancer(metaclass=ABCMeta):
                  *args, **kwargs):
         """
         Balance the portfolio based on whatever methodology chosen.
-        
-        :param args: 
-        :param kwargs: 
-        :return: 
+
+        :param args:
+        :param kwargs:
+        :return:
         """
 
     @abstractmethod
     def balance(self):
         """
         Balance the portfolio based on whatever methodology chosen.
-        
-        :return: 
+
+        :return:
         """
         raise NotImplementedError('Must implement balance(portfolio)')
 
@@ -74,7 +74,7 @@ class AlwaysBalancedBalancer(AbstractBalancer):
         else:
             total_mv = self.portfolio.total_asset_mv
 
-        weights = self._get_current_weights(self.portfolio)
+        weights = self.portfolio.current_weights(self.include_cash)
 
         # add 1 because we will be buying another asset.
         target_pct = 1 / (len(self.portfolio.owned_assets) + 1)
@@ -122,16 +122,3 @@ class AlwaysBalancedBalancer(AbstractBalancer):
 
         return target_qty, target_mv, target_pct
 
-    def _get_current_weights(self,
-                             portfolio: AbstractPortfolio) -> Dict[str, float]:
-        weights = {}
-        if self.include_cash:
-            total_mv = portfolio.total_value
-            weights['cash'] = portfolio.cash / total_mv
-        else:
-            total_mv = portfolio.total_asset_mv
-
-        for ticker, asset in portfolio.owned_assets.items():
-            weights[ticker] = asset.total_position_value / total_mv
-
-        return weights
