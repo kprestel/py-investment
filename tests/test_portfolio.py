@@ -18,9 +18,9 @@ class TestPortfolio(object):
 
 
 class TestBasicPortfolio(object):
-    def test_constructor(self, yahoo_data_handler, events, blotter,
+    def test_constructor(self, bars, events, blotter,
                          start_date):
-        test_portfolio = BasicPortfolio(yahoo_data_handler, events,
+        test_portfolio = BasicPortfolio(bars, events,
                                         start_date, blotter)
         assert test_portfolio is not None
 

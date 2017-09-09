@@ -245,10 +245,11 @@ class AbstractPortfolio(metaclass=ABCMeta):
             raise InvalidEventTypeError(expected=EventType.MARKET,
                                         event_type=event.event_type)
 
-        self.blotter.check_order_triggers()
-
         # get an element from the set
         latest_dt = self.bars.get_latest_bar_dt(next(iter(self.ticker_list)))
+        # update the blotter's current date
+        self.blotter.current_dt = latest_dt
+        self.blotter.check_order_triggers()
 
         # update positions
         # dp = self._get_temp_dict()

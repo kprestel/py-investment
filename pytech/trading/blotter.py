@@ -55,15 +55,15 @@ class Blotter(object):
         # dict of all orders. key=ticker of the asset, value=the order.
         self.orders = {}
         # keep a record of all past trades.
-        self.trades = []
+        self.trades: List[Trade] = []
         self.current_dt: datetime = None
         # events queue
         self.events: queue.Queue = events
-        self.bars = bars
-        self.max_shares = max_shares or int(1e+11)
+        self.bars : 'DataHandler' = bars
+        self.max_shares: int = max_shares or int(1e+11)
         # how much an auto generated limit price will be over the market price.
-        self.limit_pct_buffer = limit_pct_buffer or 1.02
-        self.stop_pct_buffer = stop_pct_buffer or .98
+        self.limit_pct_buffer: float = limit_pct_buffer or 1.02
+        self.stop_pct_buffer: float = stop_pct_buffer or .98
         if controls is None:
             self.controls = []
         else:
@@ -94,6 +94,17 @@ class Blotter(object):
         else:
             raise TypeError(f'bars must be an instance of DataHandler. '
                             f'{type(data_handler)} was provided')
+
+    @property
+    def current_dt(self):
+        return self._current_dt
+
+    @current_dt.setter
+    def current_dt(self, val):
+        if val is None:
+            self._current_dt = None
+        else:
+            self._current_dt = utils.parse_date(val)
 
     def __getitem__(self, key) -> Order:
         """Get an order from the orders dict."""

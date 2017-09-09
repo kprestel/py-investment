@@ -6,13 +6,13 @@ import pandas as pd
 import pytest
 
 import pytech.trading.blotter as b
-from fin.portfolio.handler import BasicSignalHandler
+from pytech.fin.portfolio.handler import BasicSignalHandler
 from pytech import TEST_DATA_DIR
 from pytech.data.handler import Bars
 from pytech.fin.asset.asset import Stock
 from pytech.fin.portfolio import BasicPortfolio
 from pytech.mongo import ARCTIC_STORE
-from trading.controls import MaxOrderCount
+from pytech.trading.controls import MaxOrderCount
 
 lib = ARCTIC_STORE['pytech.bars']
 
@@ -60,26 +60,30 @@ def events():
     return queue.Queue()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def mock_portfolio():
     """A mock portfolio that does nothing but be a mock."""
     return Mock(spec=BasicPortfolio)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def bars(events, ticker_list, start_date, end_date):
-    return Bars(events, ticker_list, start_date, end_date)
+    """Create a default :class:`YahooDataHandler`"""
+    bars = Bars(events, ticker_list, start_date, end_date)
+    bars.update_bars()
+    return bars
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture()
 def blotter(events, bars):
     return b.Blotter(events, bars=bars)
 
 
 @pytest.fixture()
-def populated_blotter(blotter: b.Blotter, mock_portfolio):
+def populated_blotter(blotter: b.Blotter, mock_portfolio, start_date):
     """Populate the blot and return it."""
     blotter.controls.append(MaxOrderCount(True, 10))
+    blotter.current_dt = start_date
 
     blotter.place_order(mock_portfolio, 'AAPL', 50, 'BUY', 'LIMIT',
                         limit_price=100.10,
@@ -98,18 +102,10 @@ def populated_blotter(blotter: b.Blotter, mock_portfolio):
 
 
 @pytest.fixture()
-def yahoo_data_handler(events, ticker_list, start_date, end_date):
-    """Create a default :class:`YahooDataHandler`"""
-    bars = Bars(events, ticker_list, start_date, end_date)
-    bars.update_bars()
-    return bars
-
-
-@pytest.fixture()
-def basic_portfolio(events, yahoo_data_handler, start_date, populated_blotter):
+def basic_portfolio(events, bars, start_date, populated_blotter):
     """Return a BasicPortfolio to be used in testing."""
-    populated_blotter.bars = yahoo_data_handler
-    return BasicPortfolio(yahoo_data_handler, events, start_date,
+    populated_blotter.bars = bars
+    return BasicPortfolio(bars, events, start_date,
                           populated_blotter)
 
 
