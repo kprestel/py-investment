@@ -7,7 +7,7 @@ import pandas as pd
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import MarketEvent, SignalEvent
 from pytech.data.handler import DataHandler
-from pytech.trading.order import get_order_types
+from pytech.trading import get_order_types
 from pytech.utils.enums import EventType, Position, SignalType, TradeAction
 from pytech.utils.exceptions import InvalidEventTypeError
 

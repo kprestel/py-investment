@@ -6,7 +6,8 @@ import datetime as dt
 import logging
 from typing import (
     Any,
-    Dict
+    Dict,
+TYPE_CHECKING
 )
 
 from abc import (
@@ -14,9 +15,11 @@ from abc import (
     abstractmethod
 )
 
-import fin.portfolio.portfolio as p
-from trading.blotter import AnyOrder
-from utils.exceptions import TradingControlViolation
+
+if TYPE_CHECKING:
+    from pytech.trading import AnyOrder
+    from fin.portfolio import AbstractPortfolio
+from pytech.utils.exceptions import TradingControlViolation
 
 
 class TradingControl(metaclass=ABCMeta):
@@ -31,8 +34,8 @@ class TradingControl(metaclass=ABCMeta):
 
     @abstractmethod
     def validate(self,
-                 order: AnyOrder,
-                 portfolio: p.AbstractPortfolio,
+                 order: 'AnyOrder',
+                 portfolio: 'AbstractPortfolio',
                  cur_dt: dt.datetime,
                  price: float):
         """
@@ -72,7 +75,7 @@ class TradingControl(metaclass=ABCMeta):
             msg += f'{k}: {v} '
         return msg
 
-    def fail(self, order: AnyOrder, cur_dt: dt.datetime, **kwargs):
+    def fail(self, order: 'AnyOrder', cur_dt: dt.datetime, **kwargs):
         """
         Handle a :class:`TradingConstraint` violation.
 
@@ -128,8 +131,8 @@ class MaxOrderSize(TradingControl):
         self.max_notional: float = max_notional
 
     def validate(self,
-                 order: AnyOrder,
-                 portfolio: p.AbstractPortfolio,
+                 order: 'AnyOrder',
+                 portfolio: 'AbstractPortfolio',
                  cur_dt: dt.datetime,
                  price: float) -> None:
         """
@@ -179,8 +182,8 @@ class MaxOrderCount(TradingControl):
         self.max_count = max_count
         self.current_date = None
 
-    def validate(self, order: AnyOrder,
-                 portfolio: p.AbstractPortfolio,
+    def validate(self, order: 'AnyOrder',
+                 portfolio: 'AbstractPortfolio',
                  cur_dt: dt.datetime,
                  price: float) -> None:
         """Fail if we've already placed `self.max_orders` today."""

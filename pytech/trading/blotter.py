@@ -4,9 +4,8 @@ import operator
 import queue
 from datetime import datetime
 from typing import (
-    Dict,
-    Union,
-    List
+    List,
+    Union
 )
 
 import pytech.utils as utils
@@ -22,8 +21,7 @@ from pytech.trading.order import (
     MarketOrder,
     Order,
     StopLimitOrder,
-    StopOrder,
-    get_order_types
+    StopOrder
 )
 from pytech.trading.trade import Trade
 from pytech.utils.enums import (
@@ -32,9 +30,10 @@ from pytech.utils.enums import (
     OrderType,
     TradeAction
 )
-from trading.controls import TradingControl
-
-AnyOrder = get_order_types()
+from . import (
+    AnyOrder,
+    TradingControl
+)
 
 
 class Blotter(object):
@@ -49,7 +48,7 @@ class Blotter(object):
                  controls: List[TradingControl] = None):
         self.logger = logging.getLogger(__name__)
         # dict of all orders. key=ticker of the asset, value=the order.
-        self.orders: Dict[str, AnyOrder] = {}
+        self.orders = {}
         # keep a record of all past trades.
         self.trades = []
         self.current_dt: datetime = None
@@ -122,6 +121,7 @@ class Blotter(object):
         This means you can iterate over a :class:``Blotter`` instance directly
         and access all of the open orders it has.
         """
+
         def do_iter(orders_dict):
             for k, v in orders_dict.items():
                 if isinstance(v, collections.Mapping):

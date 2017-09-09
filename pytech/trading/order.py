@@ -21,16 +21,6 @@ from pytech.utils.exceptions import BadOrderParams
 logger = logging.getLogger(__name__)
 
 
-def get_order_types() -> TypeVar:
-    """Return valid order types for type annotations."""
-    return TypeVar('A',
-                   Order,
-                   MarketOrder,
-                   StopOrder,
-                   LimitOrder,
-                   StopLimitOrder)
-
-
 class Order(metaclass=ABCMeta):
     """Hold open orders"""
 

@@ -33,7 +33,7 @@ def iterable_to_set(iterable):
         return set(iterable)
     except TypeError:
         logger.exception('iterable must be an iterable with hashable '
-                         'contents!')
+                         f'contents! {iterable} is not an iterable!')
         raise
 
 

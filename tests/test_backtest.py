@@ -1,7 +1,7 @@
-import pytest
-from pytech.backtest.backtest import Backtest
-from pytech.algo.strategy import BuyAndHold, CrossOverStrategy
 import datetime as dt
+
+from pytech.algo.strategy import CrossOverStrategy
+from pytech.backtest.backtest import Backtest
 
 
 class TestBacktest(object):

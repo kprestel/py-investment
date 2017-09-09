@@ -1,5 +1,9 @@
 import logging
 import queue
+from abc import (
+    ABCMeta,
+    abstractmethod
+)
 from datetime import datetime
 from typing import (
     Dict,
@@ -8,10 +12,6 @@ from typing import (
 )
 
 import pandas as pd
-from abc import (
-    ABCMeta,
-    abstractmethod
-)
 
 import pytech.utils as utils
 from pytech.backtest.event import SignalEvent
@@ -21,10 +21,12 @@ from pytech.mongo import (
     ARCTIC_STORE,
     PortfolioStore
 )
-from pytech.trading.blotter import (
-    AnyOrder,
-    Blotter
-)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from pytech.trading import (
+        AnyOrder,
+        Blotter
+    )
 from pytech.trading.trade import Trade
 from pytech.utils.enums import (
     EventType,
@@ -60,13 +62,13 @@ class AbstractPortfolio(metaclass=ABCMeta):
                  data_handler: DataHandler,
                  events: queue.Queue,
                  start_date: datetime,
-                 blotter: Blotter,
+                 blotter: 'Blotter',
                  initial_capital: float = 100000.00,
                  raise_on_warnings=False):
         self.logger = logging.getLogger(__name__)
         self.bars: DataHandler = data_handler
         self.events: queue.Queue = events
-        self.blotter: Blotter = blotter
+        self.blotter = blotter
         self.start_date: datetime = utils.parse_date(start_date)
         self.initial_capital: float = initial_capital
         self.cash: float = initial_capital
@@ -307,7 +309,7 @@ class BasicPortfolio(AbstractPortfolio):
                  data_handler: DataHandler,
                  events: queue.Queue,
                  start_date: datetime,
-                 blotter: Blotter,
+                 blotter: 'Blotter',
                  initial_capital: float = 100000.00,
                  raise_on_warnings=False):
         super().__init__(data_handler,
@@ -378,7 +380,7 @@ class BasicPortfolio(AbstractPortfolio):
                 event_type=type(event.event_type))
 
     def _process_signal(self, signal: SignalEvent,
-                        triggered_orders: List[AnyOrder]) -> None:
+                        triggered_orders: List['AnyOrder']) -> None:
         """
         Call different methods depending on the type of signal received.
 
