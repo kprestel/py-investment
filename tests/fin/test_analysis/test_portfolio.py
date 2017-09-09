@@ -9,4 +9,4 @@ class TestEfficientFrontier(object):
         frontier = EfficientFrontier()
         result = frontier()
         print(str(result))
-        result.plot()
+        # result.plot()

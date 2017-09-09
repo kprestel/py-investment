@@ -65,8 +65,8 @@ class BuyAndHold(Strategy):
 
             for ticker in self.ticker_list:
                 self.logger.debug(f'Processing ticker: {ticker}')
-                bars = self.bars.get_latest_bar_value(ticker,
-                                                      pd_utils.ADJ_CLOSE_COL)
+                bars = self.bars.latest_bar_value(ticker,
+                                                  pd_utils.ADJ_CLOSE_COL)
 
                 if bars is not None:
                     if not self.bought[ticker]:

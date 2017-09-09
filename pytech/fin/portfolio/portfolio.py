@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import (
     Dict,
     Iterable,
-    List
+    List,
+    TYPE_CHECKING
 )
 
 import pandas as pd
@@ -21,7 +22,7 @@ from pytech.mongo import (
     ARCTIC_STORE,
     PortfolioStore
 )
-from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from pytech.trading import (
         AnyOrder,
@@ -68,7 +69,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.logger = logging.getLogger(__name__)
         self.bars: DataHandler = data_handler
         self.events: queue.Queue = events
-        self.blotter = blotter
+        self.blotter: 'Blotter' = blotter
         self.start_date: datetime = utils.parse_date(start_date)
         self.initial_capital: float = initial_capital
         self.cash: float = initial_capital
@@ -279,8 +280,8 @@ class AbstractPortfolio(metaclass=ABCMeta):
                                   f'market value will be set to 0.')
             else:
                 shares_owned = owned_asset.shares_owned
-                adj_close = self.bars.get_latest_bar_value(ticker,
-                                                           utils.ADJ_CLOSE_COL)
+                adj_close = self.bars.latest_bar_value(ticker,
+                                                       utils.ADJ_CLOSE_COL)
                 market_value = shares_owned * adj_close
                 owned_asset.update_total_position_value(adj_close, latest_dt)
 

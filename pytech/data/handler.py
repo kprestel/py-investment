@@ -99,7 +99,7 @@ class DataHandler(metaclass=ABCMeta):
         raise NotImplementedError('Must implement get_latest_bar_dt()')
 
     @abstractmethod
-    def get_latest_bar_value(self, ticker: str, val_type, n=1):
+    def latest_bar_value(self, ticker: str, val_type, n=1):
         """
         Return the last **n** bars from the latest_symbol list.
 
@@ -263,7 +263,7 @@ class Bars(DataHandler):
         else:
             return utils.parse_date(bars_list[-1].name)
 
-    def get_latest_bar_value(self, ticker, col, n=1):
+    def latest_bar_value(self, ticker, col, n=1):
         """
         Get the last ``n`` bars but return an array containing only the
         ``val_type`` requested.

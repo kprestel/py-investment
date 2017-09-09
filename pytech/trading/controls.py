@@ -75,7 +75,7 @@ class TradingControl(metaclass=ABCMeta):
             msg += f'{k}: {v} '
         return msg
 
-    def fail(self, order: 'AnyOrder', cur_dt: dt.datetime, **kwargs):
+    def _fail(self, order: 'AnyOrder', cur_dt: dt.datetime, **kwargs):
         """
         Handle a :class:`TradingConstraint` violation.
 
@@ -159,7 +159,7 @@ class MaxOrderSize(TradingControl):
                            and abs(shares_post_order) > self.max_shares)
 
         if too_many_shares:
-            self.fail(order, cur_dt)
+            self._fail(order, cur_dt)
 
         value_post_order = shares_post_order * price
 
@@ -167,7 +167,7 @@ class MaxOrderSize(TradingControl):
                           abs(value_post_order) > self.max_notional)
 
         if too_much_value:
-            self.fail(order, cur_dt)
+            self._fail(order, cur_dt)
 
 
 class MaxOrderCount(TradingControl):
@@ -194,6 +194,6 @@ class MaxOrderCount(TradingControl):
         self.current_date = bt_date
 
         if self.orders_placed > self.max_count:
-            self.fail(order, cur_dt)
+            self._fail(order, cur_dt)
 
         self.orders_placed += 1

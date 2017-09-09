@@ -38,6 +38,7 @@ class PortfolioStore(VersionStore):
         with a data and metadata element that were passed to the ``write``
         function.
 
+        :rtype:
         :param symbol: Name for the item.
         :param as_of:
 

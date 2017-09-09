@@ -1,0 +1,4 @@
+---
+# global variables
+start_date: &&sd !!null
+end_date: &&ed !!null

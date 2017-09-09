@@ -1,15 +1,22 @@
 import pytech.trading.order as ord
-from pytech.utils.enums import OrderStatus, OrderType, TradeAction
+from pytech.utils.enums import (
+    OrderStatus,
+    OrderType,
+    TradeAction
+)
 
 
 class TestBlotter(object):
-    def test_place_order(self, blotter):
+    def test_place_order(self, blotter, mock_portfolio):
 
-        blotter.place_order('AAPL', 50, 'BUY', 'LIMIT', limit_price=100.10,
+        blotter.place_order(mock_portfolio, 'AAPL', 50, 'BUY', 'LIMIT',
+                            limit_price=100.10,
                             order_id='one')
-        blotter.place_order('MSFT', 50, 'SELL', 'LIMIT', limit_price=93.10,
+        blotter.place_order(mock_portfolio, 'MSFT', 50, 'SELL', 'LIMIT',
+                            limit_price=93.10,
                             order_id='three')
-        blotter.place_order('FB', 50, 'SELL', 'LIMIT', limit_price=105.10,
+        blotter.place_order(mock_portfolio, 'FB', 50, 'SELL', 'LIMIT',
+                            limit_price=105.10,
                             order_id='four')
 
         for k, v in blotter:
@@ -79,9 +86,9 @@ class TestBlotter(object):
                                                 lower_price=111)
         assert both_filters is True
 
-        dont_filter_both = blotter._filter_on_price(order, upper_price=111,
-                                                    lower_price=99)
-        assert dont_filter_both is False
+        do_not_filter_both = blotter._filter_on_price(order, upper_price=111,
+                                                      lower_price=99)
+        assert do_not_filter_both is False
 
         both_none = blotter._filter_on_price(order, None, None)
         assert both_none is False

@@ -41,39 +41,39 @@ class TestYahooDataHandler(object):
         """
         assert yahoo_data_handler is not None
         # yahoo_data_handler.update_bars()
-        aapl_close = (yahoo_data_handler.get_latest_bar_value('AAPL',
-                                                                  pd_utils.CLOSE_COL))
+        aapl_close = (yahoo_data_handler.latest_bar_value('AAPL',
+                                                          pd_utils.CLOSE_COL))
         aapl_close_expected = 101.17
         assert aapl_close == approx(aapl_close_expected)
         aapl_open = (yahoo_data_handler
-                     .get_latest_bar_value('AAPL', pd_utils.OPEN_COL))
+                     .latest_bar_value('AAPL', pd_utils.OPEN_COL))
         aapl_open_expected = 101.410004
         assert aapl_open == approx(aapl_open_expected)
 
         fb_close = (yahoo_data_handler
-                        .get_latest_bar_value('FB', pd_utils.CLOSE_COL))
+                    .latest_bar_value('FB', pd_utils.CLOSE_COL))
         fb_close_expected = 107.32
         assert fb_close == approx(fb_close_expected)
 
         fb_open = (yahoo_data_handler
-                   .get_latest_bar_value('FB', pd_utils.OPEN_COL))
+                   .latest_bar_value('FB', pd_utils.OPEN_COL))
         fb_open_expected = 107.910004
         assert fb_open == approx(fb_open_expected)
 
         yahoo_data_handler.update_bars()
 
-        aapl_close = (yahoo_data_handler.get_latest_bar_value(
+        aapl_close = (yahoo_data_handler.latest_bar_value(
                 'AAPL', pd_utils.CLOSE_COL))
         aapl_close_expected = 102.26
         assert aapl_close == approx(aapl_close_expected)
 
-        fb_close = (yahoo_data_handler.get_latest_bar_value(
+        fb_close = (yahoo_data_handler.latest_bar_value(
                 'FB', pd_utils.CLOSE_COL))
         fb_close_expected = 109.410004
         assert fb_close == approx(fb_close_expected)
 
         with pytest.raises(KeyError):
-            yahoo_data_handler.get_latest_bar_value('FAKE', pd_utils.OPEN_COL)
+            yahoo_data_handler.latest_bar_value('FAKE', pd_utils.OPEN_COL)
 
     def test_get_latest_bar_dt(self, yahoo_data_handler):
         """

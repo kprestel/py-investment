@@ -95,7 +95,7 @@ class AlwaysBalancedBalancer(AbstractBalancer):
                         ticker: str,
                         target_pct: float,
                         total_mv: float):
-        price = self.bars.get_latest_bar_value(ticker, self.price_col)
+        price = self.bars.latest_bar_value(ticker, self.price_col)
 
         return int(math.floor((target_pct * total_mv) / price))
 
@@ -110,7 +110,7 @@ class AlwaysBalancedBalancer(AbstractBalancer):
         else:
             total_mv = portfolio.total_asset_mv
 
-        latest_adj_close = portfolio.bars.get_latest_bar_value(
+        latest_adj_close = portfolio.bars.latest_bar_value(
                 ticker, pd_utils.ADJ_CLOSE_COL)
 
         target_qty = int(

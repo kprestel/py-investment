@@ -5,6 +5,7 @@ import queue
 from datetime import datetime
 from typing import (
     List,
+    TYPE_CHECKING,
     Union
 )
 
@@ -30,10 +31,13 @@ from pytech.utils.enums import (
     OrderType,
     TradeAction
 )
-from . import (
-    AnyOrder,
-    TradingControl
-)
+
+if TYPE_CHECKING:
+    from fin.portfolio import AbstractPortfolio
+    from . import (
+        AnyOrder,
+        TradingControl
+    )
 
 
 class Blotter(object):
@@ -45,7 +49,8 @@ class Blotter(object):
                  max_shares=None,
                  limit_pct_buffer: float = 1.02,
                  stop_pct_buffer: float = .98,
-                 controls: List[TradingControl] = None):
+                 controls: List['TradingControl'] = None,
+                 bars: 'DataHandler' = None):
         self.logger = logging.getLogger(__name__)
         # dict of all orders. key=ticker of the asset, value=the order.
         self.orders = {}
@@ -54,7 +59,7 @@ class Blotter(object):
         self.current_dt: datetime = None
         # events queue
         self.events: queue.Queue = events
-        self.bars = None
+        self.bars = bars
         self.max_shares = max_shares or int(1e+11)
         # how much an auto generated limit price will be over the market price.
         self.limit_pct_buffer = limit_pct_buffer or 1.02
@@ -132,6 +137,7 @@ class Blotter(object):
         return do_iter(self.orders)
 
     def place_order(self,
+                    portfolio: 'AbstractPortfolio',
                     ticker: str,
                     qty: int,
                     action: Union[TradeAction, str] = None,
@@ -172,8 +178,6 @@ class Blotter(object):
             # No point in making an order for 0 shares.
             return None
 
-        # TODO: implement controls.
-
         if action is None and qty < 0:
             action = TradeAction.SELL
         elif action is None and qty > 0:
@@ -190,13 +194,12 @@ class Blotter(object):
         is_limit_order = order_type in [OrderType.LIMIT, OrderType.STOP_LIMIT]
         is_stop_order = order_type in [OrderType.STOP, OrderType.STOP_LIMIT]
 
+        curr_price = self.bars.latest_bar_value(ticker, utils.ADJ_CLOSE_COL)
+
+        # set default stop/limit prices
         if is_limit_order and limit_price is None:
-            curr_price = self.bars.get_latest_bar_value(ticker,
-                                                        utils.ADJ_CLOSE_COL)
             limit_price = curr_price * self.limit_pct_buffer
         elif is_stop_order and stop_price is None:
-            curr_price = self.bars.get_latest_bar_value(ticker,
-                                                        utils.ADJ_CLOSE_COL)
             stop_price = curr_price * self.stop_pct_buffer
 
         if date_placed is None:
@@ -214,6 +217,9 @@ class Blotter(object):
                                    max_days_open=max_days_open,
                                    **kwargs)
 
+        for control in self.controls:
+            control.validate(order, portfolio, self.current_dt, curr_price)
+
         if ticker in self.orders:
             self.orders[ticker].update({
                 order.id: order
@@ -228,7 +234,7 @@ class Blotter(object):
                       action: TradeAction,
                       qty: int,
                       order_type: Union[OrderType, str],
-                      **kwargs) -> AnyOrder:
+                      **kwargs) -> 'AnyOrder':
         """
         Figure out what type of order to create based on given parameters.
 
@@ -301,7 +307,7 @@ class Blotter(object):
                 self._do_order_cancel(order, reason)
 
     def _check_filters(self,
-                       order: AnyOrder,
+                       order: 'AnyOrder',
                        upper_price: float,
                        lower_price: float,
                        order_type: OrderType,
@@ -319,7 +325,7 @@ class Blotter(object):
             return False
 
     def _filter_on_order_type(self,
-                              order: AnyOrder,
+                              order: 'AnyOrder',
                               order_type: OrderType) -> bool:
         """
         Filter based on :class:``OrderType``. If the ``order`` is not the same
@@ -339,7 +345,7 @@ class Blotter(object):
             return order.order_type is order_type
 
     def _filter_on_trade_action(self,
-                                order: AnyOrder,
+                                order: 'AnyOrder',
                                 trade_action: TradeAction):
         """
 
@@ -354,7 +360,7 @@ class Blotter(object):
             return order.action is trade_action
 
     def _filter_on_price(self,
-                         order: AnyOrder,
+                         order: 'AnyOrder',
                          upper_price: float,
                          lower_price: float) -> bool:
         """
@@ -397,7 +403,7 @@ class Blotter(object):
         return lower_price_broken or upper_price_broken
 
     def _do_price_filter(self,
-                         order: AnyOrder,
+                         order: 'AnyOrder',
                          price: float,
                          operator: operator) -> bool:
         """
@@ -425,7 +431,7 @@ class Blotter(object):
 
         return limit_broken or stop_broken
 
-    def _do_order_cancel(self, order: AnyOrder, reason: str):
+    def _do_order_cancel(self, order: 'AnyOrder', reason: str):
         """
         Cancel any order that is passed to this method and log the appropriate
         message.
@@ -496,7 +502,7 @@ class Blotter(object):
             f'Order id: {order_id} for ticker: {ticker} '
             f'was rejected because: {reason}')
 
-    def check_order_triggers(self) -> List[AnyOrder]:
+    def check_order_triggers(self) -> List['AnyOrder']:
         """
         Check if any order has been triggered and if they have execute the
         trade and then clean up closed orders.
@@ -516,7 +522,7 @@ class Blotter(object):
         return triggered_orders
 
     def make_trade(self,
-                   order: AnyOrder,
+                   order: 'AnyOrder',
                    price_per_share: float,
                    trade_date: datetime,
                    volume: int) -> Trade:

@@ -30,6 +30,7 @@ class BarStore(ChunkStore):
         """
         Retrieve data from the DB.
 
+        :rtype:
         :param symbol: The key for the data you wish to retrieve.
         :param chunk_range: This depends on the :class:``Chunker`` used.
         If using a :class:``DateChunker`` then a range of dates can be given in

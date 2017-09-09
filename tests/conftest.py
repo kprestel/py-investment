@@ -1,5 +1,6 @@
 import os
 import queue
+from unittest.mock import MagicMock as Mock
 
 import pandas as pd
 import pytest
@@ -11,6 +12,7 @@ from pytech.data.handler import Bars
 from pytech.fin.asset.asset import Stock
 from pytech.fin.portfolio import BasicPortfolio
 from pytech.mongo import ARCTIC_STORE
+from trading.controls import MaxOrderCount
 
 lib = ARCTIC_STORE['pytech.bars']
 
@@ -45,15 +47,12 @@ def aapl_df():
 
 def get_test_csv_path(ticker):
     """Return the path to the test CSV file"""
-
     return TEST_DATA_DIR + os.sep + '{}.csv'.format(ticker)
 
 
 @pytest.fixture(scope='session')
 def ticker_list():
     return {'AAPL', 'MSFT', 'CVS', 'FB'}
-    # return {'AAPL', 'MSFT', 'FB', 'IBM', 'SPY', 'GOOG', 'AMZN', 'SKX', 'COST',
-    #         'CVS', 'EBAY', 'INTC', 'NKE', 'PYPL'}
 
 
 @pytest.fixture(scope='session')
@@ -61,25 +60,42 @@ def events():
     return queue.Queue()
 
 
-@pytest.fixture()
-def blotter(events):
-    return b.Blotter(events)
+@pytest.fixture(scope='session')
+def mock_portfolio():
+    """A mock portfolio that does nothing but be a mock."""
+    return Mock(spec=BasicPortfolio)
+
+
+@pytest.fixture(scope='session')
+def bars(events, ticker_list, start_date, end_date):
+    return Bars(events, ticker_list, start_date, end_date)
+
+
+@pytest.fixture(scope='session')
+def blotter(events, bars):
+    return b.Blotter(events, bars=bars)
 
 
 @pytest.fixture()
-def populated_blotter(blotter):
+def populated_blotter(blotter: b.Blotter, mock_portfolio):
     """Populate the blot and return it."""
+    blotter.controls.append(MaxOrderCount(True, 10))
 
-    blotter.place_order('AAPL', 50, 'BUY', 'LIMIT', limit_price=100.10,
+    blotter.place_order(mock_portfolio, 'AAPL', 50, 'BUY', 'LIMIT',
+                        limit_price=100.10,
                         order_id='one')
-    blotter.place_order('AAPL', 50, 'BUY', 'LIMIT', limit_price=98.10,
+    blotter.place_order(mock_portfolio, 'AAPL', 50, 'BUY', 'LIMIT',
+                        limit_price=98.10,
                         order_id='two')
-    blotter.place_order('MSFT', 50, 'SELL', 'LIMIT', limit_price=93.10,
+    blotter.place_order(mock_portfolio, 'MSFT', 50, 'SELL', 'LIMIT',
+                        limit_price=93.10,
                         order_id='three')
-    blotter.place_order('FB', 50, 'SELL', 'LIMIT', limit_price=105.10,
+    blotter.place_order(mock_portfolio, 'FB', 50, 'SELL', 'LIMIT',
+                        limit_price=105.10,
                         order_id='four')
 
     return blotter
+
 
 @pytest.fixture()
 def yahoo_data_handler(events, ticker_list, start_date, end_date):
@@ -100,7 +116,7 @@ def basic_portfolio(events, yahoo_data_handler, start_date, populated_blotter):
 @pytest.fixture()
 def basic_signal_handler(basic_portfolio):
     """Return a BasicSignalHandler to be used in testing."""
-    return BasicSignalHandler(basic_portfolio)
+    return BasicSignalHandler()
 
 
 @pytest.fixture()
