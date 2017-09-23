@@ -18,7 +18,7 @@ from abc import (
 
 if TYPE_CHECKING:
     from pytech.trading import AnyOrder
-    from fin.portfolio import AbstractPortfolio
+    from fin.portfolio import Portfolio
 from pytech.utils.exceptions import TradingControlViolation
 
 
@@ -35,7 +35,7 @@ class TradingControl(metaclass=ABCMeta):
     @abstractmethod
     def validate(self,
                  order: 'AnyOrder',
-                 portfolio: 'AbstractPortfolio',
+                 portfolio: 'Portfolio',
                  cur_dt: dt.datetime,
                  price: float):
         """
@@ -132,7 +132,7 @@ class MaxOrderSize(TradingControl):
 
     def validate(self,
                  order: 'AnyOrder',
-                 portfolio: 'AbstractPortfolio',
+                 portfolio: 'Portfolio',
                  cur_dt: dt.datetime,
                  price: float) -> None:
         """
@@ -183,7 +183,7 @@ class MaxOrderCount(TradingControl):
         self.current_date = None
 
     def validate(self, order: 'AnyOrder',
-                 portfolio: 'AbstractPortfolio',
+                 portfolio: 'Portfolio',
                  cur_dt: dt.datetime,
                  price: float) -> None:
         """Fail if we've already placed `self.max_orders` today."""

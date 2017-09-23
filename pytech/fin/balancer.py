@@ -5,14 +5,14 @@ from typing import Dict
 
 import pytech.utils.pandas_utils as pd_utils
 from pytech.backtest.event import SignalEvent
-from pytech.fin.portfolio import AbstractPortfolio
+from pytech.fin.portfolio import Portfolio
 
 
 class AbstractBalancer(metaclass=ABCMeta):
     """Base class for all balancers."""
 
     def __init__(self,
-                 portfolio: AbstractPortfolio,
+                 portfolio: Portfolio,
                  allow_market_orders=True,
                  price_col=pd_utils.ADJ_CLOSE_COL,
                  *args, **kwargs):
@@ -57,7 +57,7 @@ class AlwaysBalancedBalancer(AbstractBalancer):
     """Portfolio weights are always equal."""
 
     def __init__(self,
-                 portfolio: AbstractPortfolio,
+                 portfolio: Portfolio,
                  allow_market_orders: bool = True,
                  price_col: str = pd_utils.ADJ_CLOSE_COL,
                  include_cash=False,
@@ -100,7 +100,7 @@ class AlwaysBalancedBalancer(AbstractBalancer):
         return int(math.floor((target_pct * total_mv) / price))
 
     def _get_targets(self,
-                     portfolio: AbstractPortfolio,
+                     portfolio: Portfolio,
                      ticker: str) -> (int, float, float):
         """Return the target share quantity for a given event."""
         target_pct = 1 / (len(portfolio.owned_assets) + 1)

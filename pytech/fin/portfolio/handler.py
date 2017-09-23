@@ -12,17 +12,17 @@ from pytech.utils.enums import (
 )
 from pytech.utils.exceptions import InvalidSignalTypeError
 if TYPE_CHECKING:
-    from pytech.fin.portfolio import AbstractPortfolio
+    from pytech.fin.portfolio import Portfolio
     from trading.blotter import AnyOrder
 
 
-class AbstractSignalHandler(metaclass=ABCMeta):
+class SignalHandler(metaclass=ABCMeta):
     """ABC for Signal Handlers."""
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def handle_signal(self, portfolio: 'AbstractPortfolio',
+    def handle_signal(self, portfolio: 'Portfolio',
                       triggered_orders: List['AnyOrder'],
                       signal: SignalEvent):
         """
@@ -58,7 +58,7 @@ class AbstractSignalHandler(metaclass=ABCMeta):
         else:
             raise InvalidSignalTypeError(signal_type=type(signal.signal_type))
 
-    def _handle_trade_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_trade_signal(self, portfolio: 'Portfolio',
                              triggered_orders: List['AnyOrder'],
                              signal: SignalEvent):
         """
@@ -78,7 +78,7 @@ class AbstractSignalHandler(metaclass=ABCMeta):
         except AttributeError:
             self._handle_general_trade_signal(signal)
 
-    def _handle_hold_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_hold_signal(self, portfolio: 'Portfolio',
                             triggered_orders: List['AnyOrder'],
                             signal: SignalEvent):
         """
@@ -90,7 +90,7 @@ class AbstractSignalHandler(metaclass=ABCMeta):
         """
         portfolio.blotter.hold_all_orders_for_asset(signal.ticker)
 
-    def _handle_cancel_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_cancel_signal(self, portfolio: 'Portfolio',
                               triggered_orders: List['AnyOrder'],
                               signal: SignalEvent):
         """
@@ -105,7 +105,7 @@ class AbstractSignalHandler(metaclass=ABCMeta):
                                                       lower_price=signal.lower_price,
                                                       order_type=signal.order_type)
 
-    def _handle_exit_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_exit_signal(self, portfolio: 'Portfolio',
                             triggered_orders: List['AnyOrder'],
                             signal: SignalEvent):
         """
@@ -134,7 +134,7 @@ class AbstractSignalHandler(metaclass=ABCMeta):
                                       signal.limit_price)
 
     @abstractmethod
-    def _handle_long_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_long_signal(self, portfolio: 'Portfolio',
                             triggered_orders: List['AnyOrder'],
                             signal: SignalEvent):
         """
@@ -147,7 +147,7 @@ class AbstractSignalHandler(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def _handle_short_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_short_signal(self, portfolio: 'Portfolio',
                              triggered_orders: List['AnyOrder'],
                              signal: SignalEvent):
 
@@ -161,7 +161,7 @@ class AbstractSignalHandler(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def _handle_general_trade_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_general_trade_signal(self, portfolio: 'Portfolio',
                                      triggered_orders: List['AnyOrder'],
                                      signal: SignalEvent):
         """
@@ -175,29 +175,29 @@ class AbstractSignalHandler(metaclass=ABCMeta):
         raise NotImplementedError
 
 
-class BasicSignalHandler(AbstractSignalHandler):
+class BasicSignalHandler(SignalHandler):
     """A basic implementation of a Signal handler."""
 
     def __init__(self):
         """Constructor for BasicStrategyHandler"""
         super().__init__()
 
-    def _handle_short_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_short_signal(self, portfolio: 'Portfolio',
                              triggered_orders: List['AnyOrder'],
                              signal: SignalEvent):
         pass
 
-    def _handle_hold_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_hold_signal(self, portfolio: 'Portfolio',
                             triggered_orders: List['AnyOrder'],
                             signal: SignalEvent):
         super()._handle_hold_signal(portfolio, triggered_orders, signal)
 
-    def _handle_long_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_long_signal(self, portfolio: 'Portfolio',
                             triggered_orders: List['AnyOrder'],
                             signal: SignalEvent):
         pass
 
-    def _handle_general_trade_signal(self, portfolio: 'AbstractPortfolio',
+    def _handle_general_trade_signal(self, portfolio: 'Portfolio',
                                      triggered_orders: List['AnyOrder'],
                                      signal: SignalEvent):
         pass

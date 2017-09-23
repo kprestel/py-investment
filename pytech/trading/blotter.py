@@ -33,7 +33,7 @@ from pytech.utils.enums import (
 )
 
 if TYPE_CHECKING:
-    from fin.portfolio import AbstractPortfolio
+    from fin.portfolio import Portfolio
     from . import (
         AnyOrder,
         TradingControl
@@ -50,7 +50,7 @@ class Blotter(object):
                  limit_pct_buffer: float = 1.02,
                  stop_pct_buffer: float = .98,
                  controls: List['TradingControl'] = None,
-                 bars: 'DataHandler' = None):
+                 bars: 'DataHandler' = None) -> None:
         self.logger = logging.getLogger(__name__)
         # dict of all orders. key=ticker of the asset, value=the order.
         self.orders = {}
@@ -148,7 +148,7 @@ class Blotter(object):
         return do_iter(self.orders)
 
     def place_order(self,
-                    portfolio: 'AbstractPortfolio',
+                    portfolio: 'Portfolio',
                     ticker: str,
                     qty: int,
                     action: Union[TradeAction, str] = None,

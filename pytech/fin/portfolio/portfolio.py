@@ -2,14 +2,14 @@ import logging
 import queue
 from abc import (
     ABCMeta,
-    abstractmethod
+    abstractmethod,
 )
 from datetime import datetime
 from typing import (
     Dict,
     Iterable,
     List,
-    TYPE_CHECKING
+    TYPE_CHECKING,
 )
 
 import pandas as pd
@@ -20,29 +20,29 @@ from pytech.data.handler import DataHandler
 from pytech.fin.asset.owned_asset import OwnedAsset
 from pytech.mongo import (
     ARCTIC_STORE,
-    PortfolioStore
+    PortfolioStore,
 )
 
 if TYPE_CHECKING:
     from pytech.trading import (
-        AnyOrder,
-        Blotter
-    )
+    AnyOrder,
+    Blotter,
+)
 from pytech.trading.trade import Trade
 from pytech.utils.enums import (
     EventType,
     Position,
-    TradeAction
+    TradeAction,
 )
 from pytech.utils.exceptions import (
     InsufficientFundsError,
-    InvalidEventTypeError
+    InvalidEventTypeError,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class AbstractPortfolio(metaclass=ABCMeta):
+class Portfolio(metaclass=ABCMeta):
     """
     Base class for all portfolios.
 
@@ -64,14 +64,14 @@ class AbstractPortfolio(metaclass=ABCMeta):
                  events: queue.Queue,
                  start_date: datetime,
                  blotter: 'Blotter',
-                 initial_capital: float = 100000.00,
+                 initial_capital: float = 100_000.00,
                  raise_on_warnings=False):
         self.logger = logging.getLogger(__name__)
         self.bars: DataHandler = data_handler
         self.events: queue.Queue = events
         self.blotter: 'Blotter' = blotter
         self.start_date: datetime = utils.parse_date(start_date)
-        self.initial_capital: float = initial_capital
+        self._initial_capital: float = initial_capital
         self.cash: float = initial_capital
         self.ticker_list: List[str] = self.bars.tickers
         self.owned_assets: Dict[str, OwnedAsset] = {}
@@ -100,16 +100,21 @@ class AbstractPortfolio(metaclass=ABCMeta):
                             f'{type(val)} was given.')
 
     @property
-    def total_value(self):
+    def initial_capital(self):
+        """Read only because it is just used to store this data for later."""
+        return self._initial_capital
+
+    @property
+    def total_value(self) -> float:
         """
         A read only property to make getting the current total market value
         easier.
         **This includes cash.**
         """
-        return self.all_holdings_mv[-1]['total']
+        return self.total_asset_mv + self.cash
 
     @property
-    def total_asset_mv(self):
+    def total_asset_mv(self) -> float:
         """
         A read only property to make getting the total market value of the
         owned assets easier.
@@ -197,11 +202,11 @@ class AbstractPortfolio(metaclass=ABCMeta):
 
         return post_trade_cash > 0
 
-    def get_owned_asset_mv(self, ticker):
+    def get_owned_asset_mv(self, ticker: str) -> OwnedAsset:
         """
         Return the current market value for an :class:`OwnedAsset`
 
-        :param str ticker: The ticker of the owned asset.
+        :param ticker: The ticker of the owned asset.
         :return: The current market value for the ticker.
         :raises: KeyError
         """
@@ -210,7 +215,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         except KeyError:
             raise KeyError(f'Ticker: {ticker} is not currently owned.')
 
-    def current_weights(self, include_cash: bool) -> Dict[str, float]:
+    def current_weights(self, include_cash: bool = False) -> Dict[str, float]:
         """
         Create a dictionary of the `portfolio`'s current weights at single
         point in time.
@@ -304,7 +309,7 @@ class AbstractPortfolio(metaclass=ABCMeta):
         self.all_holdings_mv.append(dh)
 
 
-class BasicPortfolio(AbstractPortfolio):
+class BasicPortfolio(Portfolio):
     """Here for testing and stuff."""
 
     def __init__(self,
@@ -345,7 +350,10 @@ class BasicPortfolio(AbstractPortfolio):
             self.owned_assets[trade.ticker] = updated_asset
 
     def _create_new_owned_asset_from_trade(self, trade):
-        """Create a new owned asset based on the execution of a trade."""
+        """
+        Create a new owned asset and add it to `self.owned_assets`, based on
+        the execution of a trade.
+        """
         if trade.action is TradeAction.SELL:
             asset_position = Position.SHORT
         else:
@@ -393,7 +401,7 @@ class BasicPortfolio(AbstractPortfolio):
             handler.handle_signal(self, signal, triggered_orders)
 
 
-class Portfolio(object):
+class Portfolio_(object):
     """
     Holds stocks and keeps tracks of the owner's cash as well and their :class:`OwnedAssets` and allows them to perform
     analysis on just the :class:`Asset` that they currently own.

@@ -9,17 +9,19 @@ from pytech.fin.asset.asset import Asset
 from pytech.utils import dt_utils as dt_utils
 from pytech.utils.enums import Position
 from pytech.trading.trade import Trade
-from pytech.utils.exceptions import NotAnAssetError
 
 
 class OwnedAsset(object):
     """
     Contains data that only matters for a :class:`Asset` that is
-    in a user's :class:`~pytech.portfolio.Portfolio`.
+    in a user's :class:`pytech.fin.portfolio.Portfolio`.
     """
 
-    def __init__(self, ticker, shares_owned, position,
-                 average_share_price, purchase_date=None):
+    def __init__(self, ticker: str,
+                 shares_owned: int,
+                 position: Position,
+                 avg_share_price: float,
+                 purchase_date: datetime = None) -> None:
         self.ticker = ticker
         self.position = Position.check_if_valid(position)
 
@@ -28,14 +30,14 @@ class OwnedAsset(object):
         else:
             self.purchase_date = dt_utils.parse_date(purchase_date)
 
-        self.average_share_price_paid = average_share_price
-        self.latest_price = average_share_price
+        self.average_share_price_paid = avg_share_price
+        self.latest_price = avg_share_price
         self.latest_price_time = self.purchase_date.time()
         self.total_position_value = 0
         self.total_position_cost = 0
 
         self.shares_owned = shares_owned
-        self._set_position_cost_and_value(average_share_price)
+        self._set_position_cost_and_value(avg_share_price)
 
     @property
     def shares_owned(self):
@@ -107,20 +109,17 @@ class OwnedAsset(object):
         else:
             return self
 
-    def _set_position_cost_and_value(self, price):
+    def _set_position_cost_and_value(self, price: float):
         """
-        Calculate a position's cost and value
+        Calculate a position's cost and value.
 
-        :param qty: number of shares
-        :type qty: int
-        :param price: price per share
-        :type price: long
+        For a short position ``total_position_cost`` should be positive
+        (because you get paid for it), and a negative ``total_position_value``.
+
+        :param price: price per share paid.
         """
-        if self.position is Position.SHORT:
-            # short positions should have a negative number of shares owned
-            # but a positive total cost
+        if self.position is Position.LONG:
             self.total_position_cost += (price * self.shares_owned) * -1
-            # but a negative total value
             self.total_position_value += price * self.shares_owned
         else:
             self.total_position_cost += price * self.shares_owned
@@ -168,8 +167,8 @@ class OwnedAsset(object):
         """
 
         pct_change = self._get_pct_change(
-                use_portfolio_benchmark=use_portfolio_benchmark,
-                market_ticker=market_ticker)
+            use_portfolio_benchmark=use_portfolio_benchmark,
+            market_ticker=market_ticker)
         return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
 
     def calculate_beta(self, use_portfolio_benchmark=True,
@@ -185,8 +184,8 @@ class OwnedAsset(object):
             The beta for the given Stock
         """
         pct_change = self._get_pct_change(
-                use_portfolio_benchmark=use_portfolio_benchmark,
-                market_ticker=market_ticker)
+            use_portfolio_benchmark=use_portfolio_benchmark,
+            market_ticker=market_ticker)
         covar = pct_change.stock_pct_change.cov(pct_change.market_pct_change)
         variance = pct_change.market_pct_change.var()
         return covar / variance
@@ -211,9 +210,9 @@ class OwnedAsset(object):
                                        start=self.start_date,
                                        end=self.end_date)
         market_pct_change = pd.Series(
-                market_df['adj_close'].pct_change(periods=1))
+            market_df['adj_close'].pct_change(periods=1))
         stock_pct_change = pd.Series(
-                self.ohlcv['adj_close'].pct_change(periods=1))
+            self.ohlcv['adj_close'].pct_change(periods=1))
         return pct_change(market_pct_change=market_pct_change,
                           stock_pct_change=stock_pct_change)
 

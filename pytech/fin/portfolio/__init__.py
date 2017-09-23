@@ -1,8 +1,8 @@
 from pytech.fin.portfolio.portfolio import (
-    AbstractPortfolio,
+    Portfolio,
     BasicPortfolio
 )
 from pytech.fin.portfolio.handler import (
-    AbstractSignalHandler,
+    SignalHandler,
     BasicSignalHandler
 )
