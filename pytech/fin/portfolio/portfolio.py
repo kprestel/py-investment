@@ -25,9 +25,9 @@ from pytech.mongo import (
 
 if TYPE_CHECKING:
     from pytech.trading import (
-    AnyOrder,
-    Blotter,
-)
+        AnyOrder,
+        Blotter,
+    )
 from pytech.trading.trade import Trade
 from pytech.utils.enums import (
     EventType,
@@ -181,24 +181,23 @@ class Portfolio(metaclass=ABCMeta):
     def _get_temp_dict(self):
         return {k: v for k, v in [(ticker, 0) for ticker in self.ticker_list]}
 
-    def check_liquidity(self, avg_price_per_share, qty):
+    def check_liquidity(self, avg_price_per_share: float, qty: int) -> bool:
         """
         Check if the portfolio has enough liquidity to actually make the trade.
         This method should be called before
         executing any trade.
 
         :param float avg_price_per_share: The price per share in the trade
-        **AFTER** commission has been applied.
+            **AFTER** commission has been applied.
         :param int qty: The amount of shares to be traded.
-        :return: True if there is enough cash to make the trade or if qty is
-        negative indicating a sale.
+        :return: ``True`` if there is enough cash to make the trade or if qty
+            is negative indicating a sale.
         """
         if qty < 0:
             return True
 
         cost = avg_price_per_share * qty
-        cur_cash = self.cash
-        post_trade_cash = cur_cash - cost
+        post_trade_cash = self.cash - cost
 
         return post_trade_cash > 0
 
@@ -221,7 +220,7 @@ class Portfolio(metaclass=ABCMeta):
         point in time.
 
         :param include_cash: if cash should be included in determining the
-        weights.
+            weights.
         :return: a dict with the key=ticker and value=weight.
         """
         weights = {}
@@ -235,6 +234,22 @@ class Portfolio(metaclass=ABCMeta):
             weights[ticker] = asset.total_position_value / total_mv
 
         return weights
+
+    def get_asset_weight(self, ticker: str,
+                         include_cash: bool = False) -> float:
+        """
+        Return the current weight an asset accounts for in the ``portfolio``.
+
+        :param ticker: the ticker to get the weight for.
+        :param include_cash: if cash should be included in determining the
+            weights.
+        :return: the weight as a float. If the asset is not owned then return
+            0.
+        """
+        try:
+            return self.current_weights(include_cash=include_cash)[ticker]
+        except KeyError:
+            return 0.0
 
     def update_timeindex(self, event):
         """

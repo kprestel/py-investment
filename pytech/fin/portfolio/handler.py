@@ -1,16 +1,24 @@
 import logging
 from abc import (
     ABCMeta,
-    abstractmethod
+    abstractmethod,
 )
-from typing import List, TYPE_CHECKING
+from typing import (
+    List,
+    TYPE_CHECKING,
+)
+
+import math
+
+import pytech.utils as utils
 
 from pytech.backtest.event import SignalEvent
 from pytech.utils.enums import (
     SignalType,
-    TradeAction
+    TradeAction,
 )
 from pytech.utils.exceptions import InvalidSignalTypeError
+
 if TYPE_CHECKING:
     from pytech.fin.portfolio import Portfolio
     from trading.blotter import AnyOrder
@@ -178,9 +186,46 @@ class SignalHandler(metaclass=ABCMeta):
 class BasicSignalHandler(SignalHandler):
     """A basic implementation of a Signal handler."""
 
-    def __init__(self):
-        """Constructor for BasicStrategyHandler"""
+    def __init__(self, include_cash: bool = False,
+                 max_weight: float = .25,
+                 min_weight: float = .05,
+                 target_weight: float = .15,
+                 price_col: str = utils.ADJ_CLOSE_COL) -> None:
+        """
+        Constructor for the signal handler.
+
+        :param include_cash: should cash be considered when calculating
+            portfolio weights.
+        :param max_weight: the max weight a single asset should account for in
+            the portfolio. This is both positive and negative, meaning a
+            ``max_weight`` of ``.25`` would prevent a ``LONG`` position from
+            being more than 25% of total portfolio value and a ``SHORT``
+            position from being more than -25% of total portfolio value.
+        :param min_weight: same as ``max_weight`` except the minimum weight an
+            asset should represent in a portfolio.
+        :param target_weight: the target weight that a single asset should
+            account for in a portfolio.
+        :param price_col: the column to get the latest price from.
+        """
         super().__init__()
+        self.include_cash = include_cash
+
+        if max_weight > 0:
+            self.max_weight = max_weight
+        else:
+            self.max_weight = max_weight * -1
+
+        if min_weight > 0:
+            self.min_weight = min_weight
+        else:
+            self.min_weight = min_weight * -1
+
+        if target_weight > 0:
+            self.target_weight = target_weight
+        else:
+            self.target_weight = target_weight * -1
+
+        self.price_col = price_col
 
     def _handle_short_signal(self, portfolio: 'Portfolio',
                              triggered_orders: List['AnyOrder'],
@@ -195,9 +240,38 @@ class BasicSignalHandler(SignalHandler):
     def _handle_long_signal(self, portfolio: 'Portfolio',
                             triggered_orders: List['AnyOrder'],
                             signal: SignalEvent):
-        pass
+        if signal.ticker in triggered_orders:
+            self.logger.info(f'ticker: {signal.ticker} already had an order'
+                             f'triggered. Not acting on signal.')
+            return
+
+        current_weight = portfolio.get_asset_weight(signal.ticker,
+                                                    self.include_cash)
+        if (current_weight >= self.max_weight
+            or current_weight <= (self.max_weight * -1)):
+            self.logger.info(f'ticker: {signal.ticker} is over the max_weight '
+                             f'of {self.max_weight} at a current weight of '
+                             f'f{current_weight}. Not acting on signal.')
+            return
+
+        price = portfolio.bars.latest_bar_value(signal.ticker, self.price_col)
+        qty = self._get_target_qty(price, portfolio, signal)
+
+        if portfolio.check_liquidity(price, qty):
+            pass
+
 
     def _handle_general_trade_signal(self, portfolio: 'Portfolio',
                                      triggered_orders: List['AnyOrder'],
                                      signal: SignalEvent):
         pass
+
+    def _get_target_qty(self, price: float,
+                        portfolio: Portfolio,
+                        signal: SignalEvent) -> int:
+        if self.include_cash:
+            mv = portfolio.total_value
+        else:
+            mv = portfolio.total_asset_mv
+
+        return int(math.floor((self.target_weight * mv) / price))

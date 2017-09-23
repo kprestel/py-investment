@@ -69,7 +69,7 @@ class SignalEvent(Event):
                  stop_price: float = None,
                  target_price: float = None,
                  strength: Any = None,
-                 order_type: OrderType = OrderType.MARKET,
+                 order_type: OrderType = None,
                  action: TradeAction = None,
                  position: Position = None,
                  upper_price: float = None,
@@ -132,7 +132,7 @@ class SignalEvent(Event):
         else:
             self.position = None
 
-        if order_type is OrderType.MARKET:
+        if order_type is None:
             # try to determine what kind of order to place
             if stop_price is None and limit_price is not None:
                 order_type = OrderType.LIMIT

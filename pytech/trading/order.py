@@ -3,7 +3,10 @@ import math
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from sys import float_info
-from typing import TypeVar
+from typing import (
+    TypeVar,
+    Union,
+)
 
 import numpy as np
 import pandas as pd
@@ -258,7 +261,7 @@ class Order(metaclass=ABCMeta):
         return int(min(available_volume, abs(self.open_amount)))
 
     @classmethod
-    def from_signal_event(cls, signal, action):
+    def from_signal_event(cls, signal: SignalEvent, action: TradeAction):
         """
         Create an order from a :class:`pytech.backtest.event.SignalEvent`.
 
@@ -270,6 +273,18 @@ class Order(metaclass=ABCMeta):
         """
         return cls(signal.ticker, action, signal.order_type,
                    stop=signal.stop_price, limit=signal.limit_price)
+
+    @classmethod
+    def get_order(cls, type_: Union['Order', str]):
+        """
+        Get a reference to the Order class requested.
+
+        :param type_: the type of order class to get.
+        :return: the reference to the class
+        """
+        for subclass in cls.__subclasses__():
+            if subclass.order_type is OrderType.check_if_valid(type_):
+                return subclass
 
 
 class MarketOrder(Order):
