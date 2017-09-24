@@ -15,6 +15,17 @@ from pytech.utils.enums import (
 )
 import datetime as dt
 
+class TestOrder(object):
+    """Tests for the base order class"""
+    def test_get_order(self):
+        ref = Order.get_order(OrderType.MARKET)
+        mkt_order = ref('AAPL',
+                        TradeAction.BUY,
+                        100,
+                        created=dt.datetime.now(),
+                        order_id='1')
+        assert isinstance(mkt_order, MarketOrder)
+
 
 class TestMarketOrder(object):
     """Tests for the order class."""

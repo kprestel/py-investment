@@ -13,6 +13,7 @@ from typing import (
 import numpy as np
 import pandas as pd
 import pandas_market_calendars as mcal
+import pytz
 from pandas.tseries.offsets import DateOffset
 
 import pytech.utils as utils
@@ -25,6 +26,7 @@ from pytech.utils.enums import (
     TradeAction,
 )
 from pytech.utils.exceptions import BadOrderParams
+from utils import class_property
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ class Order(metaclass=ABCMeta):
     """Hold open orders"""
 
     LOGGER_NAME = 'order'
+    _order_type = None
 
     def __init__(self,
                  ticker: str,
@@ -108,7 +111,7 @@ class Order(metaclass=ABCMeta):
         if created is not None:
             self.created = utils.parse_date(created)
         else:
-            self.created = pd.Timestamp(datetime.now())
+            self.created = pd.Timestamp(datetime.now(), tzinfo=pytz.UTC)
 
         # the last time the order changed
         self.last_updated = self.created
@@ -172,11 +175,6 @@ class Order(metaclass=ABCMeta):
         For a stop order, True IF stop_reached.
         For a limit order, True IF limit_reached.
         """
-
-    @property
-    @abstractmethod
-    def order_type(self) -> OrderType:
-        """Must return the OrderType"""
 
     @property
     def open(self):
@@ -264,6 +262,11 @@ class Order(metaclass=ABCMeta):
         """
         return int(min(available_volume, abs(self.open_amount)))
 
+    @class_property
+    @classmethod
+    def order_type(cls):
+        return cls._order_type
+
     @classmethod
     def from_signal_event(cls, signal: SignalEvent, action: TradeAction):
         """
@@ -279,7 +282,7 @@ class Order(metaclass=ABCMeta):
                    stop=signal.stop_price, limit=signal.limit_price)
 
     @classmethod
-    def get_order(cls, type_: Union['Order', str]):
+    def get_order(cls, type_: Union['OrderType', str]):
         """
         Get a reference to the Order class requested.
 
@@ -293,6 +296,8 @@ class Order(metaclass=ABCMeta):
 
 class MarketOrder(Order):
     """Orders that will be executed at whatever the latest market price is"""
+
+    _order_type: OrderType = OrderType.MARKET
 
     def __init__(self, ticker: str,
                  action: TradeAction,
@@ -310,13 +315,11 @@ class MarketOrder(Order):
     def triggered(self) -> bool:
         return True
 
-    @property
-    def order_type(self) -> OrderType:
-        return OrderType.MARKET
-
 
 class LimitOrder(Order):
     """Limit order. Update this."""
+
+    _order_type: OrderType = OrderType.LIMIT
 
     def __init__(self,
                  ticker: str,
@@ -357,10 +360,6 @@ class LimitOrder(Order):
     def triggered(self) -> bool:
         return self.limit_reached
 
-    @property
-    def order_type(self) -> OrderType:
-        return OrderType.LIMIT
-
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         """
         Check if the ``order``'s limit price has been broken.
@@ -387,6 +386,8 @@ class LimitOrder(Order):
 
 class StopOrder(Order):
     """Stop orders."""
+
+    _order_type: OrderType = OrderType.STOP
 
     def __init__(self,
                  ticker: str,
@@ -426,9 +427,6 @@ class StopOrder(Order):
     def triggered(self) -> bool:
         return self.stop_reached
 
-    @property
-    def order_type(self) -> OrderType:
-        return OrderType.STOP
 
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         if self.action is TradeAction.BUY and current_price >= self.stop_price:
@@ -446,6 +444,8 @@ class StopOrder(Order):
 class StopLimitOrder(StopOrder, LimitOrder):
     """Stop limit"""
 
+    _order_type: OrderType = OrderType.STOP_LIMIT
+
     def __init__(self,
                  ticker: str,
                  action: TradeAction,
@@ -462,17 +462,15 @@ class StopLimitOrder(StopOrder, LimitOrder):
         super().__init__(ticker, action, qty,
                          stop_price=stop_price,
                          limit_price=limit_price,
-                         order_subtype=order_subtype, created=created,
-                         max_days_open=max_days_open, order_id=order_id,
+                         order_subtype=order_subtype,
+                         created=created,
+                         max_days_open=max_days_open,
+                         order_id=order_id,
                          **kwargs)
 
     @property
     def triggered(self) -> bool:
         return self.stop_reached and self.limit_reached
-
-    @property
-    def order_type(self) -> OrderType:
-        return OrderType.STOP_LIMIT
 
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         """

@@ -5,7 +5,7 @@ import uuid
 import logging
 from typing import (
     Iterable,
-    Any
+    Any,
 )
 
 import collections
@@ -19,6 +19,7 @@ def make_id():
 
 def is_iterable(obj: Any) -> bool:
     return not isinstance(obj, str) and isinstance(obj, collections.Iterable)
+
 
 def iterable_to_set(iterable):
     """
@@ -48,3 +49,27 @@ class Borg(object):
 
     def __init__(self):
         self.__dict__ = self._shared_state
+
+
+# noinspection PyPep8Naming
+class class_property(property):
+    """
+    This is intended to be used a decorator on a classmethod to create a
+    class property.
+
+    .. note::
+
+        This property does **NOT** provide a setter.
+
+    >>> class ClassProp(object):
+    >>>     _foo = 'bar'
+    >>>     @class_property
+    >>>     @classmethod
+    >>>     def foo(cls):
+    >>>         return cls._foo
+
+    """
+
+    # noinspection PyMethodOverriding,PyUnresolvedReferences
+    def __get__(self, cls, owner):
+        return self.fget.__get__(None, owner)()
