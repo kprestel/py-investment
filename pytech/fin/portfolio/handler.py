@@ -267,7 +267,7 @@ class BasicSignalHandler(SignalHandler):
         pass
 
     def _get_target_qty(self, price: float,
-                        portfolio: Portfolio,
+                        portfolio: 'Portfolio',
                         signal: SignalEvent) -> int:
         if self.include_cash:
             mv = portfolio.total_value

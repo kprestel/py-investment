@@ -1,10 +1,12 @@
 import logging
 import math
-from abc import ABCMeta, abstractmethod
+from abc import (
+    ABCMeta,
+    abstractmethod,
+)
 from datetime import datetime
 from sys import float_info
 from typing import (
-    TypeVar,
     Union,
 )
 
@@ -13,12 +15,15 @@ import pandas as pd
 import pandas_market_calendars as mcal
 from pandas.tseries.offsets import DateOffset
 
-import pytech.utils.common_utils as utils
-import pytech.utils.dt_utils as dt_utils
+import pytech.utils as utils
 from pytech.backtest.event import SignalEvent
 from pytech.fin.asset.asset import Asset
-from pytech.utils.enums import (OrderStatus, OrderSubType, OrderType,
-                                TradeAction)
+from pytech.utils.enums import (
+    OrderStatus,
+    OrderSubType,
+    OrderType,
+    TradeAction,
+)
 from pytech.utils.exceptions import BadOrderParams
 
 logger = logging.getLogger(__name__)
@@ -72,11 +77,10 @@ class Order(metaclass=ABCMeta):
         See :py:func:`asymmetric_round_price_to_penny` for more information on how
             `stop_price` and `limit_price` will get rounded.
         """
-        super().__init__()
         self.id = order_id or utils.make_id()
         self.ticker = ticker
         self.logger = logging.getLogger(
-                '{}_ticker_{}'.format(self.__class__.__name__, self.ticker))
+            '{}_ticker_{}'.format(self.__class__.__name__, self.ticker))
 
         # TODO: validate that all of these inputs make sense together.
         # e.g. if its a stop order stop shouldn't be none
@@ -98,11 +102,11 @@ class Order(metaclass=ABCMeta):
         # How much commission has already been charged on the order.
         self.commission = 0.0
         self.filled = 0
-        self._status = OrderStatus.OPEN
+        self.status = OrderStatus.OPEN
         self.reason = None
 
         if created is not None:
-            self.created = dt_utils.parse_date(created)
+            self.created = utils.parse_date(created)
         else:
             self.created = pd.Timestamp(datetime.now())
 
@@ -114,7 +118,7 @@ class Order(metaclass=ABCMeta):
     def status(self):
         if not self.open_amount:
             return OrderStatus.FILLED
-        elif self._status == OrderStatus.HELD and self.filled:
+        elif self._status is OrderStatus.HELD and self.filled:
             return OrderStatus.OPEN
         else:
             return self._status
@@ -226,8 +230,8 @@ class Order(metaclass=ABCMeta):
                                             pd.Timestamp(current_date)):
                 reason = 'Market closed without executing order.'
                 self.logger.info(
-                        'Canceling trade for ticker: {} due to {}'.format(
-                                self.ticker.ticker, reason))
+                    'Canceling trade for ticker: {} due to {}'.format(
+                        self.ticker.ticker, reason))
                 self.cancel(reason=reason)
         elif self.order_subtype is OrderSubType.GOOD_TIL_CANCELED:
             expr_date = self.created + DateOffset(days=self.max_days_open)
@@ -241,8 +245,8 @@ class Order(metaclass=ABCMeta):
                               'underlying order executing.'
                               .format(self.max_days_open))
                     self.logger.info(
-                            'Canceling trade for ticker: {} due to {}'.format(
-                                    self.ticker.ticker, reason))
+                        'Canceling trade for ticker: {} due to {}'.format(
+                            self.ticker.ticker, reason))
                     self.cancel(reason=reason)
         else:
             return
@@ -290,7 +294,11 @@ class Order(metaclass=ABCMeta):
 class MarketOrder(Order):
     """Orders that will be executed at whatever the latest market price is"""
 
-    def __init__(self, ticker, action, qty, created=None, order_id=None,
+    def __init__(self, ticker: str,
+                 action: TradeAction,
+                 qty: int,
+                 created: datetime = None,
+                 order_id: str = None,
                  *args, **kwargs):
         super().__init__(ticker, action, qty, created=created,
                          order_id=order_id, *args, **kwargs)
@@ -341,7 +349,7 @@ class LimitOrder(Order):
         try:
             if np.isfinite(limit_price):
                 self._limit_price = asymmetric_round_price_to_penny(
-                        limit_price, pref_round_down)
+                    limit_price, pref_round_down)
         except TypeError:
             raise BadOrderParams(order_type='limit', price=limit_price)
 
@@ -410,7 +418,7 @@ class StopOrder(Order):
         try:
             if np.isfinite(stop_price):
                 self._stop_price = asymmetric_round_price_to_penny(
-                        stop_price, pref_round_down)
+                    stop_price, pref_round_down)
         except TypeError:
             raise BadOrderParams(order_type='stop', price=stop_price)
 
