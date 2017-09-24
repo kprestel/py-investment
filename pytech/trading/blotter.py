@@ -54,7 +54,7 @@ class Blotter(object):
                  bars: 'DataHandler' = None) -> None:
         self.logger = logging.getLogger(__name__)
         # dict of all orders. key=ticker of the asset, value=the order.
-        self.orders: Dict[str, Dict[str, Order]] = {}
+        self.orders: Dict[str, Dict[str, 'AnyOrder']] = {}
         # keep a record of all past trades.
         self.trades: List[Trade] = []
         self.current_dt: datetime = None
@@ -107,7 +107,7 @@ class Blotter(object):
         else:
             self._current_dt = utils.parse_date(val)
 
-    def __getitem__(self, key) -> Order:
+    def __getitem__(self, key) -> Dict[str, 'AnyOrder']:
         """Get an order from the orders dict."""
         return self.orders[key]
 
@@ -266,17 +266,19 @@ class Blotter(object):
         if order_type is OrderType.STOP_LIMIT:
             return StopLimitOrder(ticker, action, qty, **kwargs)
 
-    def _find_order(self, order_id, ticker):
+    def _find_order(self, order_id: str, ticker: str = None) -> 'AnyOrder':
         if ticker is None:
-            for asset_orders in self.orders:
-                if order_id in asset_orders:
-                    return asset_orders[order_id]
+            for id_, order in self:
+                if order_id == id_:
+                    return order
         else:
             for k, v in self.orders[ticker].items():
                 if k == order_id:
                     return v
 
-    def cancel_order(self, order_id, ticker=None, reason=''):
+    def cancel_order(self, order_id: str,
+                     ticker: str=None,
+                     reason: str=''):
         """
         Mark an order as canceled so that it will not get executed.
 
@@ -290,7 +292,8 @@ class Blotter(object):
             The reason that the order is being cancelled.
         :return:
         """
-        self._do_order_cancel(self._find_order(order_id, ticker), reason)
+        order = self._find_order(order_id, ticker)
+        self._do_order_cancel(order, reason)
 
     def cancel_all_orders_for_asset(self, ticker,
                                     reason='',

@@ -36,7 +36,7 @@ class TestOrder(object):
         order = Order.from_signal_event(event, 100)
         assert isinstance(order, LimitOrder)
         assert order.qty == 100
-        assert order.limit_price == 124.1
+        assert order.limit_price == 124.12
 
 
 class TestMarketOrder(object):
