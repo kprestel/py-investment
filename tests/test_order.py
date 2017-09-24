@@ -3,6 +3,7 @@ import pytest
 import pandas as pd
 import pytz
 
+from backtest.event import SignalEvent
 from pytech.trading.order import (
     Order,
     MarketOrder,
@@ -12,6 +13,7 @@ from pytech.utils.enums import (
     TradeAction,
     OrderStatus,
     OrderType,
+    SignalType,
 )
 import datetime as dt
 
@@ -25,6 +27,16 @@ class TestOrder(object):
                         created=dt.datetime.now(),
                         order_id='1')
         assert isinstance(mkt_order, MarketOrder)
+
+    def test_from_signal_event(self):
+        event = SignalEvent('AAPL',
+                            SignalType.LONG,
+                            TradeAction.BUY,
+                            limit_price=124.12)
+        order = Order.from_signal_event(event, 100)
+        assert isinstance(order, LimitOrder)
+        assert order.qty == 100
+        assert order.limit_price == 124.1
 
 
 class TestMarketOrder(object):

@@ -2,12 +2,12 @@ import datetime
 import logging
 from abc import (
     ABCMeta,
-    abstractmethod
+    abstractmethod,
 )
 from typing import (
     Any,
     Dict,
-    Union
+    Union,
 )
 
 import pytech.utils.dt_utils as dt_utils
@@ -16,7 +16,7 @@ from pytech.utils.enums import (
     OrderType,
     Position,
     SignalType,
-    TradeAction
+    TradeAction,
 )
 
 
@@ -65,12 +65,12 @@ class SignalEvent(Event):
     def __init__(self,
                  ticker: str,
                  signal_type: Union[SignalType, str],
+                 action: Union[TradeAction, str],
                  limit_price: float = None,
                  stop_price: float = None,
                  target_price: float = None,
                  strength: Any = None,
                  order_type: OrderType = None,
-                 action: TradeAction = None,
                  position: Position = None,
                  upper_price: float = None,
                  lower_price: float = None,
@@ -96,21 +96,18 @@ class SignalEvent(Event):
             considered ``LONG`` of ``SHORT`` it is up to the portfolio
             to determine this.
 
+        :param ticker: the ticker to create the signal for.
+        :param signal_type: the type of signal being created.
+        :param action: the :class:`TradeAction` the signal is indicating.
         :param upper_price:
         :param lower_price:
         :param position:
-        :param action:
         :param limit_price:
         :param stop_price:
         :param target_price:
         :param strength:
-        :param order_type:
-        :class:`StopLimitOrder` would be created.
-        - ``target_price`` and ``strength`` **DO NOT** have any sort of
-        :param ticker: The ticker to create the signal for.
-        :param signal_type: The type of signal being created.
+        :param order_type: This will never actually be ``None``.
         """
-
         super().__init__()
 
         self.ticker = ticker
@@ -158,13 +155,13 @@ class TradeSignalEvent(SignalEvent):
 
     def __init__(self,
                  ticker: str,
-                 signal_type: SignalType or str,
+                 signal_type: Union[SignalType, str],
+                 action: Union[TradeAction, str],
                  limit_price: float = None,
                  stop_price: float = None,
                  target_price: float = None,
                  strength: Any = None,
                  order_type: OrderType = None,
-                 action: TradeAction = None,
                  position: Position = None,
                  upper_price: float = None,
                  lower_price: float = None,

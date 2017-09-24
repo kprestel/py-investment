@@ -258,7 +258,8 @@ class BasicSignalHandler(SignalHandler):
         qty = self._get_target_qty(price, portfolio, signal)
 
         if portfolio.check_liquidity(price, qty):
-            pass
+            portfolio.blotter.place_order(portfolio, qty=qty,
+                                          **signal.__dict__)
 
 
     def _handle_general_trade_signal(self, portfolio: 'Portfolio',
@@ -269,7 +270,7 @@ class BasicSignalHandler(SignalHandler):
     def _get_target_qty(self, price: float,
                         portfolio: 'Portfolio',
                         signal: SignalEvent) -> int:
-        if self.include_cash:
+        if self.include_cash or portfolio.total_asset_mv == 0.0:
             mv = portfolio.total_value
         else:
             mv = portfolio.total_asset_mv

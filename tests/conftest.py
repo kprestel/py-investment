@@ -108,6 +108,10 @@ def basic_portfolio(events, bars, start_date, populated_blotter):
     return BasicPortfolio(bars, events, start_date,
                           populated_blotter)
 
+@pytest.fixture()
+def empty_portfolio(events, start_date, blotter):
+    return BasicPortfolio(blotter.bars, events, start_date, blotter)
+
 
 @pytest.fixture()
 def basic_signal_handler(basic_portfolio):

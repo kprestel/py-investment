@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import (
     List,
     TYPE_CHECKING,
-    Union
+    Union,
+    Dict,
 )
 
 import pytech.utils as utils
@@ -53,7 +54,7 @@ class Blotter(object):
                  bars: 'DataHandler' = None) -> None:
         self.logger = logging.getLogger(__name__)
         # dict of all orders. key=ticker of the asset, value=the order.
-        self.orders = {}
+        self.orders: Dict[str, Dict[str, Order]] = {}
         # keep a record of all past trades.
         self.trades: List[Trade] = []
         self.current_dt: datetime = None

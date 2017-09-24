@@ -27,7 +27,7 @@ class TradingControl(metaclass=ABCMeta):
     ABC representing a fail-safe control on the execution of a strategy.
     """
 
-    def __init__(self, raise_on_error: bool = True, **kwargs):
+    def __init__(self, raise_on_error: bool = True, **kwargs) -> None:
         self.logger: logging.Logger = logging.getLogger(__name__)
         self.raise_on_error: bool = raise_on_error
         self.__fail_args: Dict[str, Any] = kwargs

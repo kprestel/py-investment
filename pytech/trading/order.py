@@ -268,18 +268,19 @@ class Order(metaclass=ABCMeta):
         return cls._order_type
 
     @classmethod
-    def from_signal_event(cls, signal: SignalEvent, action: TradeAction):
+    def from_signal_event(cls, signal: SignalEvent, qty: int):
         """
-        Create an order from a :class:`pytech.backtest.event.SignalEvent`.
+        Create an order from a :class:`SignalEvent`.
 
         :param SignalEvent or LongSignalEvent or ShortSignalEvent signal:
         The signal event that triggered the order to be created.
         :param TradeAction action: The TradeAction that the order is for.
         :return: A new order
-        :rtype: Order
         """
-        return cls(signal.ticker, action, signal.order_type,
-                   stop=signal.stop_price, limit=signal.limit_price)
+        order_class = cls.get_order(signal.order_type)
+        # return order_class(signal.ticker, signal.action, signal.order_type,
+        #            stop=signal.stop_price, limit=signal.limit_price)
+        return order_class(qty=qty,**signal.__dict__)
 
     @classmethod
     def get_order(cls, type_: Union['OrderType', str]):
