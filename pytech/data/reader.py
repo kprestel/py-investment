@@ -4,7 +4,13 @@ database to be accessed later.
 """
 import datetime as dt
 import logging
-from typing import Dict, Iterable, Union, Tuple
+from typing import (
+    Dict,
+    Iterable,
+    Union,
+    Tuple,
+    TypeVar,
+)
 
 import numpy as np
 import pandas as pd
@@ -14,19 +20,16 @@ from arctic.exceptions import NoDataFoundException
 from pandas.tseries.offsets import BDay
 from pandas_datareader._utils import RemoteDataError
 
-import pytech.utils.dt_utils as dt_utils
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils as utils
 from pytech.decorators.decorators import write_chunks
 from pytech.mongo import ARCTIC_STORE
 from pytech.mongo.barstore import BarStore
-from pytech.utils.exceptions import DataAccessError
 from pytech.data._holders import DfLibName
 
 logger = logging.getLogger(__name__)
 
-ticker_input = Union[Iterable, str, pd.DataFrame]
-range_type = Union[pd.DatetimeIndex, DateRange]
-
+ticker_input = TypeVar('A', Iterable, str, pd.DataFrame)
+range_type = TypeVar('A', pd.DatetimeIndex, DateRange)
 
 YAHOO = 'yahoo'
 GOOGLE = 'google'
@@ -78,26 +81,34 @@ class BarReader(object):
         :param kwargs: kwargs are passed blindly to `pandas_datareader`
         :return: A `dict[ticker, DataFrame]`.
         """
-        start, end = dt_utils.sanitize_dates(start, end)
+        start, end = utils.sanitize_dates(start, end)
 
         if isinstance(tickers, str):
             try:
-                df_lib_name = self._single_get_data(tickers, source, start,
-                                                    end, check_db, filter_data,
+                df_lib_name = self._single_get_data(tickers,
+                                                    source,
+                                                    start,
+                                                    end,
+                                                    check_db,
+                                                    filter_data,
                                                     **kwargs)
                 return df_lib_name.df
-            except DataAccessError as e:
-                raise DataAccessError(
-                        f'Could not get data for ticker: {tickers}') from e
+            except utils.DataAccessError:
+                raise utils.DataAccessError(f'Could not get data for ticker: '
+                                            f'{tickers}')
         else:
             if isinstance(tickers, pd.DataFrame):
                 tickers = tickers.index
             try:
-                return self._mult_tickers_get_data(tickers, source, start, end,
-                                                   check_db, filter_data,
+                return self._mult_tickers_get_data(tickers,
+                                                   source,
+                                                   start,
+                                                   end,
+                                                   check_db,
+                                                   filter_data,
                                                    **kwargs)
-            except DataAccessError as e:
-                raise e
+            except utils.DataAccessError:
+                raise
 
     def _mult_tickers_get_data(self,
                                tickers: Iterable,
@@ -115,15 +126,15 @@ class BarReader(object):
         for t in tickers:
             try:
                 df_lib_name = self._single_get_data(t, source, start, end,
-                                                  check_db, filter_data,
-                                                  **kwargs)
+                                                    check_db, filter_data,
+                                                    **kwargs)
                 stocks[t] = df_lib_name.df
                 passed.append(t)
-            except DataAccessError:
+            except utils.DataAccessError:
                 failed.append(t)
 
         if len(passed) == 0:
-            raise DataAccessError('No data could be retrieved.')
+            raise utils.DataAccessError('No data could be retrieved.')
 
         if len(stocks) > 0 and len(failed) > 0 and len(passed) > 0:
             df_na = stocks[passed[0]].copy()
@@ -148,13 +159,13 @@ class BarReader(object):
             try:
                 return self._from_db(ticker, source, start, end,
                                      filter_data, **kwargs)
-            except DataAccessError:
+            except utils.DataAccessError:
                 # don't raise, try to make the network call
                 logger.info(f'Ticker: {ticker} not found in DB.')
 
         try:
             return self._from_web(ticker, source, start, end, **kwargs)
-        except DataAccessError:
+        except utils.DataAccessError:
             logger.warning(f'Error getting data from {source} '
                            f'for ticker: {ticker}')
             raise
@@ -180,16 +191,16 @@ class BarReader(object):
                 return DfLibName(df, lib_name=self.lib_name)
         except RemoteDataError as e:
             logger.warning(f'Error occurred getting data from {source}')
-            raise DataAccessError from e
+            raise utils.DataAccessError from e
         else:
-            df = pd_utils.rename_bar_cols(df)
-            df[pd_utils.TICKER_COL] = ticker
+            df = utils.rename_bar_cols(df)
+            df[utils.TICKER_COL] = ticker
 
             if source == YAHOO:
                 # yahoo doesn't set the index :(
-                df = df.set_index([pd_utils.DATE_COL])
+                df = df.set_index([utils.DATE_COL])
             else:
-                df.index.name = pd_utils.DATE_COL
+                df.index.name = utils.DATE_COL
 
             return DfLibName(df, lib_name=self.lib_name)
 
@@ -219,21 +230,22 @@ class BarReader(object):
             df = self.lib.read(ticker, chunk_range=chunk_range,
                                filter_data=filter_data, **kwargs)
         except NoDataFoundException as e:
-            raise DataAccessError(f'No data in DB for ticker: {ticker}') from e
+            raise utils.DataAccessError(
+                f'No data in DB for ticker: {ticker}') from e
         except KeyError as e:
             # TODO: open a bug report against arctic...
             logger.warning('KeyError thrown by Arctic...', e)
-            raise DataAccessError(
-                    f'Error reading DB for ticker: {ticker}') from e
+            raise utils.DataAccessError(
+                f'Error reading DB for ticker: {ticker}') from e
 
         logger.debug(f'Found ticker: {ticker} in DB.')
 
-        db_start = dt_utils.parse_date(df.index.min(axis=1))
-        db_end = dt_utils.parse_date(df.index.max(axis=1))
+        db_start = utils.parse_date(df.index.min(axis=1))
+        db_end = utils.parse_date(df.index.max(axis=1))
 
         # check that all the requested data is present
         # TODO: deal with days that it is expected that data shouldn't exist.
-        if db_start > start and dt_utils.is_trade_day(start):
+        if db_start > start and utils.is_trade_day(start):
             # db has less data than requested
             lower_df_lib_name = self._from_web(ticker, source, start,
                                                db_start - BDay())
@@ -241,7 +253,7 @@ class BarReader(object):
         else:
             lower_df = None
 
-        if db_end.date() < end.date() and dt_utils.is_trade_day(end):
+        if db_end.date() < end.date() and utils.is_trade_day(end):
             # db doesn't have as much data than requested
             upper_df_lib_name = self._from_web(ticker, source, db_end, end)
             upper_df = upper_df_lib_name.df

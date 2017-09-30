@@ -1,5 +1,6 @@
 import os
 import queue
+from typing import Dict
 from unittest.mock import MagicMock as Mock
 
 import pandas as pd
@@ -9,10 +10,12 @@ import pytech.trading.blotter as b
 from pytech.fin.portfolio.handler import BasicSignalHandler
 from pytech import TEST_DATA_DIR
 from pytech.data.handler import Bars
+from pytech.data import BarReader
 from pytech.fin.asset.asset import Stock
 from pytech.fin.portfolio import BasicPortfolio
 from pytech.mongo import ARCTIC_STORE
 from pytech.trading.controls import MaxOrderCount
+import pytech.utils as utils
 
 lib = ARCTIC_STORE['pytech.bars']
 
@@ -26,28 +29,92 @@ def start_date():
 def end_date():
     return '2017-06-09'
 
+@pytest.fixture(scope='session')
+def _ticker_df_cache():
+    """
+    Create a dictionary of dfs so we only have to go to disk once.
+    """
+    df_cache = {}
+    for f in os.listdir(TEST_DATA_DIR):
+        df = pd.read_csv(os.path.join(TEST_DATA_DIR, f),
+                         index_col=utils.DATE_COL,
+                         parse_dates=['date'])
+        df.index.name = utils.DATE_COL
+        df_cache[os.path.splitext(os.path.basename(f))[0]] = df
+    return df_cache
+
 
 # @pytest.fixture(autouse=True)
-def no_requests(monkeypatch):
-    """Prevent making requests to yahoo to speed up testing"""
+def write_ref_csv(monkeypatch, start_date, end_date):
+    """
+    This is a utils fixture that shouldn't be used unless generating
+    reference data.
+    """
 
-    def patch_requests(ticker, data_source, start, end):
-        # return lib.read(ticker)
-        # return db.read(ticker)
-        return pd.read_csv(get_test_csv_path(ticker), parse_dates=['Date'])
+    def to_csv(bar_reader: BarReader, tickers,
+               source='google',
+               start=start_date,
+               end=end_date,
+               check_db=True,
+               filter_data=True,
+               **kwargs):
+        start = utils.parse_date(start)
+        end = utils.parse_date(end)
+        _ = kwargs.pop('columns', None)
+        if isinstance(tickers, str):
+            df = bar_reader._single_get_data(tickers,
+                                             source,
+                                             start,
+                                             end,
+                                             check_db,
+                                             filter_data,
+                                             **kwargs)
+            df.df.to_csv(f'{TEST_DATA_DIR}{os.sep}{tickers}.csv')
+            return df.df
+        else:
+            if isinstance(tickers, pd.DataFrame):
+                tickers = tickers.index
+            df = bar_reader._mult_tickers_get_data(tickers,
+                                                   source,
+                                                   start,
+                                                   end,
+                                                   check_db,
+                                                   filter_data,
+                                                   **kwargs)
+            for ticker, df_ in df.items():
+                df_.to_csv(f'{TEST_DATA_DIR}{os.sep}{ticker}.csv')
+            return df
 
-    monkeypatch.setattr('pandas_datareader.data.DataReader', patch_requests)
+    monkeypatch.setattr(BarReader, 'get_data', to_csv)
+
+
+@pytest.fixture(autouse=True)
+def no_db(monkeypatch, _ticker_df_cache: Dict[str, pd.DataFrame]):
+    """Don't make any database calls. Read all data from `TEST_DATA_DIR`"""
+
+    def patch_get_data(bar_reader, tickers, *args, **kwargs):
+        if isinstance(tickers, str):
+            return _ticker_df_cache[tickers]
+
+        dfs = {}
+        for ticker in tickers:
+            df = _ticker_df_cache[ticker]
+            dfs[ticker] = df
+
+        return dfs
+
+    monkeypatch.setattr(BarReader, 'get_data', patch_get_data)
 
 
 @pytest.fixture(scope='module')
 def aapl_df():
     """Returns a OHLCV df for Apple."""
-    return lib.read('AAPL')
+    return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}AAPL.csv')
 
 
 def get_test_csv_path(ticker):
     """Return the path to the test CSV file"""
-    return TEST_DATA_DIR + os.sep + '{}.csv'.format(ticker)
+    return f'{TEST_DATA_DIR}{os.sep}{ticker}.csv'
 
 
 @pytest.fixture(scope='session')
@@ -107,6 +174,7 @@ def basic_portfolio(events, bars, start_date, populated_blotter):
     populated_blotter.bars = bars
     return BasicPortfolio(bars, events, start_date,
                           populated_blotter)
+
 
 @pytest.fixture()
 def empty_portfolio(events, start_date, blotter):

@@ -1,2 +1,2 @@
 [run]
-omit = lib/* bin/* include/*
+omit = lib/* bin/* include/* pyenv/* tests/*

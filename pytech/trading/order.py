@@ -26,7 +26,7 @@ from pytech.utils.enums import (
     TradeAction,
 )
 from pytech.utils.exceptions import BadOrderParams
-from utils import class_property
+from ..utils import class_property
 
 logger = logging.getLogger(__name__)
 

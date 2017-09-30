@@ -73,9 +73,6 @@ class InvalidPositionError(ValueError, PyInvestmentError):
     """Raised when a position is not either long or short"""
     msg = 'action must either be "LONG" or "SHORT". {position} was provided.'
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
-
 
 class InvalidActionError(ValueError, PyInvestmentError):
     """Raised when a :class:``Trade`` action is not either buy or sell"""

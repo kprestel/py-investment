@@ -33,7 +33,7 @@ class DataHandler(metaclass=ABCMeta):
                  start_date: dt.datetime,
                  end_date: dt.datetime,
                  asset_lib_name: str = 'pytech.bars',
-                 market_lib_name: str = 'pytech.market'):
+                 market_lib_name: str = 'pytech.market') -> None:
         """
         All child classes MUST call this constructor.
 
@@ -47,20 +47,19 @@ class DataHandler(metaclass=ABCMeta):
         :param market_lib_name: The name of the mongo library where market
             bars are stored. Defaults to *pytech.market*
         """
-        self.logger = logging.getLogger(__name__)
-        self.events = events
-        self.tickers = []
+        self.logger: logging.Logger = logging.getLogger(__name__)
+        self.events: queue.Queue = events
+        self.tickers: List[str] = []
         self.tickers.extend(tickers)
         # self._ticker_data = {}
         self.latest_ticker_data = {}
-        self.continue_backtest = True
-        self.start_date = utils.parse_date(start_date)
-        self.end_date = utils.parse_date(end_date)
-        self.asset_lib_name = asset_lib_name
-        self.market_lib_name = market_lib_name
-        self.asset_reader = BarReader(asset_lib_name)
-        self.market_reader = BarReader(market_lib_name)
-        # self._populate_ticker_data()
+        self.continue_backtest: bool = True
+        self.start_date: dt.datetime = utils.parse_date(start_date)
+        self.end_date: dt.datetime = utils.parse_date(end_date)
+        self.asset_lib_name: str = asset_lib_name
+        self.market_lib_name: str = market_lib_name
+        self.asset_reader: BarReader = BarReader(asset_lib_name)
+        self.market_reader: BarReader = BarReader(market_lib_name)
 
     @lazy_property
     def ticker_data(self):
@@ -217,6 +216,11 @@ class Bars(DataHandler):
                                           start=self.start_date,
                                           end=self.end_date,
                                           **kwargs)
+        # from pytech import TEST_DATA_DIR
+        # import os
+        # for ticker, df in dfs.items():
+        #     df.to_csv(f'{TEST_DATA_DIR}{os.sep}{ticker}.csv')
+        # return dfs
 
     def _get_new_bar(self, ticker: str):
         """

@@ -83,7 +83,7 @@ class Portfolio(metaclass=ABCMeta):
         self.lib: PortfolioStore = ARCTIC_STORE['pytech.portfolio']
         self.positions_df: pd.DataFrame = pd.DataFrame()
         self.raise_on_warnings: bool = raise_on_warnings
-        self._signal_handlers = None
+        self.signal_handlers = None
 
     @property
     def signal_handlers(self):

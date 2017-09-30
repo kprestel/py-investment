@@ -17,7 +17,7 @@ from pytech.utils.enums import (
     SignalType,
     TradeAction,
 )
-from pytech.utils.exceptions import InvalidSignalTypeError
+from pytech.utils.exceptions import InvalidSignalTypeError, InsufficientFundsError
 
 if TYPE_CHECKING:
     from pytech.fin.portfolio import Portfolio
@@ -27,8 +27,17 @@ if TYPE_CHECKING:
 class SignalHandler(metaclass=ABCMeta):
     """ABC for Signal Handlers."""
 
-    def __init__(self):
+    def __init__(self, raise_on_warnings: bool = True):
+        """
+        Constructor for the `SignalHandler` base classes
+        :param raise_on_warnings: if true exceptions will be raised, otherwise
+            they will just be logged as warnings. The main purpose of this
+            attribute is to determine whether or not to raise an
+            :class:``InsufficientFundsError`` when one is encountered.
+
+        """
         self.logger = logging.getLogger(__name__)
+        self.raise_on_warnings = raise_on_warnings
 
     def handle_signal(self, portfolio: 'Portfolio',
                       triggered_orders: List['AnyOrder'],
@@ -186,7 +195,8 @@ class SignalHandler(metaclass=ABCMeta):
 class BasicSignalHandler(SignalHandler):
     """A basic implementation of a Signal handler."""
 
-    def __init__(self, include_cash: bool = False,
+    def __init__(self, raise_on_warnings: bool = True,
+                 include_cash: bool = False,
                  max_weight: float = .25,
                  min_weight: float = .05,
                  target_weight: float = .15,
@@ -207,7 +217,7 @@ class BasicSignalHandler(SignalHandler):
             account for in a portfolio.
         :param price_col: the column to get the latest price from.
         """
-        super().__init__()
+        super().__init__(raise_on_warnings)
         self.include_cash = include_cash
 
         if max_weight > 0:
@@ -260,6 +270,11 @@ class BasicSignalHandler(SignalHandler):
         if portfolio.check_liquidity(price, qty):
             portfolio.blotter.place_order(portfolio, qty=qty,
                                           **signal.__dict__)
+        elif self.raise_on_warnings:
+            raise InsufficientFundsError(ticker=signal.ticker)
+        else:
+            self.logger.warning(f'Attempted to place an order for '
+                                f'{signal.ticker} but lack sufficient funds.')
 
 
     def _handle_general_trade_signal(self, portfolio: 'Portfolio',

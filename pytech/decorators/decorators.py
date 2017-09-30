@@ -68,12 +68,13 @@ def write_chunks(chunk_size='D', remove_ticker=True):
             lib_name = df_lib_name.lib_name
             try:
                 # TODO: make this use the fast scalar getter
-                ticker = df[utils.TICKER_COL][0]
+                # ticker = df[utils.TICKER_COL][0]
+                ticker = df[utils.TICKER_COL].iat[0]
                 # ticker = df.at[0, pd_utils.TICKER_COL]
             except KeyError:
                 raise PyInvestmentKeyError(
                     'Decorated functions are required to add a column '
-                    f'{utils.TICKER_COL} that contains the ticker.')
+                    f'"{utils.TICKER_COL}" that contains the ticker.')
 
             if remove_ticker:
                 # should this be saved?

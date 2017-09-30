@@ -41,12 +41,10 @@ class TestYahooDataHandler(object):
         """
         assert bars is not None
         # yahoo_data_handler.update_bars()
-        aapl_close = (bars.latest_bar_value('AAPL',
-                                            pd_utils.CLOSE_COL))
+        aapl_close = (bars.latest_bar_value('AAPL', pd_utils.CLOSE_COL))
         aapl_close_expected = 101.17
         assert aapl_close == approx(aapl_close_expected)
-        aapl_open = (bars
-                     .latest_bar_value('AAPL', pd_utils.OPEN_COL))
+        aapl_open = (bars.latest_bar_value('AAPL', pd_utils.OPEN_COL))
         aapl_open_expected = 101.410004
         assert aapl_open == approx(aapl_open_expected)
 

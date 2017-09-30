@@ -21,7 +21,6 @@ __pycache__/
 # C extensions
 .idea
 *.sqlite
-test/sample_data/*
 #pytech/pytech.sqlite
 
 # Distribution / packaging
@@ -111,12 +110,8 @@ pytech/FY_20160924_10K_AAPL.json
 pytech/Q1_20151226_10Q_AAPL.json
 pytech/Q2_20160326_10Q_AAPL.json
 pytech/Q3_20160625_10Q_AAPL.json
-test/sample_data/
-/resources/
-/tests/sample_data/
 pytech/resources/
 pyenv_3.6/
 pytech/source/_static/
 pytech/source/_templates/
-tests/fin/resources/
 tests/resources/

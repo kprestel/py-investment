@@ -568,7 +568,7 @@ class Blotter(object):
             and ``None`` if the order is still open
         :rtype: Order or None
 
-        This method will add the ticker to the :py:class:``Portfolio`` ticker
+        This method will add the ticker to the :class:``Portfolio`` ticker
         dict and update the db to reflect the trade.
 
         Valid **action** parameter values are:
