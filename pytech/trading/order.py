@@ -280,7 +280,7 @@ class Order(metaclass=ABCMeta):
         order_class = cls.get_order(signal.order_type)
         # return order_class(signal.ticker, signal.action, signal.order_type,
         #            stop=signal.stop_price, limit=signal.limit_price)
-        return order_class(qty=qty,**signal.__dict__)
+        return order_class(qty=qty, **signal.__dict__)
 
     @classmethod
     def get_order(cls, type_: Union['OrderType', str]):
@@ -419,15 +419,14 @@ class StopOrder(Order):
         pref_round_down = self.action is not TradeAction.BUY
         try:
             if np.isfinite(stop_price):
-                self._stop_price = asymmetric_round_price_to_penny(
-                    stop_price, pref_round_down)
+                self._stop_price = asymmetric_round_price_to_penny(stop_price,
+                                                                   pref_round_down)
         except TypeError:
             raise BadOrderParams(order_type='stop', price=stop_price)
 
     @property
     def triggered(self) -> bool:
         return self.stop_reached
-
 
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         if self.action is TradeAction.BUY and current_price >= self.stop_price:

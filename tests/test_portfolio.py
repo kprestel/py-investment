@@ -6,24 +6,9 @@ from fin.asset.owned_asset import OwnedAsset
 from pytech.backtest.event import MarketEvent
 from pytech.fin.portfolio import BasicPortfolio
 from pytech.fin.portfolio.portfolio import (
-    Portfolio_,
     Portfolio,
 )
 from utils.enums import Position
-
-
-class TestPortfolio(object):
-    def test_check_liquidity(self):
-        test_portfolio = Portfolio_(starting_cash=100)
-
-        liquid = test_portfolio.check_liquidity(100.0, 2)
-        assert liquid is False
-
-        liquid = test_portfolio.check_liquidity(100.0, -2)
-        assert liquid is True
-
-        liquid = test_portfolio.check_liquidity(1.0, 2)
-        assert liquid is True
 
 
 class TestBasicPortfolio(object):

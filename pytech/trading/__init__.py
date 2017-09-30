@@ -19,7 +19,13 @@ def get_order_types() -> TypeVar:
                    StopLimitOrder)
 
 
-AnyOrder = get_order_types()
+# AnyOrder = get_order_types()
+AnyOrder = TypeVar('A',
+                   Order,
+                   MarketOrder,
+                   StopOrder,
+                   LimitOrder,
+                   StopLimitOrder)
 
 from .controls import TradingControl
 from .blotter import Blotter

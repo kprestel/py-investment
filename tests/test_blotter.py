@@ -1,9 +1,14 @@
+from typing import TYPE_CHECKING
+
 import pytech.trading.order as ord
 from pytech.utils.enums import (
     OrderStatus,
     OrderType,
     TradeAction
 )
+
+if TYPE_CHECKING:
+    from pytech.trading import Blotter
 
 
 class TestBlotter(object):
@@ -92,3 +97,13 @@ class TestBlotter(object):
 
         both_none = blotter._filter_on_price(order, None, None)
         assert both_none is False
+
+    def test_get_item(self, populated_blotter: 'Blotter'):
+        """Test the `__get_item__` implementation."""
+        order = populated_blotter['one']
+        assert isinstance(order, ord.LimitOrder)
+        assert order.limit_price == 100.10
+        order_dict = populated_blotter['AAPL']
+        assert 2 == len(order_dict)
+
+

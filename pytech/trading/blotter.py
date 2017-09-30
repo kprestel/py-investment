@@ -16,28 +16,28 @@ from pytech.data.handler import DataHandler
 from pytech.fin.asset.asset import Asset
 from pytech.trading.commission import (
     AbstractCommissionModel,
-    PerOrderCommissionModel
+    PerOrderCommissionModel,
 )
 from pytech.trading.order import (
     LimitOrder,
     MarketOrder,
     Order,
     StopLimitOrder,
-    StopOrder
+    StopOrder,
 )
 from pytech.trading.trade import Trade
 from pytech.utils.enums import (
     OrderStatus,
     OrderSubType,
     OrderType,
-    TradeAction
+    TradeAction,
 )
 
 if TYPE_CHECKING:
     from fin.portfolio import Portfolio
     from . import (
         AnyOrder,
-        TradingControl
+        TradingControl,
     )
 
 
@@ -60,7 +60,7 @@ class Blotter(object):
         self.current_dt: datetime = None
         # events queue
         self.events: queue.Queue = events
-        self.bars : 'DataHandler' = bars
+        self.bars: 'DataHandler' = bars
         self.max_shares: int = max_shares or int(1e+11)
         # how much an auto generated limit price will be over the market price.
         self.limit_pct_buffer: float = limit_pct_buffer or 1.02
@@ -107,18 +107,29 @@ class Blotter(object):
         else:
             self._current_dt = utils.parse_date(val)
 
-    def __getitem__(self, key) -> Dict[str, 'AnyOrder']:
-        """Get an order from the orders dict."""
-        return self.orders[key]
+    def __getitem__(self, key) -> Union[Dict[str, 'AnyOrder'],
+                                        'AnyOrder']:
+        """
+        Get an order from the orders dict or get all orders for a ticker.
+
+        :param key: either an 'order_id` or a ticker.
+            If `key` is an `order_id` then that order will be returned.
+            If `key` is a ticker than a `Dict` of all the orders for the ticker
+            will be returned
+        """
+        try:
+            return self.orders[key]
+        except KeyError:
+            return self._find_order(key)
 
     def __setitem__(self, key, value):
         """
         Add an order to the orders dict.
         If the key is an instance of :class:`~ticker.Asset` then the ticker is used as the key, otherwise the key is the
         ticker.
-        :param key: The key to dictionary, will always be the ticker of the ``Asset`` the order is for but an instance
-        of :class:`~ticker.Asset` will also work as long as the ticker is set.
-        :type key: Asset or str
+        :param key: The key to dictionary, will always be the ticker of the
+        ``Asset`` the order is for but an instance of :class:`~ticker.Asset`
+        will also work as long as the ticker is set.
         :param Order value: The order.
         """
         if issubclass(key.__class__, Asset):
@@ -246,7 +257,10 @@ class Blotter(object):
                       action: TradeAction,
                       qty: int,
                       order_type: Union[OrderType, str],
-                      **kwargs) -> 'AnyOrder':
+                      **kwargs) -> Union[MarketOrder,
+                                         StopOrder,
+                                         LimitOrder,
+                                         StopLimitOrder]:
         """
         Figure out what type of order to create based on given parameters.
 
@@ -277,8 +291,8 @@ class Blotter(object):
                     return v
 
     def cancel_order(self, order_id: str,
-                     ticker: str=None,
-                     reason: str=''):
+                     ticker: str = None,
+                     reason: str = ''):
         """
         Mark an order as canceled so that it will not get executed.
 
