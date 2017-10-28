@@ -4,22 +4,20 @@ through.
 """
 import datetime as dt
 import logging
+from abc import (
+    ABCMeta,
+    abstractmethod,
+)
 from typing import (
     Any,
     Dict,
-TYPE_CHECKING
+    TYPE_CHECKING,
 )
-
-from abc import (
-    ABCMeta,
-    abstractmethod
-)
-
 
 if TYPE_CHECKING:
     from pytech.trading import AnyOrder
     from fin.portfolio import Portfolio
-from pytech.utils.exceptions import TradingControlViolation
+from exceptions import TradingControlViolation
 
 
 class TradingControl(metaclass=ABCMeta):

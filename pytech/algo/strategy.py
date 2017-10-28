@@ -1,15 +1,26 @@
 import logging
-from abc import ABCMeta, abstractmethod
+from abc import (
+    ABCMeta,
+    abstractmethod,
+)
 from queue import Queue
 
 import pandas as pd
 
 import pytech.utils.pandas_utils as pd_utils
-from pytech.backtest.event import MarketEvent, SignalEvent
+from exceptions import InvalidEventTypeError
+from pytech.backtest.event import (
+    MarketEvent,
+    SignalEvent,
+)
 from pytech.data.handler import DataHandler
 from pytech.trading import get_order_types
-from pytech.utils.enums import EventType, Position, SignalType, TradeAction
-from pytech.utils.exceptions import InvalidEventTypeError
+from pytech.utils.enums import (
+    EventType,
+    Position,
+    SignalType,
+    TradeAction,
+)
 
 OrderTypes = get_order_types()
 

@@ -115,3 +115,4 @@ pyenv_3.6/
 pytech/source/_static/
 pytech/source/_templates/
 tests/resources/
+.project

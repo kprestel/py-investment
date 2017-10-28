@@ -1,13 +1,19 @@
 from functools import wraps
-import pandas as pd
 
+import pandas as pd
 from arctic.chunkstore.chunkstore import ChunkStore
+from pandas.tseries.offsets import BDay
 
 import pytech.utils as utils
-from pytech.mongo import ARCTIC_STORE, BarStore
-from pytech.utils.exceptions import InvalidStoreError, PyInvestmentKeyError
-from pandas.tseries.offsets import BDay
-from pytech.data._holders import DfLibName
+from exceptions import (
+    InvalidStoreError,
+    PyInvestmentKeyError,
+)
+from pytech.data._holders import ReaderResult
+from pytech.mongo import (
+    ARCTIC_STORE,
+    BarStore,
+)
 
 
 def memoize(obj):
@@ -102,7 +108,7 @@ def write_chunks(chunk_size='D', remove_ticker=True):
                 lib.update(ticker, df, chunk_size=chunk_size, upsert=True)
 
             df.index.freq = BDay()
-            return DfLibName(df, lib_name)
+            return ReaderResult(lib_name, ticker, df)
 
         return eval_and_write
 

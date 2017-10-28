@@ -5,7 +5,7 @@ import pandas as pd
 from dateutil import tz
 import pytz
 import pandas_market_calendars as mcal
-from pandas.core.dtypes.inference import is_number
+from pandas.api.types import is_number
 from pandas.tslib import Timestamp
 
 

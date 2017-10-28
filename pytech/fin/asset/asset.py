@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 import pytech.utils as utils
-from pytech.data._holders import DfLibName
+from pytech.data._holders import ReaderResult
 from pytech.decorators.decorators import memoize, write_chunks
 from pytech.data.reader import BarReader
 from pytech.fin.market.market import Market
@@ -130,7 +130,7 @@ class Stock(Asset):
     @write_chunks()
     def _rolling_beta(self,
                      col=utils.CLOSE_COL,
-                     window: int = 30) -> DfLibName:
+                     window: int = 30) -> ReaderResult:
         """
         Calculate the rolling beta over a given window.
 
@@ -145,7 +145,7 @@ class Stock(Asset):
         betas = pd.concat([_calc_beta(sdf)
                            for sdf in utils.roll(df, window)], axis=1).T
         betas['ticker'] = self.ticker
-        return DfLibName(betas, BETA_STORE)
+        return ReaderResult(BETA_STORE, self.ticker, betas)
 
     def rolling_beta(self,
                       col=utils.CLOSE_COL,

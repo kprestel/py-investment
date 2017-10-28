@@ -17,6 +17,7 @@ import pytz
 from pandas.tseries.offsets import DateOffset
 
 import pytech.utils as utils
+from exceptions import BadOrderParams
 from pytech.backtest.event import SignalEvent
 from pytech.fin.asset.asset import Asset
 from pytech.utils.enums import (
@@ -25,7 +26,6 @@ from pytech.utils.enums import (
     OrderType,
     TradeAction,
 )
-from pytech.utils.exceptions import BadOrderParams
 from ..utils import class_property
 
 logger = logging.getLogger(__name__)

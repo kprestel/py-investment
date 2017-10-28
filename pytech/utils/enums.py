@@ -1,12 +1,14 @@
 from enum import Enum
 
-from pytech.utils.exceptions import (InvalidActionError,
-                                     InvalidOrderStatusError,
-                                     InvalidOrderSubTypeError,
-                                     InvalidOrderTypeError,
-                                     InvalidPositionError,
-                                     InvalidSignalTypeError,
-                                     InvalidEventTypeError)
+from exceptions import (
+    InvalidActionError,
+    InvalidEventTypeError,
+    InvalidOrderStatusError,
+    InvalidOrderSubTypeError,
+    InvalidOrderTypeError,
+    InvalidPositionError,
+    InvalidSignalTypeError,
+)
 
 
 class AutoNumber(Enum):

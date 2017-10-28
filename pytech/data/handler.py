@@ -232,7 +232,7 @@ class Bars(DataHandler):
         for bar in self.ticker_data[ticker]:
             yield bar
 
-    def get_latest_bar(self, ticker: str) -> List[pd.DataFrame]:
+    def get_latest_bar(self, ticker: str) -> pd.DataFrame:
 
         try:
             bars_list = self.latest_ticker_data[ticker]

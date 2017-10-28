@@ -34,7 +34,7 @@ from pytech.utils.enums import (
     Position,
     TradeAction,
 )
-from pytech.utils.exceptions import (
+from exceptions import (
     InsufficientFundsError,
     InvalidEventTypeError,
 )
