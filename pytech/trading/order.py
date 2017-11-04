@@ -209,46 +209,6 @@ class Order(metaclass=ABCMeta):
         :rtype: bool
         """
 
-    def check_order_expiration(self, current_date=datetime.now()):
-        """
-        Check if the order should be closed due to passage of time and update
-        the order's status.
-
-        :param datetime current_date: This is used to facilitate backtesting,
-        so that the current date can be mocked in order to accurately
-        trigger/cancel orders in the past.
-        (default: datetime.now())
-        """
-        trading_cal = mcal.get_calendar(self.portfolio.trading_cal)
-        schedule = trading_cal.schedule(start_date=self.portfolio.start_date,
-                                        end_date=self.portfolio.end_date)
-
-        if self.order_subtype is OrderSubType.DAY:
-            if not trading_cal.open_at_time(schedule,
-                                            pd.Timestamp(current_date)):
-                reason = 'Market closed without executing order.'
-                self.logger.info(
-                    'Canceling trade for ticker: {} due to {}'.format(
-                        self.ticker.ticker, reason))
-                self.cancel(reason=reason)
-        elif self.order_subtype is OrderSubType.GOOD_TIL_CANCELED:
-            expr_date = self.created + DateOffset(days=self.max_days_open)
-            # check if the expiration date is today.
-            if current_date.date() == expr_date.date():
-                # if the expiration date is today then
-                # check if the market has closed.
-                if not trading_cal.open_at_time(schedule,
-                                                pd.Timestamp(current_date)):
-                    reason = ('Max days of {} had passed without the '
-                              'underlying order executing.'
-                              .format(self.max_days_open))
-                    self.logger.info(
-                        'Canceling trade for ticker: {} due to {}'.format(
-                            self.ticker.ticker, reason))
-                    self.cancel(reason=reason)
-        else:
-            return
-
     def get_available_volume(self, available_volume):
         """
         Get the available volume to trade.

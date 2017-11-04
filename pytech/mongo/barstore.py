@@ -48,7 +48,7 @@ class BarStore(ChunkStore):
 
     @mongo_retry
     def write(self, symbol: str,
-              item: pd.DataFrame or pd.Series,
+              item: Union[pd.DataFrame, pd.Series],
               metadata: Any = None,
               chunker: Chunker = DateChunker(),
               audit: Dict = None,
@@ -91,7 +91,7 @@ class BarStore(ChunkStore):
 
     # @mongo_retry
     def update(self, symbol: str,
-               item: pd.DataFrame or pd.Series,
+               item: Union[pd.DataFrame, pd.Series],
                metadata: Any = None,
                chunk_range: Union[pd.DatetimeIndex, DateRange] = None,
                upsert: bool = False,
