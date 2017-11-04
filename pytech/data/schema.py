@@ -1,6 +1,7 @@
 import uuid
 
 import sqlalchemy as sa
+from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import (
     ENUM,
     TEXT,
@@ -18,6 +19,7 @@ class utcnow(FunctionElement):
 @compiles(utcnow, 'postgresql')
 def pg_utcnow(element, compiler, **kwargs):
     return "TIMEZONE('utc', CURRENT_TIMESTAMP)"
+
 
 from utils.enums import (
     TradeAction,
@@ -99,6 +101,10 @@ bars = sa.Table(
     sa.UniqueConstraint('dt', 'ticker', name='uix_dt_ticker')
 )
 
+# after creating the bar table, turn it into a hyper table.
+event.listen(bars, 'after_create',
+             sa.DDL('SELECT create_hypertable("bar", "dt")'))
+
 portfolio = sa.Table(
     'portfolio',
     metadata,
@@ -137,3 +143,8 @@ ownership = sa.Table(
     sa.UniqueConstraint('portfolio_id', 'trade_id', 'ticker',
                         name='uix_ownership_pk')
 )
+
+if __name__ == '__main__':
+    engine = sa.create_engine('postgresql://pytech:pytech@localhost/pytech',
+                              echo=True)
+    metadata.create_all(engine, checkfirst=True)
