@@ -49,7 +49,9 @@ class Asset(metaclass=ABCMeta):
     :class:``~pytech.portfolio.Portfolio`` tries to trade it an exception will occur.
     """
 
-    def __init__(self, ticker: str, start_date: dt.datetime,
+    def __init__(self,
+                 ticker: str,
+                 start_date: dt.datetime,
                  end_date: dt.datetime):
         self.ticker = ticker
         self.asset_type = self.__class__.__name__

@@ -1,14 +1,18 @@
 """
 Trade module which contains anything related to the actual execution of a trade.
 """
+import datetime as dt
 import logging
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 from exceptions import UntriggeredTradeError
 from pytech.utils import dt_utils as dt_utils
 from pytech.utils.enums import TradeAction
+
+if TYPE_CHECKING:
+    from trading import Order
 
 
 class Trade(object):
@@ -20,9 +24,16 @@ class Trade(object):
 
     LOGGER_NAME = 'trade'
 
-    def __init__(self, qty, price_per_share, action, strategy, order,
-                 avg_price_per_share, commission=0.0,
-                 trade_date=None, ticker=None):
+    def __init__(self,
+                 qty: int,
+                 price_per_share: float,
+                 action: TradeAction,
+                 strategy: str,
+                 order: Order,
+                 avg_price_per_share: float,
+                 commission: float = 0.0,
+                 trade_date: dt.datetime = None,
+                 ticker: str = None):
         """
         :param datetime trade_date: corresponding to the date and time of the
             trade date
@@ -55,7 +66,7 @@ class Trade(object):
         if trade_date:
             self.trade_date = dt_utils.parse_date(trade_date)
         else:
-            self.trade_date = pd.Timestamp(datetime.now())
+            self.trade_date = pd.Timestamp(dt.datetime.now())
 
         self.action = TradeAction.check_if_valid(action)
         self.strategy = strategy
