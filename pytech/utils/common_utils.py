@@ -10,6 +10,8 @@ from typing import (
 
 import collections
 
+from pytech.exceptions import PyInvestmentTypeError
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,9 +35,9 @@ def iterable_to_set(iterable):
     try:
         return set(iterable)
     except TypeError:
-        logger.exception('iterable must be an iterable with hashable '
-                         f'contents! {iterable} is not an iterable!')
-        raise
+        raise PyInvestmentTypeError(
+            'iterable must be an iterable with hashable '
+            f'contents! {iterable} is not an iterable!')
 
 
 def tail(n: int, iterable: Iterable):

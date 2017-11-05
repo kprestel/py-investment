@@ -10,7 +10,6 @@ from typing import (
     Dict,
     Iterable,
     Union,
-    Tuple,
     TypeVar,
     List,
 )
@@ -24,7 +23,7 @@ from pandas.tseries.offsets import BDay
 from pandas_datareader._utils import RemoteDataError
 
 import pytech.utils as utils
-from exceptions import DataAccessError
+from pytech.exceptions import DataAccessError
 from pytech.decorators.decorators import write_chunks
 from pytech.mongo import ARCTIC_STORE
 from pytech.mongo.barstore import BarStore

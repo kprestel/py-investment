@@ -1,4 +1,6 @@
 import os
+from dateutil.tz import tzutc
+from dateutil.parser import parse
 import queue
 from typing import Dict
 from unittest.mock import MagicMock as Mock
@@ -110,6 +112,15 @@ def no_db(monkeypatch, _ticker_df_cache: Dict[str, pd.DataFrame]):
 def aapl_df():
     """Returns a OHLCV df for Apple."""
     return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}AAPL.csv')
+
+def date_utc(s):
+    return parse(s, tzinfos=tzutc)
+
+@pytest.fixture(scope='module')
+def cvs_df():
+    return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}CVS.csv')
+    # return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}CVS.csv', parse_dates=['date'],
+    #                    date_parser=date_utc)
 
 
 def get_test_csv_path(ticker):

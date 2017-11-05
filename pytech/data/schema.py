@@ -1,7 +1,6 @@
 import uuid
 
 import sqlalchemy as sa
-from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import (
     ENUM,
     TEXT,
@@ -21,7 +20,7 @@ def pg_utcnow(element, compiler, **kwargs):
     return "TIMEZONE('utc', CURRENT_TIMESTAMP)"
 
 
-from utils.enums import (
+from pytech.utils.enums import (
     TradeAction,
     OrderType,
     OrderSubType,
@@ -91,24 +90,26 @@ trade = sa.Table(
 bars = sa.Table(
     'bar',
     metadata,
-    sa.Column('dt', TIMESTAMP, nullable=False),
+    sa.Column('date', TIMESTAMP, nullable=False),
     sa.Column('open', sa.Numeric(16, 2), nullable=False),
     sa.Column('high', sa.Numeric(16, 2), nullable=False),
     sa.Column('low', sa.Numeric(16, 2), nullable=False),
     sa.Column('close', sa.Numeric(16, 2), nullable=False),
+    sa.Column('volume', sa.INTEGER, nullable=False),
     sa.Column('adj_close', sa.Numeric(16, 2)),  # not all sources have this
     sa.Column('ticker', None, sa.ForeignKey('asset.ticker'), nullable=False),
-    sa.UniqueConstraint('dt', 'ticker', name='uix_dt_ticker')
+    sa.UniqueConstraint('date', 'ticker', name='uix_date_ticker')
 )
 
 # after creating the bar table, turn it into a hyper table.
-event.listen(bars, 'after_create',
-             sa.DDL('SELECT create_hypertable("bar", "dt")'))
+# event.listen(bars, 'after_create',
+#              sa.DDL('CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;\n'
+#                     'SELECT create_hypertable("bar", "date");'))
 
 portfolio = sa.Table(
     'portfolio',
     metadata,
-    sa.Column('id', UUID, primary_key=True, default=uuid.uuid4()),
+    sa.Column('id', UUID, primary_key=True, default=uuid.uuid4().hex),
     sa.Column('cash', sa.Numeric(16, 2), nullable=False),
     sa.Column('created', TIMESTAMP(timezone=True), server_default=utcnow()),
     sa.Column('last_updated', TIMESTAMP(timezone=True),

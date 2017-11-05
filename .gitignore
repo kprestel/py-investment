@@ -3,19 +3,12 @@
 # Virtualenv
 # http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
 .Python
-[Bb]in
-[Ii]nclude
-[Ll]ib
-[Ll]ib64
 [Ll]ocal
-[Ss]cripts
-pyvenv.cfg
 .venv
 pip-selfcheck.json
 ### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[cod]
 *$py.class
 
 # C extensions
@@ -26,18 +19,12 @@ __pycache__/
 # Distribution / packaging
 env/
 pyenv/
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
-var/
-*.egg-info/
 .installed.cfg
 *.egg
 
@@ -49,8 +36,6 @@ var/
 
 # Installer logs
 pip-log.txt
-pip-delete-this-directory.txt
-
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -63,9 +48,6 @@ coverage.xml
 .hypothesis/
 
 # Translations
-*.mo
-*.pot
-
 # Django stuff:
 *.log
 local_settings.py
@@ -110,9 +92,11 @@ pytech/FY_20160924_10K_AAPL.json
 pytech/Q1_20151226_10Q_AAPL.json
 pytech/Q2_20160326_10Q_AAPL.json
 pytech/Q3_20160625_10Q_AAPL.json
-pytech/resources/
 pyenv_3.6/
 pytech/source/_static/
 pytech/source/_templates/
-tests/resources/
 .project
+ddl_v1.uml
+resources/
+/ddl_v1.uml
+/ddl_v1.png

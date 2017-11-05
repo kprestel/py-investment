@@ -29,7 +29,7 @@ class Trade(object):
                  price_per_share: float,
                  action: TradeAction,
                  strategy: str,
-                 order: Order,
+                 order: 'Order',
                  avg_price_per_share: float,
                  commission: float = 0.0,
                  trade_date: dt.datetime = None,

@@ -5,7 +5,7 @@ from arctic.chunkstore.chunkstore import ChunkStore
 from pandas.tseries.offsets import BDay
 
 import pytech.utils as utils
-from exceptions import (
+from pytech.exceptions import (
     InvalidStoreError,
     PyInvestmentKeyError,
 )

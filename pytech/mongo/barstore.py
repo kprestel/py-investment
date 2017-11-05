@@ -1,5 +1,9 @@
 import logging
-from typing import Any, Dict, Union
+from typing import (
+    Any,
+    Dict,
+    Union,
+)
 
 import pandas as pd
 from arctic.chunkstore._chunker import Chunker
@@ -23,10 +27,11 @@ class BarStore(ChunkStore):
         self.logger.info(f'BarStore collection name: {arctic_lib.get_name()}')
 
     # @mongo_retry
-    def read(self, symbol: str,
-             chunk_range: pd.DatetimeIndex or DateRange = None,
+    def read(self,
+             symbol: str,
+             chunk_range: [pd.DatetimeIndex, DateRange] = None,
              filter_data=True,
-             **kwargs) -> pd.DataFrame or pd.Series:
+             **kwargs) -> Union[pd.DataFrame, pd.Series]:
         """
         Retrieve data from the DB.
 
