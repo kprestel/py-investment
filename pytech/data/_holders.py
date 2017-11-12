@@ -2,8 +2,6 @@
 This module is for lightweight data holders to make interfacing the
 return values these functions easier.
 """
-from collections import namedtuple
-from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -11,8 +9,9 @@ import pandas as pd
 class ReaderResult(object):
     """Data holder object that gets returned by readers."""
 
-    def __init__(self, lib_name: str, ticker: str, df: pd.DataFrame=None,
-                 successful: bool=True) -> None:
+    def __init__(self, ticker: str,
+                 df: pd.DataFrame = None,
+                 successful: bool = True) -> None:
         """
         Constructor for the result.
 
@@ -27,6 +26,5 @@ class ReaderResult(object):
             self.df = pd.DataFrame()
         else:
             self.df = df
-        self.lib_name = lib_name
         self.ticker = ticker
         self.successful = successful

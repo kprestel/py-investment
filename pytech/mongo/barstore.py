@@ -26,7 +26,6 @@ class BarStore(ChunkStore):
         super().__init__(arctic_lib)
         self.logger.info(f'BarStore collection name: {arctic_lib.get_name()}')
 
-    # @mongo_retry
     def read(self,
              symbol: str,
              chunk_range: [pd.DatetimeIndex, DateRange] = None,
@@ -94,7 +93,6 @@ class BarStore(ChunkStore):
         """
         return super().delete(symbol, chunk_range, audit)
 
-    # @mongo_retry
     def update(self, symbol: str,
                item: Union[pd.DataFrame, pd.Series],
                metadata: Any = None,

@@ -8,6 +8,7 @@ import pandas_market_calendars as mcal
 from pandas.api.types import is_number
 from pandas.tslib import Timestamp
 
+from exceptions import PyInvestmentTypeError
 
 date_type = Union[dt.date, dt.datetime]
 
@@ -24,7 +25,7 @@ def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
     """
     if isinstance(date_to_parse, dt.date) and not isinstance(date_to_parse,
                                                              dt.datetime):
-        raise TypeError(
+        raise PyInvestmentTypeError(
                 f'date must be a datetime object. {type(date_to_parse)} '
                 f'was provided')
     elif isinstance(date_to_parse, Timestamp):
@@ -41,7 +42,7 @@ def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
         # TODO: timezone
         return pd.to_datetime(date_to_parse, utc=True)
     else:
-        raise TypeError(
+        raise PyInvestmentTypeError(
                 'date_to_parse must be a pandas '
                 'Timestamp, datetime, or a date string. '
                 f'{type(date_to_parse)} was provided')
@@ -107,3 +108,7 @@ def prev_weekday(a_dt: date_type):
     return a_dt
 
 
+class DateRange(object):
+
+    def __init__(self, start=None, end=None):
+        self.start, self.end = sanitize_dates(start, end)

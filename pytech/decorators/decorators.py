@@ -108,7 +108,7 @@ def write_chunks(chunk_size='D', remove_ticker=True):
                 lib.update(ticker, df, chunk_size=chunk_size, upsert=True)
 
             df.index.freq = BDay()
-            return ReaderResult(lib_name, ticker, df)
+            return ReaderResult(ticker, df)
 
         return eval_and_write
 

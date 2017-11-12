@@ -14,6 +14,7 @@ from typing import (
 
 import psycopg2 as pg
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import (
     Insert,
     Delete,
@@ -64,14 +65,18 @@ class write(sqlaction):
                  vals: Dict[str, Any] = None, *args,
                  **kwargs):
         with self.engine.begin() as conn:
-            if vals is None:
-                res = conn.execute(stmt)
-            else:
-                res = conn.execute(stmt, vals)
-            return res
+            try:
+                if vals is None:
+                    res = conn.execute(stmt)
+                else:
+                    res = conn.execute(stmt, vals)
+                return res
+            except IntegrityError as e:
+                self.logger.warning(f'{e}')
 
     def df(self, df: pd.DataFrame, table: str, index: bool = False):
         output = StringIO()
+        df[utils.VOL_COL] =  df[utils.VOL_COL].astype(dtype='int64')
         df.to_csv(output, index=index, header=False)
         output.getvalue()
         output.seek(0)
@@ -85,7 +90,18 @@ class write(sqlaction):
 
 
 class reader(sqlaction):
-    def __call__(self, query: Select, *args, **kwargs):
+    def __call__(self, query: Select, ret_df: bool = False, *args, **kwargs):
+        print('penis')
         with self.engine.begin() as conn:
-            for row in conn.execute(query):
-                yield row
+            if ret_df:
+                return pd.read_sql_query(query, conn)
+            else:
+                for row in conn.execute(query):
+                    yield row
+
+    def df(self, query: Select, *args, **kwargs):
+        with self.engine.begin() as conn:
+            df = pd.read_sql_query(query, conn)
+            df.index = df.date
+            return df
+

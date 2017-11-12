@@ -147,7 +147,7 @@ class Stock(Asset):
         betas = pd.concat([_calc_beta(sdf)
                            for sdf in utils.roll(df, window)], axis=1).T
         betas['ticker'] = self.ticker
-        return ReaderResult(BETA_STORE, self.ticker, betas)
+        return ReaderResult(self.ticker, betas)
 
     def rolling_beta(self,
                       col=utils.CLOSE_COL,

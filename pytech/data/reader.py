@@ -4,7 +4,7 @@ database to be accessed later.
 """
 import itertools
 import datetime as dt
-from multiprocessing.pool import ThreadPool
+from multiprocessing.pool import ThreadPool as Pool
 import logging
 from typing import (
     Dict,
@@ -18,9 +18,13 @@ import numpy as np
 import pandas as pd
 import pandas_datareader as pdr
 from arctic.date import DateRange
-from arctic.exceptions import NoDataFoundException
 from pandas.tseries.offsets import BDay
 from pandas_datareader._utils import RemoteDataError
+import sqlalchemy as sa
+from sqlalchemy import between
+
+from pytech.data.connection import reader
+from pytech.data.schema import bars
 
 import pytech.utils as utils
 from pytech.exceptions import DataAccessError
@@ -52,6 +56,7 @@ class BarReader(object):
                                             BarStore.LIBRARY_TYPE)
 
         self.lib = ARCTIC_STORE[self.lib_name]
+        self.reader = reader()
 
     def get_data(self,
                  tickers: ticker_input,
@@ -126,7 +131,7 @@ class BarReader(object):
         failed = []
         passed = []
 
-        with ThreadPool(len(tickers)) as pool:
+        with Pool(len(tickers)) as pool:
             result = pool.starmap_async(self._single_get_data,
                                         zip(tickers,
                                             itertools.repeat(source),
@@ -167,20 +172,19 @@ class BarReader(object):
         """Do the get data method for a single ticker."""
         if check_db:
             try:
-                return self._from_db(ticker, source, start, end,
-                                     filter_data, **kwargs)
+                return self._from_db(ticker, source, start, end, **kwargs)
             except DataAccessError:
                 # don't raise, try to make the network call
-                logger.info(f'Ticker: {ticker} not found in DB.')
+                logger.info(f'Ticker: {ticker} not found in DB, attempting to'
+                            f'download data for {ticker}')
 
         try:
             return self._from_web(ticker, source, start, end, **kwargs)
         except DataAccessError:
             logger.warning(f'Error getting data from {source} '
                            f'for ticker: {ticker}', exc_info=1)
-            return ReaderResult(self.lib_name, ticker, successful=False)
+            return ReaderResult(ticker, successful=False)
 
-    @write_chunks()
     def _from_web(self,
                   ticker: str,
                   source: str,
@@ -200,7 +204,7 @@ class BarReader(object):
                                       f'ticker: {ticker}.')
         except RemoteDataError as e:
             logger.exception(f'Error occurred getting data from {source}.')
-            return ReaderResult(self.lib_name, ticker, successful=False)
+            return ReaderResult(ticker, successful=False)
 
         df = utils.rename_bar_cols(df)
         df[utils.TICKER_COL] = ticker
@@ -211,14 +215,13 @@ class BarReader(object):
         else:
             df.index.name = utils.DATE_COL
 
-        return ReaderResult(self.lib_name, ticker, df)
+        return ReaderResult(ticker, df)
 
     def _from_db(self,
                  ticker: str,
                  source: str,
                  start: dt.datetime,
                  end: dt.datetime,
-                 filter_data: bool = True,
                  **kwargs) -> ReaderResult:
         """
         Try to read data from the DB.
@@ -232,21 +235,11 @@ class BarReader(object):
         :return: The data frame.
         :raises: NoDataFoundException if no data is found for the given ticker.
         """
-        chunk_range = DateRange(start=start, end=end)
+        q = (sa.select([bars]).where(bars.c.ticker == ticker)
+            .where(bars.c.date.between(start, end)))
 
-        try:
-            logger.info(f'Checking DB for ticker: {ticker}')
-            df = self.lib.read(ticker, chunk_range=chunk_range,
-                               filter_data=filter_data, **kwargs)
-        except (KeyError, NoDataFoundException) as e:
-            if isinstance(e, KeyError):
-                # TODO: open a bug report against arctic...
-                msg = f'Error reading DB for ticker: {ticker}'
-            else:
-                msg = f'No data in DB for ticker: {ticker}'
-
-            logger.exception(msg)
-            return ReaderResult(self.lib_name, ticker, successful=False)
+        logger.info(f'Checking DB for ticker: {ticker}')
+        df = self.reader.df(q)
 
         if df.empty:
             raise DataAccessError('DataFrame was empty. No data found.')
@@ -274,7 +267,7 @@ class BarReader(object):
             upper_df = None
 
         new_df = _concat_dfs(lower_df, upper_df, df)
-        return ReaderResult(self.lib_name, ticker, new_df)
+        return ReaderResult(ticker, new_df)
 
     def get_symbols(self):
         for s in self.lib.list_symbols():

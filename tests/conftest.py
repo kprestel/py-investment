@@ -90,7 +90,7 @@ def write_ref_csv(monkeypatch, start_date, end_date):
     monkeypatch.setattr(BarReader, 'get_data', to_csv)
 
 
-@pytest.fixture(autouse=True)
+# @pytest.fixture(autouse=True)
 def no_db(monkeypatch, _ticker_df_cache: Dict[str, pd.DataFrame]):
     """Don't make any database calls. Read all data from `TEST_DATA_DIR`"""
 
@@ -116,12 +116,15 @@ def aapl_df():
 def date_utc(s):
     return parse(s, tzinfos=tzutc)
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='session')
 def cvs_df():
     return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}CVS.csv')
     # return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}CVS.csv', parse_dates=['date'],
     #                    date_parser=date_utc)
 
+@pytest.fixture(scope='session')
+def goog_df():
+    return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}GOOG.csv')
 
 def get_test_csv_path(ticker):
     """Return the path to the test CSV file"""

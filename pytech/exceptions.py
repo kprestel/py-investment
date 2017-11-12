@@ -24,8 +24,10 @@ class PyInvestmentError(Exception):
     __unicode__ = __str__
     __repr__ = __str__
 
+
 class PyInvestmentTypeError(PyInvestmentError, TypeError):
     """Generic TypeErrors that are raised from PyInvestment"""
+
 
 class AssetExistsError(PyInvestmentError):
     """
@@ -155,8 +157,8 @@ class PyInvestmentKeyError(KeyError, PyInvestmentError):
 class DataAccessError(NoDataFoundException, RemoteDataError,
                       PyInvestmentError):
     """
-    Raised when data is requested. Wraps Arctic and Pandas web reader
-    exceptions.
+    Raised when data is requested and is not available.
+    Wraps Arctic and Pandas web reader exceptions.
     """
 
 
