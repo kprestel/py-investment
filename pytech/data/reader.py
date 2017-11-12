@@ -2,36 +2,33 @@
 Act as a wrapper around pandas_datareader and write the responses to the
 database to be accessed later.
 """
-import itertools
 import datetime as dt
-from multiprocessing.pool import ThreadPool as Pool
+import itertools
 import logging
+from multiprocessing.pool import ThreadPool as Pool
 from typing import (
     Dict,
     Iterable,
-    Union,
-    TypeVar,
     List,
+    TypeVar,
+    Union,
 )
 
 import numpy as np
 import pandas as pd
 import pandas_datareader as pdr
-from arctic.date import DateRange
+import sqlalchemy as sa
 from pandas.tseries.offsets import BDay
 from pandas_datareader._utils import RemoteDataError
-import sqlalchemy as sa
-from sqlalchemy import between
-
-from pytech.data.connection import reader
-from pytech.data.schema import bars
 
 import pytech.utils as utils
+from pytech.data._holders import ReaderResult
+from pytech.data.connection import reader
+from pytech.data.schema import bars
 from pytech.exceptions import DataAccessError
-from pytech.decorators.decorators import write_chunks
 from pytech.mongo import ARCTIC_STORE
 from pytech.mongo.barstore import BarStore
-from pytech.data._holders import ReaderResult
+from pytech.utils import DateRange
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +58,8 @@ class BarReader(object):
     def get_data(self,
                  tickers: ticker_input,
                  source: str = GOOGLE,
-                 start: dt.datetime = None,
-                 end: dt.datetime = None,
+                 date_range: DateRange = None,
                  check_db: bool = True,
-                 filter_data: bool = True,
                  **kwargs) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
         """
         Get data and create a :class:`pd.DataFrame` from it.
@@ -89,42 +84,30 @@ class BarReader(object):
         :param kwargs: kwargs are passed blindly to `pandas_datareader`
         :return: A `dict[ticker, DataFrame]`.
         """
-        start, end = utils.sanitize_dates(start, end)
+        date_range = date_range or DateRange()
 
         if isinstance(tickers, str):
             try:
-                df_lib_name = self._single_get_data(tickers,
-                                                    source,
-                                                    start,
-                                                    end,
-                                                    check_db,
-                                                    filter_data,
-                                                    **kwargs)
-                return df_lib_name.df
+                result = self._single_get_data(tickers, source, date_range,
+                                               check_db, **kwargs)
+                return result.df
             except DataAccessError:
                 raise DataAccessError(f'Could not get data for ticker: '
-                                            f'{tickers}')
+                                      f'{tickers}')
         else:
             if isinstance(tickers, pd.DataFrame):
                 tickers = tickers.index
             try:
-                return self._mult_tickers_get_data(tickers,
-                                                   source,
-                                                   start,
-                                                   end,
-                                                   check_db,
-                                                   filter_data,
-                                                   **kwargs)
+                return self._mult_tickers_get_data(tickers, source, date_range,
+                                                   check_db, **kwargs)
             except DataAccessError:
                 raise
 
     def _mult_tickers_get_data(self,
                                tickers: List,
                                source: str,
-                               start: dt.datetime,
-                               end: dt.datetime,
+                               date_range: DateRange,
                                check_db: bool,
-                               filter_data: bool,
                                **kwargs) -> Dict[str, pd.DataFrame]:
         """Download data for multiple tickers."""
         stocks = {}
@@ -135,10 +118,8 @@ class BarReader(object):
             result = pool.starmap_async(self._single_get_data,
                                         zip(tickers,
                                             itertools.repeat(source),
-                                            itertools.repeat(start),
-                                            itertools.repeat(end),
-                                            itertools.repeat(check_db),
-                                            itertools.repeat(filter_data)))
+                                            itertools.repeat(date_range),
+                                            itertools.repeat(check_db)))
             res = result.get()
 
         for r in res:
@@ -164,22 +145,20 @@ class BarReader(object):
     def _single_get_data(self,
                          ticker: str,
                          source: str,
-                         start: dt.datetime,
-                         end: dt.datetime,
+                         date_range: DateRange,
                          check_db: bool,
-                         filter_data: bool,
                          **kwargs) -> ReaderResult:
         """Do the get data method for a single ticker."""
         if check_db:
             try:
-                return self._from_db(ticker, source, start, end, **kwargs)
+                return self._from_db(ticker, source, date_range, **kwargs)
             except DataAccessError:
                 # don't raise, try to make the network call
                 logger.info(f'Ticker: {ticker} not found in DB, attempting to'
                             f'download data for {ticker}')
 
         try:
-            return self._from_web(ticker, source, start, end, **kwargs)
+            return self._from_web(ticker, source, date_range, **kwargs)
         except DataAccessError:
             logger.warning(f'Error getting data from {source} '
                            f'for ticker: {ticker}', exc_info=1)
@@ -188,17 +167,18 @@ class BarReader(object):
     def _from_web(self,
                   ticker: str,
                   source: str,
-                  start: dt.datetime,
-                  end: dt.datetime,
+                  date_range: DateRange,
                   **kwargs) -> ReaderResult:
         """Retrieve data from a web source"""
         _ = kwargs.pop('columns', None)
 
         try:
-            logger.info(f'Making call to {source}. Start date: {start},'
-                        f'End date: {end}')
-            df = pdr.DataReader(ticker, data_source=source, start=start,
-                                end=end, **kwargs)
+            logger.info(
+                f'Making call to {source}. Start date: {date_range.start},'
+                f'End date: {date_range.end}')
+            df = pdr.DataReader(ticker, data_source=source,
+                                start=date_range.start,
+                                end=date_range.end, **kwargs)
             if df.empty:
                 raise RemoteDataError(f'df retrieved was empty for '
                                       f'ticker: {ticker}.')
@@ -220,8 +200,7 @@ class BarReader(object):
     def _from_db(self,
                  ticker: str,
                  source: str,
-                 start: dt.datetime,
-                 end: dt.datetime,
+                 date_range: DateRange,
                  **kwargs) -> ReaderResult:
         """
         Try to read data from the DB.
@@ -235,8 +214,9 @@ class BarReader(object):
         :return: The data frame.
         :raises: NoDataFoundException if no data is found for the given ticker.
         """
-        q = (sa.select([bars]).where(bars.c.ticker == ticker)
-            .where(bars.c.date.between(start, end)))
+        q = (sa.select([bars])
+             .where(bars.c.ticker == ticker)
+             .where(bars.c.date.between(date_range.start, date_range.end)))
 
         logger.info(f'Checking DB for ticker: {ticker}')
         df = self.reader.df(q)
@@ -251,17 +231,19 @@ class BarReader(object):
 
         # check that all the requested data is present
         # TODO: deal with days that it is expected that data shouldn't exist.
-        if db_start > start and utils.is_trade_day(start):
+        if db_start > date_range.start and date_range.is_trade_day('start'):
             # db has less data than requested
-            lower_df_lib_name = self._from_web(ticker, source, start,
-                                               db_start - BDay())
+            tmp_dt_range = DateRange(date_range.start, db_start - BDay())
+            lower_df_lib_name = self._from_web(ticker, source, tmp_dt_range)
             lower_df = lower_df_lib_name.df
         else:
             lower_df = None
 
-        if db_end.date() < end.date() and utils.is_trade_day(end):
+        if db_end < date_range.end and date_range.is_trade_day('end'):
             # db doesn't have as much data than requested
-            upper_df_lib_name = self._from_web(ticker, source, db_end, end)
+            tmp_dt_range_end = DateRange(db_end, date_range.end)
+            upper_df_lib_name = self._from_web(ticker, source,
+                                               tmp_dt_range_end)
             upper_df = upper_df_lib_name.df
         else:
             upper_df = None

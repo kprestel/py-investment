@@ -1,8 +1,8 @@
-import datetime as dt
 import itertools
 
 import pytech.utils as utils
 from pytech.data.reader import BarReader
+from pytech.utils import DateRange
 
 
 class Market(utils.Borg):
@@ -13,22 +13,17 @@ class Market(utils.Borg):
 
     def __init__(self, ticker: str = 'SPY',
                  source: str = 'google',
-                 start_date: dt.datetime = None,
-                 end_date: dt.datetime = None,
+                 date_range: DateRange = None,
                  lib_name: str = 'pytech.market') -> None:
         super().__init__()
-        start_date, end_date = utils.sanitize_dates(start_date,
-                                                    end_date)
+        self.date_range = date_range or DateRange()
         self.ticker = ticker
-        self.start_date = start_date
-        self.end_date = end_date
         self.lib_name = lib_name
         self.reader = BarReader(lib_name)
         self.source = source
         self.market = self.reader.get_data(self.ticker,
                                            self.source,
-                                           self.start_date,
-                                           self.end_date)
+                                           self.date_range)
 
 
 class BondBasket(utils.Borg):
@@ -40,17 +35,14 @@ class BondBasket(utils.Borg):
     ALL = itertools.chain(US_TBONDS, US_TBILLS, LIBOR)
     SOURCE = 'fred'
 
-    def __init__(self, start_date: dt.datetime = None,
-                 end_date: dt.datetime = None,
+    def __init__(self,
+                 date_range: DateRange = None,
                  lib_name: str = 'pytech.bond') -> None:
         super().__init__()
-        start_date, end_date = utils.sanitize_dates(start_date, end_date)
-        self.start_date = start_date
-        self.end_date = end_date
+        self.date_range = date_range or DateRange()
         self.lib_name = lib_name
         self.reader = BarReader(lib_name)
-        self.data = self.reader.get_data(self.ALL, self.SOURCE,
-                                         self.start_date, self.end_date)
+        self.data = self.reader.get_data(self.ALL, self.SOURCE, self.date_range)
 
 
 class YieldCurve(object):

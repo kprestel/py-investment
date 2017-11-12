@@ -8,7 +8,10 @@ import pandas_market_calendars as mcal
 from pandas.api.types import is_number
 from pandas.tslib import Timestamp
 
-from exceptions import PyInvestmentTypeError
+from exceptions import (
+    PyInvestmentTypeError,
+    PyInvestmentValueError,
+)
 
 date_type = Union[dt.date, dt.datetime]
 
@@ -112,3 +115,16 @@ class DateRange(object):
 
     def __init__(self, start=None, end=None):
         self.start, self.end = sanitize_dates(start, end)
+
+        if self.start >= self.end:
+            raise PyInvestmentValueError(f'start must be less than end.'
+                                         f'start: {start}, end: {end}')
+
+    def is_trade_day(self, dt: str):
+        if dt == 'start':
+            return is_trade_day(self.start)
+        elif dt == 'end':
+            return is_trade_day(self.end)
+        else:
+            raise PyInvestmentValueError(f'{dt} is not valid. Must be '
+                                         f'"start" or "end"')

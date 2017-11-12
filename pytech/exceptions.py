@@ -29,6 +29,10 @@ class PyInvestmentTypeError(PyInvestmentError, TypeError):
     """Generic TypeErrors that are raised from PyInvestment"""
 
 
+class PyInvestmentValueError(PyInvestmentError, ValueError):
+    """Generic ValueErrors that are raised from PyInvestment"""
+
+
 class AssetExistsError(PyInvestmentError):
     """
     Raised when a :class:``Asset`` is trying to be inserted into either

@@ -1,6 +1,9 @@
 import datetime as dt
 import logging
-from abc import ABCMeta, abstractmethod
+from abc import (
+    ABCMeta,
+    abstractmethod,
+)
 from typing import Tuple
 
 import numpy as np
@@ -8,9 +11,13 @@ import pandas as pd
 
 import pytech.utils as utils
 from pytech.data._holders import ReaderResult
-from pytech.decorators.decorators import memoize, write_chunks
+from pytech.decorators.decorators import (
+    memoize,
+    write_chunks,
+)
 from pytech.data.reader import BarReader
 from pytech.fin.market.market import Market
+from pytech.utils import DateRange
 
 BETA_STORE = 'pytech.beta'
 
@@ -51,22 +58,12 @@ class Asset(metaclass=ABCMeta):
 
     def __init__(self,
                  ticker: str,
-                 start_date: dt.datetime,
-                 end_date: dt.datetime):
+                 date_range: DateRange = None):
         self.ticker = ticker
         self.asset_type = self.__class__.__name__
         self.logger = logging.getLogger(self.__class__.__name__)
-
-        start_date, end_date = utils.sanitize_dates(start_date, end_date)
-
-        self.start_date = start_date
-        self.end_date = end_date
-        self.market = Market(start_date=self.start_date,
-                             end_date=self.end_date)
-
-        if self.start_date >= self.end_date:
-            raise ValueError('start_date must be older than end_date. '
-                             f'start_date: {start_date} end_date: {end_date}.')
+        self.date_range = date_range or DateRange()
+        self.market = Market(date_range=self.date_range)
 
     @property
     def df(self):
@@ -113,26 +110,26 @@ class Asset(metaclass=ABCMeta):
 
 
 class Stock(Asset):
-    def __init__(self, ticker: str, start_date: dt.datetime,
-                 end_date: dt.datetime, source: str = 'google',
+    def __init__(self, ticker: str,
+                 date_range: DateRange,
+                 source: str = 'google',
                  lib_name: str = 'pytech.bars'):
         self.source = source
         self.reader = BarReader(lib_name)
         self.lib_name = lib_name
-        super().__init__(ticker, start_date, end_date)
+        super().__init__(ticker, date_range)
 
     @memoize
     def get_data(self) -> pd.DataFrame:
-        return self.reader.get_data(self.ticker, self.source,
-                                    self.start_date, self.end_date)
+        return self.reader.get_data(self.ticker, self.source, self.date_range)
 
     def last_price(self, col=utils.CLOSE_COL):
         return self.df[col][-1]
 
     @write_chunks()
     def _rolling_beta(self,
-                     col=utils.CLOSE_COL,
-                     window: int = 30) -> ReaderResult:
+                      col=utils.CLOSE_COL,
+                      window: int = 30) -> ReaderResult:
         """
         Calculate the rolling beta over a given window.
 
@@ -150,8 +147,8 @@ class Stock(Asset):
         return ReaderResult(self.ticker, betas)
 
     def rolling_beta(self,
-                      col=utils.CLOSE_COL,
-                      window: int = 30) -> pd.DataFrame:
+                     col=utils.CLOSE_COL,
+                     window: int = 30) -> pd.DataFrame:
         """
         Calculate the rolling beta over a given window.
 
