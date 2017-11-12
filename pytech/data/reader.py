@@ -22,6 +22,7 @@ from pandas.tseries.offsets import BDay
 from pandas_datareader._utils import RemoteDataError
 
 import pytech.utils as utils
+from pytech.decorators import write_df
 from pytech.data._holders import ReaderResult
 from pytech.data.connection import reader
 from pytech.data.schema import bars
@@ -164,6 +165,7 @@ class BarReader(object):
                            f'for ticker: {ticker}', exc_info=1)
             return ReaderResult(ticker, successful=False)
 
+    @write_df('bar')
     def _from_web(self,
                   ticker: str,
                   source: str,

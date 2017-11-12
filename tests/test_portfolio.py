@@ -13,9 +13,9 @@ from utils.enums import Position
 
 class TestBasicPortfolio(object):
     def test_constructor(self, bars, events, blotter,
-                         start_date):
+                         date_range):
         test_portfolio = BasicPortfolio(bars, events,
-                                        start_date, blotter)
+                                        date_range, blotter)
         assert test_portfolio is not None
 
     def test_update_timeindex(self, basic_portfolio):

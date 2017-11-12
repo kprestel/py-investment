@@ -20,9 +20,9 @@ class TestDataHandler(object):
 class TestYahooDataHandler(object):
     """Test the :class:`YahooDataHandler`"""
 
-    def test_constructor(self, events, ticker_list, start_date, end_date):
+    def test_constructor(self, events, ticker_list, date_range):
         """Test the constructor"""
-        handler = Bars(events, ticker_list, start_date, end_date)
+        handler = Bars(events, ticker_list, date_range)
         assert handler is not None
         handler.update_bars()
 

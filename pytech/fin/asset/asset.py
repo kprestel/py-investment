@@ -13,7 +13,7 @@ import pytech.utils as utils
 from pytech.data._holders import ReaderResult
 from pytech.decorators.decorators import (
     memoize,
-    write_chunks,
+    write_df,
 )
 from pytech.data.reader import BarReader
 from pytech.fin.market.market import Market
@@ -126,7 +126,7 @@ class Stock(Asset):
     def last_price(self, col=utils.CLOSE_COL):
         return self.df[col][-1]
 
-    @write_chunks()
+    @write_df('beta')
     def _rolling_beta(self,
                       col=utils.CLOSE_COL,
                       window: int = 30) -> ReaderResult:

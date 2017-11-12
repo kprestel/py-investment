@@ -18,6 +18,7 @@ from pytech.fin.portfolio import BasicPortfolio
 from pytech.mongo import ARCTIC_STORE
 from pytech.trading.controls import MaxOrderCount
 import pytech.utils as utils
+from pytech.utils import DateRange
 
 lib = ARCTIC_STORE['pytech.bars']
 
@@ -30,6 +31,10 @@ def start_date():
 @pytest.fixture(scope='session')
 def end_date():
     return '2017-06-09'
+
+@pytest.fixture(scope='session')
+def date_range(start_date, end_date):
+    return DateRange(start_date, end_date)
 
 @pytest.fixture(scope='session')
 def _ticker_df_cache():
@@ -47,7 +52,7 @@ def _ticker_df_cache():
 
 
 # @pytest.fixture(autouse=True)
-def write_ref_csv(monkeypatch, start_date, end_date):
+def write_ref_csv(monkeypatch, date_range):
     """
     This is a utils fixture that shouldn't be used unless generating
     reference data.
@@ -66,10 +71,8 @@ def write_ref_csv(monkeypatch, start_date, end_date):
         if isinstance(tickers, str):
             df = bar_reader._single_get_data(tickers,
                                              source,
-                                             start,
-                                             end,
+                                             date_range,
                                              check_db,
-                                             filter_data,
                                              **kwargs)
             df.df.to_csv(f'{TEST_DATA_DIR}{os.sep}{tickers}.csv')
             return df.df
@@ -78,10 +81,8 @@ def write_ref_csv(monkeypatch, start_date, end_date):
                 tickers = tickers.index
             df = bar_reader._mult_tickers_get_data(tickers,
                                                    source,
-                                                   start,
-                                                   end,
+                                                   date_range,
                                                    check_db,
-                                                   filter_data,
                                                    **kwargs)
             for ticker, df_ in df.items():
                 df_.to_csv(f'{TEST_DATA_DIR}{os.sep}{ticker}.csv')
@@ -148,9 +149,9 @@ def mock_portfolio():
 
 
 @pytest.fixture()
-def bars(events, ticker_list, start_date, end_date):
+def bars(events, ticker_list, date_range):
     """Create a default :class:`YahooDataHandler`"""
-    bars = Bars(events, ticker_list, start_date, end_date)
+    bars = Bars(events, ticker_list, date_range)
     bars.update_bars()
     return bars
 
@@ -183,16 +184,15 @@ def populated_blotter(blotter: b.Blotter, mock_portfolio, start_date):
 
 
 @pytest.fixture()
-def basic_portfolio(events, bars, start_date, populated_blotter):
+def basic_portfolio(events, bars, date_range, populated_blotter):
     """Return a BasicPortfolio to be used in testing."""
     populated_blotter.bars = bars
-    return BasicPortfolio(bars, events, start_date,
-                          populated_blotter)
+    return BasicPortfolio(bars, events, date_range, populated_blotter)
 
 
 @pytest.fixture()
-def empty_portfolio(events, start_date, blotter):
-    return BasicPortfolio(blotter.bars, events, start_date, blotter)
+def empty_portfolio(events, date_range, blotter):
+    return BasicPortfolio(blotter.bars, events, date_range, blotter)
 
 
 @pytest.fixture()
@@ -202,10 +202,10 @@ def basic_signal_handler(basic_portfolio):
 
 
 @pytest.fixture()
-def aapl(start_date, end_date):
-    return Stock('AAPL', start_date, end_date)
+def aapl(date_range):
+    return Stock('AAPL', date_range)
 
 
 @pytest.fixture()
-def fb(start_date, end_date):
-    return Stock('FB', start_date, end_date)
+def fb(date_range):
+    return Stock('FB', date_range)

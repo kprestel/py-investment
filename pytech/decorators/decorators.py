@@ -3,8 +3,11 @@ from functools import wraps
 import pandas as pd
 from arctic.chunkstore.chunkstore import ChunkStore
 from pandas.tseries.offsets import BDay
+from sqlalchemy import Table
 
 import pytech.utils as utils
+from pytech.data.schema import assets
+from pytech.data.connection import write
 from pytech.exceptions import (
     InvalidStoreError,
     PyInvestmentKeyError,
@@ -46,7 +49,7 @@ def optional_arg_decorator(fn):
     return wrapped_decorator
 
 
-def write_chunks(chunk_size='D', remove_ticker=True):
+def write_df(table: str):
     """
     Used to wrap functions that return :class:`pd.DataFrame`s and writes the
     output to a :class:`ChunkStore`. It is required that the the wrapped
@@ -69,9 +72,8 @@ def write_chunks(chunk_size='D', remove_ticker=True):
     def wrapper(f):
         @wraps(f)
         def eval_and_write(*args, **kwargs):
-            df_lib_name = f(*args, **kwargs)
-            df = df_lib_name.df
-            lib_name = df_lib_name.lib_name
+            result = f(*args, **kwargs)
+            df = result.df
             try:
                 # TODO: make this use the fast scalar getter
                 # ticker = df[utils.TICKER_COL][0]
@@ -82,32 +84,37 @@ def write_chunks(chunk_size='D', remove_ticker=True):
                     'Decorated functions are required to add a column '
                     f'"{utils.TICKER_COL}" that contains the ticker.')
 
-            if remove_ticker:
-                # should this be saved?
-                df.drop(utils.TICKER_COL, axis=1, inplace=True)
+            if 'date' not in df.columns and 'date' in df.index.names:
+                df[utils.DATE_COL] = df.index
 
             # this is a work around for a flaw in the the arctic DateChunker.
-            if 'date' not in df.columns or 'date' not in df.index.names:
-                if df.index.dtype == pd.to_datetime(['2017']).dtype:
-                    df.index.name = 'date'
-                else:
-                    raise ValueError('df must be datetime indexed or have a'
-                                     'column named "date".')
+            # if 'date' not in df.columns or 'date' not in df.index.names:
+            #     if df.index.dtype == pd.to_datetime(['2017']).dtype:
+            #         df.index.name = 'date'
+            #     else:
+            #         raise ValueError('df must be datetime indexed or have a'
+            #                          'column named "date".')
 
-            if lib_name not in ARCTIC_STORE.list_libraries():
+            # if lib_name not in ARCTIC_STORE.list_libraries():
                 # create the lib if it does not already exist
-                ARCTIC_STORE.initialize_library(lib_name,
-                                                BarStore.LIBRARY_TYPE)
+                # ARCTIC_STORE.initialize_library(lib_name,
+                #                                 BarStore.LIBRARY_TYPE)
 
-            lib = ARCTIC_STORE[lib_name]
+            # lib = ARCTIC_STORE[lib_name]
 
-            if not isinstance(lib, ChunkStore):
-                raise InvalidStoreError(required=ChunkStore,
-                                        provided=type(lib))
-            else:
-                lib.update(ticker, df, chunk_size=chunk_size, upsert=True)
+            # if not isinstance(lib, ChunkStore):
+            #     raise InvalidStoreError(required=ChunkStore,
+            #                             provided=type(lib))
+            # else:
+            #     lib.update(ticker, df, chunk_size=chunk_size, upsert=True)
+
+            writer = write()
+
+            ins = assets.insert().values(ticker=ticker)
+            writer(ins)
 
             df.index.freq = BDay()
+            writer.df(df, table)
             return ReaderResult(ticker, df)
 
         return eval_and_write

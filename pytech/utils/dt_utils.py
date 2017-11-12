@@ -8,7 +8,7 @@ import pandas_market_calendars as mcal
 from pandas.api.types import is_number
 from pandas.tslib import Timestamp
 
-from exceptions import (
+from pytech.exceptions import (
     PyInvestmentTypeError,
     PyInvestmentValueError,
 )

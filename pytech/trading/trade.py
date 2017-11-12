@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from exceptions import UntriggeredTradeError
+from pytech.exceptions import UntriggeredTradeError
 from pytech.utils import dt_utils as dt_utils
 from pytech.utils.enums import TradeAction
 

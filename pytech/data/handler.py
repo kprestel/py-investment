@@ -3,13 +3,13 @@ import logging
 import queue
 from abc import (
     ABCMeta,
-    abstractmethod
+    abstractmethod,
 )
 from typing import (
     Dict,
     Iterable,
     Union,
-    List
+    List,
 )
 
 import numpy as np
@@ -18,10 +18,11 @@ import pandas as pd
 import pytech.utils as utils
 from pytech.decorators.decorators import (
     memoize,
-    lazy_property
+    lazy_property,
 )
 from pytech.backtest.event import MarketEvent
 from pytech.data.reader import BarReader
+from pytech.utils import DateRange
 
 
 class DataHandler(metaclass=ABCMeta):
@@ -30,8 +31,7 @@ class DataHandler(metaclass=ABCMeta):
     def __init__(self,
                  events: queue.Queue,
                  tickers: Iterable[str],
-                 start_date: dt.datetime,
-                 end_date: dt.datetime,
+                 date_range: DateRange,
                  asset_lib_name: str = 'pytech.bars',
                  market_lib_name: str = 'pytech.market') -> None:
         """
@@ -54,8 +54,7 @@ class DataHandler(metaclass=ABCMeta):
         # self._ticker_data = {}
         self.latest_ticker_data = {}
         self.continue_backtest: bool = True
-        self.start_date: dt.datetime = utils.parse_date(start_date)
-        self.end_date: dt.datetime = utils.parse_date(end_date)
+        self.date_range: DateRange = date_range or DateRange()
         self.asset_lib_name: str = asset_lib_name
         self.market_lib_name: str = market_lib_name
         self.asset_reader: BarReader = BarReader(asset_lib_name)
@@ -133,13 +132,12 @@ class Bars(DataHandler):
     def __init__(self,
                  events: queue.Queue,
                  tickers: Iterable,
-                 start_date: dt.datetime,
-                 end_date: dt.datetime,
+                 date_range: DateRange,
                  source: str = 'google',
                  asset_lib_name: str = 'pytech.bars',
                  market_lib_name: str = 'pytech.market'):
         self.source = source
-        super().__init__(events, tickers, start_date, end_date,
+        super().__init__(events, tickers, date_range,
                          asset_lib_name, market_lib_name)
 
     def _populate_ticker_data(self) -> Dict[str, Iterable[pd.Series]]:
@@ -212,15 +210,9 @@ class Bars(DataHandler):
             tickers = self.tickers
 
         return self.asset_reader.get_data(tickers,
-                                          source=self.source,
-                                          start=self.start_date,
-                                          end=self.end_date,
+                                          self.source,
+                                          self.date_range,
                                           **kwargs)
-        # from pytech import TEST_DATA_DIR
-        # import os
-        # for ticker, df in dfs.items():
-        #     df.to_csv(f'{TEST_DATA_DIR}{os.sep}{ticker}.csv')
-        # return dfs
 
     def _get_new_bar(self, ticker: str):
         """
@@ -233,7 +225,7 @@ class Bars(DataHandler):
             yield bar
 
     def get_latest_bar(self, ticker: str) -> pd.DataFrame:
-
+        """Return the latest bar."""
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:

@@ -17,7 +17,7 @@ from typing import (
 if TYPE_CHECKING:
     from pytech.trading import AnyOrder
     from fin.portfolio import Portfolio
-from exceptions import TradingControlViolation
+from pytech.exceptions import TradingControlViolation
 
 
 class TradingControl(metaclass=ABCMeta):

@@ -2,13 +2,13 @@ import datetime as dt
 import logging
 import queue
 
-import pytech.utils.common_utils as com_utils
-import pytech.utils.dt_utils as dt_utils
+import pytech.utils as utils
 from pytech.data.handler import Bars
 from pytech.fin.portfolio import BasicPortfolio
 from pytech.trading.blotter import Blotter
 from pytech.trading.execution import SimpleExecutionHandler
 from pytech.utils.enums import EventType
+from pytech.utils import DateRange
 
 
 class Backtest(object):
@@ -21,9 +21,8 @@ class Backtest(object):
     def __init__(self,
                  ticker_list,
                  initial_capital,
-                 start_date,
+                 date_range: DateRange,
                  strategy,
-                 end_date=None,
                  data_handler=None,
                  execution_handler=None,
                  portfolio=None,
@@ -40,14 +39,10 @@ class Backtest(object):
         :param portfolio:
         """
         self.logger = logging.getLogger(__name__)
-        self.ticker_list = com_utils.iterable_to_set(ticker_list)
+        self.ticker_list = utils.iterable_to_set(ticker_list)
         self.initial_capital = initial_capital
-        self.start_date = dt_utils.parse_date(start_date)
+        self.date_range = date_range or DateRange()
 
-        if end_date is None:
-            self.end_date = dt.datetime.utcnow()
-        else:
-            self.end_date = dt_utils.parse_date(end_date)
         self.strategy_cls = strategy
 
         if data_handler is None:
@@ -79,13 +74,12 @@ class Backtest(object):
     def _init_trading_instances(self):
         self.data_handler = self.data_handler_cls(self.events,
                                                   self.ticker_list,
-                                                  self.start_date,
-                                                  self.end_date)
+                                                  self.date_range)
         self.blotter.bars = self.data_handler
         self.strategy = self.strategy_cls(self.data_handler, self.events)
         self.portfolio = self.portfolio_cls(self.data_handler,
                                             self.events,
-                                            self.start_date,
+                                            self.date_range,
                                             self.blotter,
                                             self.initial_capital)
         self.execution_handler = self.execution_handler_cls(self.events)
@@ -97,7 +91,6 @@ class Backtest(object):
 
         This method gets called in ``run``.
         """
-
 
     def run(self):
         self.pre_run_hook()

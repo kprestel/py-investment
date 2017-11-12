@@ -1,5 +1,6 @@
 import logging
 import queue
+import uuid
 from abc import (
     ABCMeta,
     abstractmethod,
@@ -16,12 +17,14 @@ import pandas as pd
 
 import pytech.utils as utils
 from pytech.backtest.event import SignalEvent
+from pytech.data.connection import write
 from pytech.data.handler import DataHandler
 from pytech.fin.asset.owned_asset import OwnedAsset
 from pytech.mongo import (
     ARCTIC_STORE,
     PortfolioStore,
 )
+from pytech.utils import DateRange
 
 if TYPE_CHECKING:
     from pytech.trading import (
@@ -34,9 +37,10 @@ from pytech.utils.enums import (
     Position,
     TradeAction,
 )
-from exceptions import (
+from pytech.exceptions import (
     InsufficientFundsError,
     InvalidEventTypeError,
+    PyInvestmentTypeError,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,15 +66,16 @@ class Portfolio(metaclass=ABCMeta):
     def __init__(self,
                  data_handler: DataHandler,
                  events: queue.Queue,
-                 start_date: datetime,
+                 date_range: DateRange,
                  blotter: 'Blotter',
                  initial_capital: float = 100_000.00,
                  raise_on_warnings=False) -> None:
+        self._id = uuid.uuid4()
+        self.date_range = date_range or DateRange()
         self.logger = logging.getLogger(__name__)
         self.bars: DataHandler = data_handler
         self.events: queue.Queue = events
         self.blotter: 'Blotter' = blotter
-        self.start_date: datetime = utils.parse_date(start_date)
         self._initial_capital: float = initial_capital
         self.cash: float = initial_capital
         self.ticker_list: List[str] = self.bars.tickers
@@ -84,6 +89,13 @@ class Portfolio(metaclass=ABCMeta):
         self.positions_df: pd.DataFrame = pd.DataFrame()
         self.raise_on_warnings: bool = raise_on_warnings
         self.signal_handlers = None
+        self.writer = write()
+        self.writer.insert_portfolio(self)
+
+    @property
+    def id(self):
+        """Returns a ``hex`` representation of the portfolios ``id``"""
+        return self._id.hex
 
     @property
     def signal_handlers(self):
@@ -96,8 +108,8 @@ class Portfolio(metaclass=ABCMeta):
         elif utils.is_iterable(val):
             self._signal_handlers = val
         else:
-            raise TypeError('signal_handlers must be an iterable. '
-                            f'{type(val)} was given.')
+            raise PyInvestmentTypeError('signal_handlers must be an iterable. '
+                                        f'{type(val)} was given.')
 
     @property
     def initial_capital(self):
@@ -149,12 +161,12 @@ class Portfolio(metaclass=ABCMeta):
         This should only be called once.
         """
         d = self._get_temp_dict()
-        d['datetime'] = self.start_date
+        d['datetime'] = self.date_range.start
         return [d]
 
     def _construct_all_holdings(self):
         d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
-        d['datetime'] = self.start_date
+        d['datetime'] = self.date_range.start
         d['cash'] = self.initial_capital
         d['commission'] = 0.0
         d['total'] = self.initial_capital
@@ -330,13 +342,13 @@ class BasicPortfolio(Portfolio):
     def __init__(self,
                  data_handler: DataHandler,
                  events: queue.Queue,
-                 start_date: datetime,
+                 date_range: DateRange,
                  blotter: 'Blotter',
                  initial_capital: float = 100000.00,
                  raise_on_warnings=False):
         super().__init__(data_handler,
                          events,
-                         start_date,
+                         date_range,
                          blotter,
                          initial_capital,
                          raise_on_warnings)
@@ -414,4 +426,3 @@ class BasicPortfolio(Portfolio):
         """
         for handler in self.signal_handlers:
             handler.handle_signal(self, signal, triggered_orders)
-

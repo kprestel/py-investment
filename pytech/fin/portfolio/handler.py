@@ -10,7 +10,7 @@ from typing import (
 )
 
 import pytech.utils as utils
-from exceptions import (
+from pytech.exceptions import (
     InsufficientFundsError,
     InvalidSignalTypeError,
 )

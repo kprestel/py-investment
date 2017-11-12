@@ -17,9 +17,10 @@ from pytech.data.schema import (
 class TestWrite(object):
     writer = write()
 
-    def test___call__(self):
-        ins = portfolio.insert().values(cash=123456)
-        self.writer(ins)
+    def test___call__(self, basic_portfolio):
+        self.writer.insert_portfolio(basic_portfolio)
+        # ins = portfolio.insert().values(cash=123456)
+        # self.writer(ins)
 
     def test_df(self, goog_df: pd.DataFrame):
         ins = assets.insert().values(ticker='GOOG')

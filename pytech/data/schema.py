@@ -111,6 +111,7 @@ portfolio = sa.Table(
     metadata,
     sa.Column('id', UUID, primary_key=True, default=uuid.uuid4().hex),
     sa.Column('cash', sa.Numeric(16, 2), nullable=False),
+    sa.Column('initial_capital', sa.Numeric(16, 2), nullable=False),
     sa.Column('created', TIMESTAMP(timezone=True), server_default=utcnow()),
     sa.Column('last_updated', TIMESTAMP(timezone=True),
               server_onupdate=utcnow()),
@@ -134,15 +135,14 @@ ownership = sa.Table(
     metadata,
     sa.Column('portfolio_id', None, sa.ForeignKey('portfolio.id'),
               primary_key=True),
-    sa.Column('trade_id', None, sa.ForeignKey('trade.id'), primary_key=True),
     sa.Column('ticker', None, sa.ForeignKey('asset.ticker'), primary_key=True),
     sa.Column('shares_owned', sa.INTEGER, nullable=False),
     sa.Column('avg_price_per_share', sa.Numeric(16, 2), nullable=False),
+    sa.Column('commission', sa.Numeric(16, 2)),
     sa.Column('created', TIMESTAMP(timezone=True), server_default=utcnow()),
     sa.Column('last_updated', TIMESTAMP(timezone=True),
               server_onupdate=utcnow()),
-    sa.UniqueConstraint('portfolio_id', 'trade_id', 'ticker',
-                        name='uix_ownership_pk')
+    sa.UniqueConstraint('portfolio_id', 'ticker', name='uix_ownership_pk')
 )
 
 if __name__ == '__main__':
