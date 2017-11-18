@@ -58,7 +58,7 @@ class DataHandler(metaclass=ABCMeta):
         self.asset_lib_name: str = asset_lib_name
         self.market_lib_name: str = market_lib_name
         self.asset_reader: BarReader = BarReader(asset_lib_name)
-        self.market_reader: BarReader = BarReader(market_lib_name)
+        self.mkt_reader: BarReader = BarReader(market_lib_name)
 
     @lazy_property
     def ticker_data(self):
@@ -137,8 +137,11 @@ class Bars(DataHandler):
                  asset_lib_name: str = 'pytech.bars',
                  market_lib_name: str = 'pytech.market'):
         self.source = source
-        super().__init__(events, tickers, date_range,
-                         asset_lib_name, market_lib_name)
+        super().__init__(events=events,
+                         tickers=tickers,
+                         date_range=date_range,
+                         asset_lib_name=asset_lib_name,
+                         market_lib_name=market_lib_name)
 
     def _populate_ticker_data(self) -> Dict[str, Iterable[pd.Series]]:
         """
@@ -153,10 +156,10 @@ class Bars(DataHandler):
             out[t] = df_dict[t]
 
             # TODO needed?
-            if comb_index is None:
-                comb_index = out[t].index
-            else:
-                comb_index.union(out[t].index)
+            # if comb_index is None:
+            #     comb_index = out[t].index.get_level_values(utils.DATE_COL)
+            # else:
+            #     comb_index.union(out[t].index.get_level_values(utils.DATE_COL))
 
             self.latest_ticker_data[t] = []
 
@@ -184,12 +187,24 @@ class Bars(DataHandler):
 
         if market_ticker is not None and market_ticker not in self.tickers:
             # get the market data if it has not already been fetched
-            market_df = self.market_reader.get_data(market_ticker, columns=col)
-            agg_df[market_ticker] = market_df[col]
+            market_df: pd.DataFrame = self.mkt_reader.get_data(market_ticker,
+                                                               columns=col,
+                                                               date_range=self.date_range)
+            if agg_df.empty:
+                agg_df = pd.DataFrame(market_df[col].values,
+                                      index=market_df.index,
+                                      columns=[market_ticker])
 
         for t in self.tickers:
-            temp_df = df_dict[t]
-            agg_df[t] = temp_df[col]
+            temp_df: pd.DataFrame = df_dict[t].copy()
+            temp_df = pd.DataFrame(temp_df[col].values,
+                                   index=temp_df.index,
+                                   columns=[t])
+            if agg_df.empty:
+                agg_df = df_dict[t][[col, utils.TICKER_COL]]
+            else:
+                agg_df = pd.merge(agg_df, temp_df, left_index=True,
+                                  right_index=True, how='outer')
 
         return agg_df
 

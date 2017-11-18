@@ -265,18 +265,21 @@ def _concat_dfs(lower_df: pd.DataFrame,
     Helper method to concat the missing data frames, where `df` is the original
     df.
     """
+    def do_concat(*args) -> pd.DataFrame:
+        # noinspection PyTypeChecker
+        return pd.concat(list(args), join='inner', axis=0)
     if lower_df is None and upper_df is None:
         # everything is already in the df
         return df
     elif lower_df is not None and upper_df is None:
         # missing only lower data
-        return pd.DataFrame(pd.concat([df, lower_df]))
+        return do_concat(df, lower_df)
     elif lower_df is None and upper_df is not None:
         # missing only upper data
-        return pd.DataFrame(pd.concat([df, upper_df]))
+        return do_concat(df, upper_df)
     elif lower_df is not None and upper_df is not None:
         # both missing
-        return pd.DataFrame(pd.concat([df, upper_df, lower_df]))
+        return do_concat(df, upper_df, lower_df)
     else:
         return df
 

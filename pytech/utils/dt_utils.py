@@ -1,5 +1,8 @@
 import datetime as dt
-from typing import Tuple, Union
+from typing import (
+    Tuple,
+    Union,
+)
 
 import pandas as pd
 from dateutil import tz
@@ -13,7 +16,7 @@ from pytech.exceptions import (
     PyInvestmentValueError,
 )
 
-date_type = Union[dt.date, dt.datetime]
+date_type = Union[dt.date, dt.datetime, str, int]
 
 NYSE = mcal.get_calendar('NYSE')
 
@@ -29,8 +32,8 @@ def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
     if isinstance(date_to_parse, dt.date) and not isinstance(date_to_parse,
                                                              dt.datetime):
         raise PyInvestmentTypeError(
-                f'date must be a datetime object. {type(date_to_parse)} '
-                f'was provided')
+            f'date must be a datetime object. {type(date_to_parse)} '
+            f'was provided')
     elif isinstance(date_to_parse, Timestamp):
         if date_to_parse.tz is None:
             return date_to_parse.replace(tzinfo=pytz.UTC)
@@ -46,9 +49,9 @@ def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
         return pd.to_datetime(date_to_parse, utc=True)
     else:
         raise PyInvestmentTypeError(
-                'date_to_parse must be a pandas '
-                'Timestamp, datetime, or a date string. '
-                f'{type(date_to_parse)} was provided')
+            'date_to_parse must be a pandas '
+            'Timestamp, datetime, or a date string. '
+            f'{type(date_to_parse)} was provided')
 
 
 def get_default_date(is_start_date):
@@ -112,9 +115,17 @@ def prev_weekday(a_dt: date_type):
 
 
 class DateRange(object):
-
-    def __init__(self, start=None, end=None):
+    def __init__(self, start: date_type = None,
+                 end: date_type = None,
+                 freq: str = 'B',
+                 cal: str = 'NYSE'):
+        # TODO: open, closed
         self.start, self.end = sanitize_dates(start, end)
+        self.freq = freq
+        if cal == 'NYSE':
+            self.cal = NYSE
+        else:
+            raise NotImplementedError('TODO.')
 
         if self.start >= self.end:
             raise PyInvestmentValueError(f'start must be less than end.'
@@ -128,3 +139,8 @@ class DateRange(object):
         else:
             raise PyInvestmentValueError(f'{dt} is not valid. Must be '
                                          f'"start" or "end"')
+
+    @property
+    def dt_index(self):
+        schedule = self.cal.schedule(start_date=self.start, end_date=self.end)
+        return mcal.date_range(schedule=schedule, frequency=self.freq)
