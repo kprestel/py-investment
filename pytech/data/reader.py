@@ -246,7 +246,7 @@ class BarReader(object):
 
         if db_end < date_range.end and date_range.is_trade_day('end'):
             # db doesn't have as much data than requested
-            tmp_dt_range_end = DateRange(db_end + BDay(), date_range.end)
+            tmp_dt_range_end = DateRange(db_end, date_range.end)
             upper_df_lib_name = self._from_web(ticker, source,
                                                tmp_dt_range_end)
             upper_df = upper_df_lib_name.df

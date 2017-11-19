@@ -5,6 +5,7 @@ from pytech.fin.analysis.portfolio import EfficientFrontier
 
 
 class TestEfficientFrontier(object):
+    @pytest.mark.skip('Legacy DB')
     def test_standard_frontier(self):
         frontier = EfficientFrontier()
         result = frontier()
