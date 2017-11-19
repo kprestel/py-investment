@@ -4,6 +4,7 @@ import time
 import pandas as pd
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from pytech.data.connection import (
     reader,
@@ -15,15 +16,21 @@ from pytech.data.schema import (
 )
 
 
-@pytest.mark.skip('todo?')
 class TestWrite(object):
     writer = write()
 
     def test___call__(self, basic_portfolio):
         self.writer.insert_portfolio(basic_portfolio)
-        # ins = portfolio.insert().values(cash=123456)
-        # self.writer(ins)
 
+    def test___call__none(self, basic_portfolio):
+        self.writer.insert_portfolio(basic_portfolio, on_conflict=None)
+
+    def test___call__raise(self, basic_portfolio):
+        with pytest.raises(IntegrityError):
+            self.writer.insert_portfolio(basic_portfolio, on_conflict='raise')
+
+
+    @pytest.mark.skip('todo?')
     def test_df(self, fb_df: pd.DataFrame):
         ins = assets.insert().values(ticker='FB')
         self.writer(ins)

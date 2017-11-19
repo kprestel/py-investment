@@ -10,6 +10,7 @@ from typing import (
     Dict,
     TYPE_CHECKING,
     Union,
+    Optional,
 )
 
 import pandas as pd
@@ -18,9 +19,12 @@ import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import (
     Delete,
-    Insert,
     Select,
     Update,
+)
+from sqlalchemy.dialects.postgresql import (
+    Insert,
+    insert,
 )
 
 import pytech.utils as utils
@@ -81,7 +85,7 @@ class write(sqlaction):
                 self.logger.warning(f'{e}')
 
     def df(self, df: pd.DataFrame, table: str, index: bool = False) -> None:
-        out_df : pd.DataFrame = df.copy()
+        out_df: pd.DataFrame = df.copy()
         out_df[utils.VOL_COL] = out_df[utils.VOL_COL].astype(dtype='int64')
         out_df = out_df.dropna()
         out_df = out_df[out_df[utils.FROM_DB_COL] == False]
@@ -93,25 +97,45 @@ class write(sqlaction):
         conn = self.engine.raw_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.copy_from(output, table, sep=',', columns=out_df.columns)
+                cursor.copy_from(output, table, sep=',',
+                                 columns=out_df.columns)
                 conn.commit()
         except pg.IntegrityError as e:
-            self.logger.warning(f'{e}')
             raise
         finally:
             conn.close()
 
-    def insert_portfolio(self, portfolio_: 'Portfolio'):
+    def insert_portfolio(self, portfolio_: 'Portfolio',
+                         on_conflict: Optional[str] = 'upsert'):
+        """
+        Insert a portfolio into the DB.
+
+        :param portfolio_: the portfolio to insert.
+        :param on_conflict: what to do if a primary key conflict is
+            encountered. Valid options are:
+
+            - None
+                - do nothing
+            - upsert
+                - perform an upsert
+            - raise
+                - raise the :class:`IntegrityError`
+        :return:
+        """
         """Writes a portfolio to the database."""
-        ins = portfolio.insert().values(id=portfolio_.id,
-                                        cash=portfolio_.cash,
-                                        initial_capital=portfolio_.initial_capital)
-        try:
-            with self.engine.begin() as conn:
-                res = conn.execute(ins)
-                return res
-        except IntegrityError as e:
-            self.logger.warning(f'{e}')
+        ins = insert(portfolio).values(id=portfolio_.id,
+                                       cash=portfolio_.cash,
+                                       initial_capital=portfolio_.initial_capital)
+        if on_conflict == 'upsert':
+            ins = ins.on_conflict_do_update(constraint='portfolio_pkey',
+                                      set_=dict(cash=portfolio_.cash,
+                                                initial_capital=portfolio_.initial_capital))
+        elif on_conflict is None:
+            ins = ins.on_conflict_do_nothing(constraint='portfolio_pkey')
+
+        with self.engine.begin() as conn:
+            res = conn.execute(ins)
+            return res
 
 
 class reader(sqlaction):
