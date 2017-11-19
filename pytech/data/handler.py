@@ -156,10 +156,10 @@ class Bars(DataHandler):
             out[t] = df_dict[t]
 
             # TODO needed?
-            # if comb_index is None:
-            #     comb_index = out[t].index.get_level_values(utils.DATE_COL)
-            # else:
-            #     comb_index.union(out[t].index.get_level_values(utils.DATE_COL))
+            if comb_index is None:
+                comb_index = out[t].index.get_level_values(utils.DATE_COL)
+            else:
+                comb_index.union(out[t].index.get_level_values(utils.DATE_COL))
 
             self.latest_ticker_data[t] = []
 

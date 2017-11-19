@@ -48,13 +48,11 @@ class TestYahooDataHandler(object):
         aapl_open_expected = 101.410004
         assert aapl_open == approx(aapl_open_expected)
 
-        fb_close = (bars
-                    .latest_bar_value('FB', pd_utils.CLOSE_COL))
+        fb_close = (bars.latest_bar_value('FB', pd_utils.CLOSE_COL))
         fb_close_expected = 107.32
         assert fb_close == approx(fb_close_expected)
 
-        fb_open = (bars
-                   .latest_bar_value('FB', pd_utils.OPEN_COL))
+        fb_open = (bars.latest_bar_value('FB', pd_utils.OPEN_COL))
         fb_open_expected = 107.910004
         assert fb_open == approx(fb_open_expected)
 

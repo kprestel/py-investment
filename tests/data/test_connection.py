@@ -2,6 +2,7 @@
 import time
 
 import pandas as pd
+import pytest
 from sqlalchemy import select
 
 from pytech.data.connection import (
@@ -14,6 +15,7 @@ from pytech.data.schema import (
 )
 
 
+@pytest.mark.skip('todo?')
 class TestWrite(object):
     writer = write()
 

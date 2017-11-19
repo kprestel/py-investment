@@ -254,6 +254,7 @@ class BarReader(object):
             upper_df = None
 
         new_df = _concat_dfs(lower_df, upper_df, df)
+        new_df = new_df.sort_index()
         return ReaderResult(ticker, new_df)
 
     def get_symbols(self):
