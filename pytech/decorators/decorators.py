@@ -73,6 +73,8 @@ def write_df(table: str):
         @wraps(f)
         def eval_and_write(*args, **kwargs):
             result = f(*args, **kwargs)
+            if not result.successful:
+                return result
             df = result.df
             try:
                 # TODO: make this use the fast scalar getter

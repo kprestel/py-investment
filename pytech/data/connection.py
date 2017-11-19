@@ -51,7 +51,8 @@ def getconn():
 
 
 class sqlaction(metaclass=ABCMeta):
-    _engine = sa.create_engine('postgresql+psycopg2://', creator=getconn)
+    _engine = sa.create_engine('postgresql+psycopg2://', creator=getconn,
+                               echo=True)
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -79,20 +80,24 @@ class write(sqlaction):
             except IntegrityError as e:
                 self.logger.warning(f'{e}')
 
-    def df(self, df: pd.DataFrame, table: str, index: bool = False):
+    def df(self, df: pd.DataFrame, table: str, index: bool = False) -> None:
+        out_df : pd.DataFrame = df.copy()
+        out_df[utils.VOL_COL] = out_df[utils.VOL_COL].astype(dtype='int64')
+        out_df = out_df.dropna()
+        out_df = out_df[out_df[utils.FROM_DB_COL] == False]
+        out_df = out_df.drop(utils.FROM_DB_COL, axis=1)
         output = StringIO()
-        df[utils.VOL_COL] = df[utils.VOL_COL].astype(dtype='int64')
-        df = df.dropna()
-        df.to_csv(output, index=index, header=False)
+        out_df.to_csv(output, index=index, header=False)
         output.getvalue()
         output.seek(0)
         conn = self.engine.raw_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.copy_from(output, table, sep=',', columns=df.columns)
+                cursor.copy_from(output, table, sep=',', columns=out_df.columns)
                 conn.commit()
         except pg.IntegrityError as e:
             self.logger.warning(f'{e}')
+            raise
         finally:
             conn.close()
 

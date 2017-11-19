@@ -10,9 +10,7 @@ class TestBacktest(object):
 
         initial_capital = 100000
         # start_date = '2016-03-10'
-        start_date = dt.datetime(year=2016, month=3, day=10)
-        end_date = dt.datetime(year=2016, month=5, day=10)
-        backtest = Backtest(ticker_list=ticker_list,
+        backtest = Backtest(ticker_list=['FB'],
                             date_range=date_range,
                             initial_capital=initial_capital,
                             strategy=CrossOverStrategy)

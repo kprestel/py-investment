@@ -58,7 +58,7 @@ class BarReader(object):
 
     def get_data(self,
                  tickers: ticker_input,
-                 source: str = GOOGLE,
+                 source: str = YAHOO,
                  date_range: DateRange = None,
                  check_db: bool = True,
                  **kwargs) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
@@ -177,8 +177,9 @@ class BarReader(object):
         try:
             logger.info(
                 f'Making call to {source}. Start date: {date_range.start},'
-                f'End date: {date_range.end}')
-            df = pdr.DataReader(ticker, data_source=source,
+                f'End date: {date_range.end}, Ticker: {ticker}')
+            df = pdr.DataReader(ticker,
+                                data_source=source,
                                 start=date_range.start,
                                 end=date_range.end, **kwargs)
             if df.empty:
@@ -190,9 +191,9 @@ class BarReader(object):
 
         df = utils.rename_bar_cols(df)
         df[utils.TICKER_COL] = ticker
+        df[utils.FROM_DB_COL] = False
 
-        if source == YAHOO:
-            # yahoo doesn't set the index :(
+        if not isinstance(df.index, pd.DatetimeIndex):
             df = df.set_index([utils.DATE_COL])
         else:
             df.index.name = utils.DATE_COL
@@ -217,11 +218,13 @@ class BarReader(object):
         :raises: NoDataFoundException if no data is found for the given ticker.
         """
         q = (sa.select([bars])
-             .where(bars.c.ticker == ticker)
-             .where(bars.c.date.between(date_range.start, date_range.end)))
+             .where(sa.and_(bars.c.date >= date_range.start,
+                            bars.c.date <= date_range.end + BDay(),
+                            bars.c.ticker == ticker)))
 
         logger.info(f'Checking DB for ticker: {ticker}')
         df = self.reader.df(q)
+        df[utils.FROM_DB_COL] = True
 
         if df.empty:
             raise DataAccessError('DataFrame was empty. No data found.')
@@ -243,7 +246,7 @@ class BarReader(object):
 
         if db_end < date_range.end and date_range.is_trade_day('end'):
             # db doesn't have as much data than requested
-            tmp_dt_range_end = DateRange(db_end, date_range.end)
+            tmp_dt_range_end = DateRange(db_end + BDay(), date_range.end)
             upper_df_lib_name = self._from_web(ticker, source,
                                                tmp_dt_range_end)
             upper_df = upper_df_lib_name.df
@@ -265,9 +268,11 @@ def _concat_dfs(lower_df: pd.DataFrame,
     Helper method to concat the missing data frames, where `df` is the original
     df.
     """
+
     def do_concat(*args) -> pd.DataFrame:
         # noinspection PyTypeChecker
         return pd.concat(list(args), join='inner', axis=0)
+
     if lower_df is None and upper_df is None:
         # everything is already in the df
         return df

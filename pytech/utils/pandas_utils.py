@@ -16,6 +16,7 @@ CLOSE_COL = 'close'
 ADJ_CLOSE_COL = 'adj_close'
 VOL_COL = 'volume'
 TICKER_COL = 'ticker'
+FROM_DB_COL = 'from_db'
 
 REQUIRED_COLS = frozenset({
     DATE_COL,

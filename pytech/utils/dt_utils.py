@@ -127,7 +127,7 @@ class DateRange(object):
         else:
             raise NotImplementedError('TODO.')
 
-        if self.start >= self.end:
+        if self.start > self.end:
             raise PyInvestmentValueError(f'start must be less than end.'
                                          f'start: {start}, end: {end}')
 

@@ -109,10 +109,15 @@ def no_db(monkeypatch, _ticker_df_cache: Dict[str, pd.DataFrame]):
     monkeypatch.setattr(BarReader, 'get_data', patch_get_data)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='session')
 def aapl_df():
     """Returns a OHLCV df for Apple."""
     return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}AAPL.csv')
+
+@pytest.fixture(scope='session')
+def fb_df():
+    """Returns a OHLCV df for Apple."""
+    return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}FB.csv')
 
 def date_utc(s):
     return parse(s, tzinfos=tzutc)
@@ -120,8 +125,7 @@ def date_utc(s):
 @pytest.fixture(scope='session')
 def cvs_df():
     return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}CVS.csv')
-    # return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}CVS.csv', parse_dates=['date'],
-    #                    date_parser=date_utc)
+
 
 @pytest.fixture(scope='session')
 def goog_df():
@@ -201,11 +205,11 @@ def basic_signal_handler(basic_portfolio):
     return BasicSignalHandler()
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def aapl(date_range):
     return Stock('AAPL', date_range)
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def fb(date_range):
     return Stock('FB', date_range)

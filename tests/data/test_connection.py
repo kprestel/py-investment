@@ -22,11 +22,11 @@ class TestWrite(object):
         # ins = portfolio.insert().values(cash=123456)
         # self.writer(ins)
 
-    def test_df(self, aapl_df: pd.DataFrame):
-        ins = assets.insert().values(ticker='AAPL')
+    def test_df(self, fb_df: pd.DataFrame):
+        ins = assets.insert().values(ticker='FB')
         self.writer(ins)
-        aapl_df['ticker'] = 'AAPL'
-        self.writer.df(aapl_df, 'bar')
+        fb_df['ticker'] = 'FB'
+        self.writer.df(fb_df, 'bar')
 
 
 class TestRead(object):

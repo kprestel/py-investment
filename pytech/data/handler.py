@@ -133,7 +133,7 @@ class Bars(DataHandler):
                  events: queue.Queue,
                  tickers: Iterable,
                  date_range: DateRange,
-                 source: str = 'google',
+                 source: str = 'yahoo',
                  asset_lib_name: str = 'pytech.bars',
                  market_lib_name: str = 'pytech.market'):
         self.source = source
