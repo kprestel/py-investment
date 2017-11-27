@@ -1,14 +1,15 @@
-from collections import namedtuple
 import numbers
+from collections import namedtuple
 from datetime import datetime
 
 import pandas as pd
+import pytz
 from pandas_datareader import data as web
 
+import pytech.utils as utils
 from pytech.fin.asset.asset import Asset
-from pytech.utils import dt_utils as dt_utils
-from pytech.utils.enums import Position
 from pytech.trading.trade import Trade
+from pytech.utils.enums import Position
 
 
 class OwnedAsset(object):
@@ -21,26 +22,25 @@ class OwnedAsset(object):
                  shares_owned: int,
                  position: Position,
                  avg_share_price: float,
-                 purchase_date: datetime = None) -> None:
+                 purchase_date: 'utils.date_type' = None) -> None:
         self.ticker = ticker
         self.position = Position.check_if_valid(position)
 
         if purchase_date is None:
-            self.purchase_date = pd.Timestamp(datetime.now())
+            self.purchase_date = pd.Timestamp(datetime.now(tz=pytz.UTC))
         else:
-            self.purchase_date = dt_utils.parse_date(purchase_date)
+            self.purchase_date = utils.parse_date(purchase_date)
 
         self.average_share_price_paid = avg_share_price
         self.latest_price = avg_share_price
         self.latest_price_time = self.purchase_date.time()
         self.total_position_value = 0
         self.total_position_cost = 0
-
         self.shares_owned = shares_owned
         self._set_position_cost_and_value(avg_share_price)
 
     @property
-    def shares_owned(self):
+    def shares_owned(self) -> int:
         return self._shares_owned
 
     @shares_owned.setter
@@ -51,7 +51,7 @@ class OwnedAsset(object):
             raise TypeError('shares_owned MUST be an integer.')
 
     @property
-    def ticker(self):
+    def ticker(self) -> str:
         if issubclass(self._ticker.__class__, Asset):
             return self._ticker.ticker
         else:
@@ -63,6 +63,14 @@ class OwnedAsset(object):
             self._ticker = ticker.ticker
         else:
             self._ticker = ticker
+
+    @property
+    def market_value(self) -> float:
+        """
+        Returns the current market value of the owned asset for the number
+        of shares currently owned.
+        """
+        return self.shares_owned * self.latest_price
 
     @classmethod
     def from_trade(cls, trade, asset_position):
@@ -136,7 +144,7 @@ class OwnedAsset(object):
         :return:
         """
         self.latest_price = latest_price
-        self.latest_price_time = dt_utils.parse_date(price_date)
+        self.latest_price_time = utils.parse_date(price_date)
 
         if self.position is Position.SHORT:
             self.total_position_value = (

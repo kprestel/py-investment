@@ -8,30 +8,37 @@ from io import StringIO
 from typing import (
     Any,
     Dict,
+    Iterable,
+    Optional,
     TYPE_CHECKING,
     Union,
-    Optional,
 )
 
 import pandas as pd
 import psycopg2 as pg
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import (
+    Insert,
+    insert,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import (
     Delete,
     Select,
     Update,
 )
-from sqlalchemy.dialects.postgresql import (
-    Insert,
-    insert,
-)
 
 import pytech.utils as utils
-from pytech.data.schema import portfolio
+from pytech.data.schema import (
+    asset_snapshot,
+    portfolio,
+    portfolio_snapshot,
+    metadata
+)
 
 if TYPE_CHECKING:
     from fin.portfolio import Portfolio
+    from fin.asset.owned_asset import OwnedAsset
 
 dml_stmts = Union[Insert, Update, Delete]
 
@@ -60,6 +67,7 @@ class sqlaction(metaclass=ABCMeta):
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        metadata.create_all(self._engine, checkfirst=True)
 
     @utils.class_property
     @classmethod
@@ -127,11 +135,44 @@ class write(sqlaction):
                                        initial_capital=portfolio_.initial_capital)
         if on_conflict == 'upsert':
             ins = ins.on_conflict_do_update(constraint='portfolio_pkey',
-                                      set_=dict(cash=portfolio_.cash,
-                                                initial_capital=portfolio_.initial_capital))
+                                            set_=dict(cash=portfolio_.cash,
+                                                      initial_capital=portfolio_.initial_capital))
         elif on_conflict is None:
             ins = ins.on_conflict_do_nothing(constraint='portfolio_pkey')
 
+        return self._do_insert(ins)
+
+    def portfolio_snapshot(self, portfolio_: 'Portfolio',
+                           cur_dt: 'utils.date_type'):
+        """
+        Write the portfolio's current state to the `portfolio_snapshot` table.
+
+        :param portfolio_: the portfolio to write
+        """
+        ins = insert(portfolio_snapshot).values(portfolio_id=portfolio_.id,
+                                                date=cur_dt,
+                                                cash=portfolio_.cash,
+                                                equity=portfolio_.equity,
+                                                commission=portfolio_.total_commission)
+        return self._do_insert(ins)
+
+    def owned_asset_snapshot(self, assets: Iterable['OwnedAsset'],
+                             portfolio_id: str,
+                             cur_dt: 'utils.date_type'):
+        with self.engine.begin() as conn:
+            conn.execute(
+                asset_snapshot.insert(),
+                [
+                    dict(portfolio_id=portfolio_id,
+                         date=cur_dt,
+                         ticker=asset.ticker,
+                         shares=asset.shares_owned,
+                         mv=asset.market_value,
+                         close=asset.latest_price)
+                    for asset in assets
+                ])
+
+    def _do_insert(self, ins: Insert):
         with self.engine.begin() as conn:
             res = conn.execute(ins)
             return res

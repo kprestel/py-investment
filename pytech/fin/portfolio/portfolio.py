@@ -78,16 +78,19 @@ class Portfolio(metaclass=ABCMeta):
         self.cash: float = initial_capital
         self.ticker_list: List[str] = self.bars.tickers
         self.owned_assets: Dict[str, OwnedAsset] = {}
-        # holdings = mv
-        self.all_holdings_mv = self._construct_all_holdings()
-        # positions = qty
-        self.all_positions_qty = self._construct_all_positions()
         self.total_commission: float = 0.0
         self.positions_df: pd.DataFrame = pd.DataFrame()
         self.raise_on_warnings: bool = raise_on_warnings
         self.signal_handlers = None
         self.writer = write()
         self.writer.insert_portfolio(self)
+
+    def __iter__(self):
+        """
+        Iterate over the owned_assets.
+        """
+        for asset in self.owned_assets.values():
+            yield asset
 
     @property
     def id(self):
@@ -134,6 +137,14 @@ class Portfolio(metaclass=ABCMeta):
             mv += asset.total_position_value
         return mv
 
+    @property
+    def equity(self) -> float:
+        """
+        The total amount of equity the portfolio owns at a point in time.
+        :return:
+        """
+        return sum(a.total_position_value for a in self)
+
     @abstractmethod
     def update_signal(self, event):
         """
@@ -149,46 +160,6 @@ class Portfolio(metaclass=ABCMeta):
         :class:`FillEvent`.
         """
         raise NotImplementedError('Must implement update_fill()')
-
-    def _construct_all_positions(self):
-        """
-        Constructs the position list using the start date to determine when
-        the index will begin.
-
-        This should only be called once.
-        """
-        d = self._get_temp_dict()
-        d['datetime'] = self.date_range.start
-        return [d]
-
-    def _construct_all_holdings(self):
-        d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
-        d['datetime'] = self.date_range.start
-        d['cash'] = self.initial_capital
-        d['commission'] = 0.0
-        d['total'] = self.initial_capital
-        return [d]
-
-    def _construct_current_holdings(self):
-        """
-        Construct a dict which holds the instantaneous market value of the
-        portfolio across all symbols.
-
-        This should only be called once.
-        """
-        d = {k: v for k, v in [(ticker, 0.0) for ticker in self.ticker_list]}
-        return d
-
-    def create_equity_curve_df(self):
-        """Create a df from all_holdings_mv list of dicts."""
-        curve = pd.DataFrame(self.all_holdings_mv)
-        curve.set_index('datetime', inplace=True)
-        curve['returns'] = curve['total'].pct_change()
-        curve['equity_curve'] = (1.0 + curve['returns']).cumprod()
-        self.equity_curve = curve
-
-    def _get_temp_dict(self):
-        return {k: v for k, v in [(ticker, 0) for ticker in self.ticker_list]}
 
     def check_liquidity(self, avg_price_per_share: float, qty: int) -> bool:
         """
@@ -280,57 +251,17 @@ class Portfolio(metaclass=ABCMeta):
         self.blotter.current_dt = latest_dt
         self.blotter.check_order_triggers()
 
-        # update positions
-        # dp = self._get_temp_dict()
-        # dp['datetime'] = latest_dt
-        dh = self._get_temp_dict()
+        for owned_asset in self:
+            adj_close = self.bars.latest_bar_value(owned_asset.ticker,
+                                                   utils.ADJ_CLOSE_COL)
+            owned_asset.update_total_position_value(adj_close, latest_dt)
 
-        for ticker in self.ticker_list:
-            try:
-                dh[ticker] = self.owned_assets[ticker].shares_owned
-            except KeyError:
-                dh[ticker] = 0
-
-        # append current positions
-        # self.all_positions_qty.append(dp)
-
-        # update holdings
-        # dh = self._get_temp_dict()
-        index = []
-        dh['cash'] = self.cash
-        dh['commission'] = self.total_commission
-        dh['total'] = self.cash
-
-        for ticker in self.ticker_list:
-            try:
-                owned_asset = self.owned_assets[ticker]
-            except KeyError:
-                market_value = 0
-                self.logger.debug(f'{ticker} is not currently owned, '
-                                  f'market value will be set to 0.')
-            else:
-                shares_owned = owned_asset.shares_owned
-                adj_close = self.bars.latest_bar_value(ticker,
-                                                       utils.ADJ_CLOSE_COL)
-                market_value = shares_owned * adj_close
-                owned_asset.update_total_position_value(adj_close, latest_dt)
-
-            # approximate to real value.
-            dh[ticker] = market_value
-            dh['total'] += market_value
-            index.append((latest_dt, ticker))
-
-        multi_index = pd.MultiIndex.from_tuples(index, names=['datetime',
-                                                              'ticker'])
-        df = pd.DataFrame(dh, index=multi_index)
-
-        self.positions_df = pd.concat([self.positions_df, df])
-        self.logger.info('Writing current portfolio state to DB.')
-        # self.lib.write_snapshot(self.POSITION_COLLECTION,
-        #                         self.positions_df,
-        #                         latest_dt)
-        # self.lib.write_snapshot(self.TICK_COLLECTION, df, latest_dt)
-        self.all_holdings_mv.append(dh)
+        self.logger.debug('Writing current portfolio state to DB.')
+        self.writer.portfolio_snapshot(self, latest_dt)
+        if self.owned_assets:
+            self.writer.owned_asset_snapshot(self.owned_assets.values(),
+                                         self.id,
+                                         latest_dt)
 
 
 class BasicPortfolio(Portfolio):

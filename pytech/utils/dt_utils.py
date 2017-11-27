@@ -5,23 +5,21 @@ from typing import (
 )
 
 import pandas as pd
-from dateutil import tz
-import pytz
 import pandas_market_calendars as mcal
+import pytz
 from pandas.api.types import is_number
-from pandas.tslib import Timestamp
 
 from pytech.exceptions import (
     PyInvestmentTypeError,
     PyInvestmentValueError,
 )
 
-date_type = Union[dt.date, dt.datetime, str, int]
+date_type = Union[dt.datetime, pd.Timestamp]
 
 NYSE = mcal.get_calendar('NYSE')
 
 
-def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
+def parse_date(date_to_parse: date_type):
     """
     Converts strings or datetime objects to UTC timestamps.
 
@@ -31,16 +29,15 @@ def parse_date(date_to_parse: Union[dt.datetime, Timestamp]):
     """
     if isinstance(date_to_parse, dt.date) and not isinstance(date_to_parse,
                                                              dt.datetime):
-        raise PyInvestmentTypeError(
-            f'date must be a datetime object. {type(date_to_parse)} '
-            f'was provided')
-    elif isinstance(date_to_parse, Timestamp):
+        raise PyInvestmentTypeError(f'date must be a datetime object. '
+                                    f'{type(date_to_parse)} was provided')
+    elif isinstance(date_to_parse, pd.Timestamp):
         if date_to_parse.tz is None:
             return date_to_parse.replace(tzinfo=pytz.UTC)
         else:
             return date_to_parse
     elif isinstance(date_to_parse, dt.datetime):
-        return pd.to_datetime(date_to_parse.replace(tzinfo=tz.tzutc()),
+        return pd.to_datetime(date_to_parse.replace(tzinfo=pytz.UTC),
                               utc=True)
     elif isinstance(date_to_parse, dt.date):
         return pd.to_datetime(date_to_parse, utc=True)

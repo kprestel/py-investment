@@ -26,7 +26,6 @@ class TestBasicPortfolio(object):
         """
         basic_portfolio.update_timeindex(MarketEvent())
         assert basic_portfolio.owned_assets == {}
-        assert basic_portfolio.all_holdings_mv[0]['AAPL'] == 0.0
         basic_portfolio.update_timeindex(MarketEvent())
 
     # noinspection PyTypeChecker

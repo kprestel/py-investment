@@ -35,14 +35,12 @@ class BondBasket(utils.Borg):
     ALL = itertools.chain(US_TBONDS, US_TBILLS, LIBOR)
     SOURCE = 'fred'
 
-    def __init__(self,
-                 date_range: DateRange = None,
-                 lib_name: str = 'pytech.bond') -> None:
+    def __init__(self, date_range: DateRange = None) -> None:
         super().__init__()
         self.date_range = date_range or DateRange()
-        self.lib_name = lib_name
-        self.reader = BarReader(lib_name)
-        self.data = self.reader.get_data(self.ALL, self.SOURCE, self.date_range)
+        self.reader = BarReader()
+        self.data = self.reader.get_data(self.ALL, self.SOURCE,
+                                         self.date_range)
 
 
 class YieldCurve(object):

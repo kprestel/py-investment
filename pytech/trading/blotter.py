@@ -149,7 +149,6 @@ class Blotter(object):
         This means you can iterate over a :class:``Blotter`` instance directly
         and access all of the open orders it has.
         """
-
         def do_iter(orders_dict):
             for k, v in orders_dict.items():
                 if isinstance(v, collections.Mapping):

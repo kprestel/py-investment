@@ -145,6 +145,29 @@ ownership = sa.Table(
     sa.UniqueConstraint('portfolio_id', 'ticker', name='uix_ownership_pk')
 )
 
+asset_snapshot = sa.Table(
+    'asset_snapshot',
+    metadata,
+    sa.Column('portfolio_id', None, sa.ForeignKey('portfolio.id'),
+              primary_key=True),
+    sa.Column('ticker', None, sa.ForeignKey('asset.ticker'), primary_key=True),
+    sa.Column('date', TIMESTAMP(timezone=TIMESTAMP), primary_key=True),
+    sa.Column('shares', sa.INTEGER),
+    sa.Column('mv', sa.Numeric(16, 2)),
+    sa.Column('close', sa.Numeric(16, 2))
+)
+
+portfolio_snapshot = sa.Table(
+    'portfolio_snapshot',
+    metadata,
+    sa.Column('portfolio_id', None, sa.ForeignKey('portfolio.id'),
+              primary_key=True),
+    sa.Column('date', TIMESTAMP(timezone=TIMESTAMP), primary_key=True),
+    sa.Column('cash', sa.Numeric(16, 2)),
+    sa.Column('equity', sa.Numeric(16, 2)),
+    sa.Column('commission', sa.Numeric(16, 2))
+)
+
 if __name__ == '__main__':
     engine = sa.create_engine('postgresql://pytech:pytech@localhost/pytech',
                               echo=True)
