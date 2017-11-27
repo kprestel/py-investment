@@ -1,21 +1,13 @@
 from functools import wraps
 
-import pandas as pd
-from arctic.chunkstore.chunkstore import ChunkStore
 from pandas.tseries.offsets import BDay
-from sqlalchemy import Table
 
 import pytech.utils as utils
-from pytech.data.schema import assets
-from pytech.data.connection import write
-from pytech.exceptions import (
-    InvalidStoreError,
-    PyInvestmentKeyError,
-)
 from pytech.data._holders import ReaderResult
-from pytech.mongo import (
-    ARCTIC_STORE,
-    BarStore,
+from pytech.data.connection import write
+from pytech.data.schema import assets
+from pytech.exceptions import (
+    PyInvestmentKeyError,
 )
 
 

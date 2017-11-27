@@ -15,12 +15,9 @@ from pytech.data.handler import Bars
 from pytech.data import BarReader
 from pytech.fin.asset.asset import Stock
 from pytech.fin.portfolio import BasicPortfolio
-from pytech.mongo import ARCTIC_STORE
 from pytech.trading.controls import MaxOrderCount
 import pytech.utils as utils
 from pytech.utils import DateRange
-
-lib = ARCTIC_STORE['pytech.bars']
 
 
 @pytest.fixture(scope='session')

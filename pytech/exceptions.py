@@ -1,7 +1,6 @@
 """
 Hold exceptions used throughout the package
 """
-from arctic.exceptions import NoDataFoundException
 from pandas_datareader._utils import RemoteDataError
 
 
@@ -158,11 +157,10 @@ class PyInvestmentKeyError(KeyError, PyInvestmentError):
     """Wrapper around the KeyError"""
 
 
-class DataAccessError(NoDataFoundException, RemoteDataError,
-                      PyInvestmentError):
+class DataAccessError(RemoteDataError, PyInvestmentError):
     """
     Raised when data is requested and is not available.
-    Wraps Arctic and Pandas web reader exceptions.
+    Wraps Pandas web reader exceptions.
     """
 
 

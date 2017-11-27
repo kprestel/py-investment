@@ -10,7 +10,7 @@ class TestBacktest(object):
 
         initial_capital = 100000
         # start_date = '2016-03-10'
-        backtest = Backtest(ticker_list=['FB'],
+        backtest = Backtest(ticker_list=ticker_list,
                             date_range=date_range,
                             initial_capital=initial_capital,
                             strategy=CrossOverStrategy)

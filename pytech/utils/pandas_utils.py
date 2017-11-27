@@ -58,6 +58,7 @@ def roll(df: pd.DataFrame, window: int):
                            df.index[i:i + window],
                            df.columns)
 
+
 class PgSQLDataBase(pandas.io.sql.SQLDatabase):
     """A faster implementation of ``panda``'s ``to_sql()``"""
 

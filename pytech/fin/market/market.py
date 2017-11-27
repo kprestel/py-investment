@@ -19,7 +19,7 @@ class Market(utils.Borg):
         self.date_range = date_range or DateRange()
         self.ticker = ticker
         self.lib_name = lib_name
-        self.reader = BarReader(lib_name)
+        self.reader = BarReader()
         self.source = source
         self.market = self.reader.get_data(self.ticker,
                                            self.source,

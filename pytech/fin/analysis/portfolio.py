@@ -1,10 +1,16 @@
 import logging
-from typing import List, Tuple
+from typing import (
+    List,
+    Tuple,
+)
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.optimize import OptimizeResult, minimize
+from scipy.optimize import (
+    OptimizeResult,
+    minimize,
+)
 
 import pytech.data.reader as reader
 import pytech.utils.pandas_utils as pd_utils
@@ -21,8 +27,8 @@ class EfficientFrontier(object):
         self.logger = logging.getLogger(__name__)
         self.asset_lib_name = asset_lib_name
         self.market_lib_name = market_lib_name
-        self.market_reader = reader.BarReader(self.market_lib_name)
-        self.asset_reader = reader.BarReader(self.asset_lib_name)
+        self.market_reader = reader.BarReader()
+        self.asset_reader = reader.BarReader()
 
         if tickers is None:
             self.tickers = []
@@ -53,7 +59,7 @@ class EfficientFrontier(object):
     def _load_data(self) -> List[float]:
         """Loads the data and updates `tickers` if needed."""
         if not self.tickers:
-            for x in self.asset_reader.get_symbols():
+            for x in self.asset_reader.tickers:
                 self.tickers.append(x)
 
         tmp_prices_out = []

@@ -57,8 +57,8 @@ class DataHandler(metaclass=ABCMeta):
         self.date_range: DateRange = date_range or DateRange()
         self.asset_lib_name: str = asset_lib_name
         self.market_lib_name: str = market_lib_name
-        self.asset_reader: BarReader = BarReader(asset_lib_name)
-        self.mkt_reader: BarReader = BarReader(market_lib_name)
+        self.asset_reader: BarReader = BarReader()
+        self.mkt_reader: BarReader = BarReader()
 
     @lazy_property
     def ticker_data(self):

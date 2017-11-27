@@ -144,3 +144,7 @@ class DateRange(object):
     def dt_index(self):
         schedule = self.cal.schedule(start_date=self.start, end_date=self.end)
         return mcal.date_range(schedule=schedule, frequency=self.freq)
+
+    def __repr__(self):
+        return (f'{self.__class__.__name__}(start={self.start}, '
+                f'end={self.end}, freq={self.freq}, cal={self.cal})')

@@ -82,7 +82,7 @@ class write(sqlaction):
                     res = conn.execute(stmt, vals)
                 return res
             except IntegrityError as e:
-                self.logger.warning(f'{e}')
+                raise
 
     def df(self, df: pd.DataFrame, table: str, index: bool = False) -> None:
         out_df: pd.DataFrame = df.copy()
@@ -122,7 +122,6 @@ class write(sqlaction):
                 - raise the :class:`IntegrityError`
         :return:
         """
-        """Writes a portfolio to the database."""
         ins = insert(portfolio).values(id=portfolio_.id,
                                        cash=portfolio_.cash,
                                        initial_capital=portfolio_.initial_capital)

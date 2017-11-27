@@ -22,13 +22,14 @@ from pandas.tseries.offsets import BDay
 from pandas_datareader._utils import RemoteDataError
 
 import pytech.utils as utils
-from pytech.decorators import write_df
 from pytech.data._holders import ReaderResult
 from pytech.data.connection import reader
-from pytech.data.schema import bars
+from pytech.data.schema import (
+    assets,
+    bars,
+)
+from pytech.decorators import write_df
 from pytech.exceptions import DataAccessError
-from pytech.mongo import ARCTIC_STORE
-from pytech.mongo.barstore import BarStore
 from pytech.utils import DateRange
 
 logger = logging.getLogger(__name__)
@@ -45,16 +46,14 @@ FAMA_FRENCH = 'famafrench'
 class BarReader(object):
     """Read and write data from the DB and the web."""
 
-    def __init__(self, lib_name: str):
-        self.lib_name = lib_name
-
-        if lib_name not in ARCTIC_STORE.list_libraries():
-            # create the lib if it does not already exist
-            ARCTIC_STORE.initialize_library(lib_name,
-                                            BarStore.LIBRARY_TYPE)
-
-        self.lib = ARCTIC_STORE[self.lib_name]
+    def __init__(self):
         self.reader = reader()
+
+    @property
+    def tickers(self):
+        q = sa.select([assets.c.ticker])
+        for s in self.reader(q):
+            yield q
 
     def get_data(self,
                  tickers: ticker_input,
@@ -235,7 +234,6 @@ class BarReader(object):
         db_end = utils.parse_date(df.index.max())
 
         # check that all the requested data is present
-        # TODO: deal with days that it is expected that data shouldn't exist.
         if db_start > date_range.start and date_range.is_trade_day('start'):
             # db has less data than requested
             tmp_dt_range = DateRange(date_range.start, db_start - BDay())
@@ -256,10 +254,6 @@ class BarReader(object):
         new_df = _concat_dfs(lower_df, upper_df, df)
         new_df = new_df.sort_index()
         return ReaderResult(ticker, new_df)
-
-    def get_symbols(self):
-        for s in self.lib.list_symbols():
-            yield s
 
 
 def _concat_dfs(lower_df: pd.DataFrame,

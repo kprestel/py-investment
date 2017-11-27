@@ -115,7 +115,7 @@ class Stock(Asset):
                  source: str = 'google',
                  lib_name: str = 'pytech.bars'):
         self.source = source
-        self.reader = BarReader(lib_name)
+        self.reader = BarReader()
         self.lib_name = lib_name
         super().__init__(ticker, date_range)
 

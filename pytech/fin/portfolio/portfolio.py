@@ -5,7 +5,6 @@ from abc import (
     ABCMeta,
     abstractmethod,
 )
-from datetime import datetime
 from typing import (
     Dict,
     Iterable,
@@ -16,14 +15,13 @@ from typing import (
 import pandas as pd
 
 import pytech.utils as utils
-from pytech.backtest.event import SignalEvent
+from pytech.backtest.event import (
+    FillEvent,
+    SignalEvent,
+)
 from pytech.data.connection import write
 from pytech.data.handler import DataHandler
 from pytech.fin.asset.owned_asset import OwnedAsset
-from pytech.mongo import (
-    ARCTIC_STORE,
-    PortfolioStore,
-)
 from pytech.utils import DateRange
 
 if TYPE_CHECKING:
@@ -85,7 +83,6 @@ class Portfolio(metaclass=ABCMeta):
         # positions = qty
         self.all_positions_qty = self._construct_all_positions()
         self.total_commission: float = 0.0
-        self.lib: PortfolioStore = ARCTIC_STORE['pytech.portfolio']
         self.positions_df: pd.DataFrame = pd.DataFrame()
         self.raise_on_warnings: bool = raise_on_warnings
         self.signal_handlers = None
@@ -329,10 +326,10 @@ class Portfolio(metaclass=ABCMeta):
 
         self.positions_df = pd.concat([self.positions_df, df])
         self.logger.info('Writing current portfolio state to DB.')
-        self.lib.write_snapshot(self.POSITION_COLLECTION,
-                                self.positions_df,
-                                latest_dt)
-        self.lib.write_snapshot(self.TICK_COLLECTION, df, latest_dt)
+        # self.lib.write_snapshot(self.POSITION_COLLECTION,
+        #                         self.positions_df,
+        #                         latest_dt)
+        # self.lib.write_snapshot(self.TICK_COLLECTION, df, latest_dt)
         self.all_holdings_mv.append(dh)
 
 
@@ -389,21 +386,24 @@ class BasicPortfolio(Portfolio):
         self.owned_assets[trade.ticker] = OwnedAsset.from_trade(trade,
                                                                 asset_position)
 
-    def update_fill(self, event):
-        if event.type is EventType.FILL:
-            order = self.blotter[event.order_id]
-            if self.check_liquidity(event.price, event.available_volume):
-                trade = self.blotter.make_trade(order,
-                                                event.price,
-                                                event.dt,
-                                                event.available_volume)
-                self._update_from_trade(trade)
-            else:
-                self.logger.warning(
-                    'Insufficient funds available to execute trade for '
-                    f'ticker: {order.ticker}')
-                if self.raise_on_warnings:
-                    raise InsufficientFundsError(ticker=order.ticker)
+    def update_fill(self, event: FillEvent):
+        if not event.event_type == EventType.FILL:
+            raise InvalidEventTypeError(expected=type(EventType.SIGNAL),
+                                        event_type=type(event.event_type))
+
+        order = self.blotter[event.order_id]
+        if self.check_liquidity(event.price, event.available_volume):
+            trade = self.blotter.make_trade(order,
+                                            event.price,
+                                            event.dt,
+                                            event.available_volume)
+            self._update_from_trade(trade)
+        else:
+            self.logger.warning(
+                'Insufficient funds available to execute trade for '
+                f'ticker: {order.ticker}')
+            if self.raise_on_warnings:
+                raise InsufficientFundsError(ticker=order.ticker)
 
     def update_signal(self, event: SignalEvent) -> None:
         if event.event_type is EventType.SIGNAL:

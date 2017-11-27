@@ -1,11 +1,10 @@
-# noinspection PyUnresolvedReferences
 import pytest
 
-from pytech.fin.asset.asset import Stock
 import pytech.fin.analysis.random as rand
-import pymc3 as pm
+from pytech.fin.asset.asset import Stock
 
 
+@pytest.mark.skip('rip arctic.')
 def test_monte_carlo(fb: Stock):
     cagr = fb.cagr()
     vol = fb.std()
@@ -15,7 +14,6 @@ def test_monte_carlo(fb: Stock):
 
     output = rand.monte_carlo(cagr, vol, trading_days, last_price)
     print(output)
-
 
 
 @pytest.mark.skip('not a test.')
