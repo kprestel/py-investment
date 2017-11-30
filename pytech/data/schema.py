@@ -169,6 +169,6 @@ portfolio_snapshot = sa.Table(
 )
 
 if __name__ == '__main__':
-    engine = sa.create_engine('postgresql://pytech:pytech@localhost/pytech',
+    engine = sa.create_engine('postgresql://postgres:pytech@localhost/pytech',
                               echo=True)
     metadata.create_all(engine, checkfirst=True)

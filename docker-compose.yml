@@ -1,13 +1,20 @@
-version: '3'
+version: '3.1'
 
 services:
   db:
-    container_name: mongo
-    image: mongo:3.2
+    container_name: pytech
+#    build: .
+    restart: "always"
+    image: timescale/timescaledb
     ports:
-      - "27017:27017"
+      - "5432:5432"
     volumes:
-      - mongodata:/data/db
+      - pytech:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: 'pytech'
+      POSTGRES_PASSWORD: 'pytech'
+      POSTGRES_DB: 'pytech'
 
 volumes:
-  mongodata:
+  pytech:
+    external: true
