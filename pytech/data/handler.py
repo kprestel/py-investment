@@ -304,14 +304,9 @@ class Bars(DataHandler):
 
     def update_bars(self) -> None:
         for ticker in self.tickers:
-            try:
-                bar = next(self._get_new_bar(ticker))
-                # bar is a tuple and we only care about the 2nd value in it.
-                bar = bar[1]
-            except StopIteration:
-                self.continue_backtest = False
-            else:
-                if bar is not None:
-                    self.latest_ticker_data[ticker].append(bar)
-
+            bar = next(self._get_new_bar(ticker))
+            # bar is a tuple and we only care about the 2nd value in it.
+            bar = bar[1]
+            if bar is not None:
+                self.latest_ticker_data[ticker].append(bar)
         self.events.put(MarketEvent())

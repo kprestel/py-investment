@@ -112,7 +112,7 @@ class Asset(metaclass=ABCMeta):
 class Stock(Asset):
     def __init__(self, ticker: str,
                  date_range: DateRange,
-                 source: str = 'google',
+                 source: str = 'yahoo',
                  lib_name: str = 'pytech.bars'):
         self.source = source
         self.reader = BarReader()

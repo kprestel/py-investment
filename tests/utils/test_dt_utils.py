@@ -1,6 +1,8 @@
 import datetime as dt
 
 import pytest
+import pandas_market_calendars as mcal
+import pytz
 
 import pytech.utils as utils
 
@@ -34,6 +36,16 @@ def test_is_weekday(adate, expected):
 def test_prev_weekday(adate, expected):
     assert utils.prev_weekday(adate) == expected
 
+@pytest.mark.parametrize('dt,expected,exchange', [
+    (dt.datetime(2017, 6, 1), dt.datetime(2017, 6, 1, 16), 'NYSE'),
+    (dt.datetime(2017, 5, 1), dt.datetime(2017, 5, 1, 16), 'NYSE')
+])
+def test_parse_date(dt, expected, exchange):
+    cal = mcal.get_calendar(exchange)
+    expected = expected.replace(tzinfo=cal.tz)
+    expected = expected.astimezone(pytz.UTC)
+    test_dt = utils.parse_date(date_to_parse=dt, exchange=exchange)
+    assert test_dt == expected
 
 class TestDateRange(object):
 

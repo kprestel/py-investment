@@ -247,6 +247,7 @@ class Portfolio(metaclass=ABCMeta):
 
         # get an element from the set
         latest_dt = self.bars.get_latest_bar_dt(next(iter(self.ticker_list)))
+        self.logger.debug(f'latest_dt={latest_dt}')
         # update the blotter's current date
         self.blotter.current_dt = latest_dt
         self.blotter.check_order_triggers()
@@ -260,8 +261,8 @@ class Portfolio(metaclass=ABCMeta):
         self.writer.portfolio_snapshot(self, latest_dt)
         if self.owned_assets:
             self.writer.owned_asset_snapshot(self.owned_assets.values(),
-                                         self.id,
-                                         latest_dt)
+                                             self.id,
+                                             latest_dt)
 
 
 class BasicPortfolio(Portfolio):

@@ -10,6 +10,7 @@ class PyInvestmentError(Exception):
     msg = None
 
     def __init__(self, *args, **kwargs):
+        self.args = args
         self.kwargs = kwargs
         # super().__init__(self, *args, **kwargs)
 
@@ -17,7 +18,10 @@ class PyInvestmentError(Exception):
         return str(self)
 
     def __str__(self):
-        msg = self.msg.format(**self.kwargs)
+        if self.kwargs:
+            msg = self.msg.format(**self.kwargs)
+        else:
+            msg = self.args[0]
         return msg
 
     __unicode__ = __str__

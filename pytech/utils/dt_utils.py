@@ -4,6 +4,7 @@ from typing import (
     Union,
 )
 
+
 import pandas as pd
 import pandas_market_calendars as mcal
 import pytz
@@ -12,51 +13,67 @@ from pandas.api.types import is_number
 from pytech.exceptions import (
     PyInvestmentTypeError,
     PyInvestmentValueError,
+    PyInvestmentKeyError,
 )
 
-date_type = Union[dt.datetime, pd.Timestamp]
+date_type = Union[dt.datetime, pd.Timestamp, str]
 
 NYSE = mcal.get_calendar('NYSE')
 
 
-def parse_date(date_to_parse: date_type):
+def parse_date(date_to_parse: date_type,
+               exchange: str = 'NYSE') -> dt.datetime:
     """
     Converts strings or datetime objects to UTC timestamps.
 
-    :param date_to_parse: The date to parse.
-    :type date_to_parse: datetime or str or Timestamp
+    :param date_to_parse: the date to parse.
+    :param exchange: the exchange being used, defaults to NYSE.
+        This is used to set the time in the event that the `date_date_to_parse`
+        does not have a time set.
     :return: ``pandas.TimeStamp``
     """
-    if isinstance(date_to_parse, dt.date) and not isinstance(date_to_parse,
-                                                             dt.datetime):
-        raise PyInvestmentTypeError(f'date must be a datetime object. '
-                                    f'{type(date_to_parse)} was provided')
-    elif isinstance(date_to_parse, pd.Timestamp):
-        if date_to_parse.tz is None:
-            return date_to_parse.replace(tzinfo=pytz.UTC)
+    from dateutil.parser import parse
+    try:
+        cal = mcal.get_calendar(exchange)
+    except KeyError:
+        raise PyInvestmentKeyError(f'{exchange} is not a valid exchange.')
+
+    if isinstance(date_to_parse, str):
+        try:
+            date_to_parse = parse(date_to_parse)
+        except ValueError as e:
+            raise PyInvestmentValueError(e)
+        except TypeError as ex:
+            raise PyInvestmentTypeError(ex)
+
+    exchange_time = cal.close_time
+
+    repl = {}
+    for attr in ("hour", "minute", "second", "microsecond"):
+        value = getattr(date_to_parse, attr, False)
+        if value:
+            repl[attr] = value
         else:
-            return date_to_parse
-    elif isinstance(date_to_parse, dt.datetime):
-        return pd.to_datetime(date_to_parse.replace(tzinfo=pytz.UTC),
-                              utc=True)
-    elif isinstance(date_to_parse, dt.date):
-        return pd.to_datetime(date_to_parse, utc=True)
-    elif isinstance(date_to_parse, str):
-        # TODO: timezone
-        return pd.to_datetime(date_to_parse, utc=True)
-    else:
-        raise PyInvestmentTypeError(
-            'date_to_parse must be a pandas '
-            'Timestamp, datetime, or a date string. '
-            f'{type(date_to_parse)} was provided')
+            repl[attr] = getattr(exchange_time, attr)
+
+    date_to_parse = date_to_parse.replace(**repl)
+
+    try:
+        if date_to_parse.tz is None:
+            date_to_parse = date_to_parse.replace(tzinfo=cal.tz)
+    except AttributeError:
+        if date_to_parse.tzinfo is None:
+            date_to_parse = date_to_parse.replace(tzinfo=cal.tz)
+
+    return date_to_parse.astimezone(pytz.UTC)
 
 
 def get_default_date(is_start_date):
     if is_start_date:
-        temp_date = dt.datetime.now() - dt.timedelta(days=365)
+        temp_date = dt.datetime.now(pytz.UTC) - dt.timedelta(days=365)
         return parse_date(temp_date)
     else:
-        return parse_date(dt.datetime.now())
+        return parse_date(dt.datetime.now(pytz.UTC))
 
 
 def sanitize_dates(start, end) -> Tuple[dt.datetime, dt.datetime]:
@@ -69,18 +86,17 @@ def sanitize_dates(start, end) -> Tuple[dt.datetime, dt.datetime]:
     if is_number(start):
         # treat ints as a year
         start = dt.datetime(start, 1, 1)
-    start = pd.to_datetime(start, utc=True)
+    start = parse_date(start)
 
     if is_number(end):
         end = dt.datetime(end, 1, 1)
-    end = pd.to_datetime(end, utc=True)
+    end = parse_date(end)
 
     if start is None:
-        start = dt.datetime(2010, 1, 1, tzinfo=pytz.UTC)
+        start = dt.datetime(2010, 1, 1)
 
     if end is None:
-        end = dt.datetime.today()
-        end = end.replace(tzinfo=pytz.UTC)
+        end = dt.datetime.now(pytz.UTC)
         end = prev_weekday(end)
 
     # return parse_date(start), parse_date(end)
@@ -114,7 +130,7 @@ def prev_weekday(a_dt: date_type):
 class DateRange(object):
     def __init__(self, start: date_type = None,
                  end: date_type = None,
-                 freq: str = 'B',
+                 freq: str = '1D',
                  cal: str = 'NYSE'):
         # TODO: open, closed
         self.start, self.end = sanitize_dates(start, end)
@@ -125,7 +141,7 @@ class DateRange(object):
             raise NotImplementedError('TODO.')
 
         if self.start > self.end:
-            raise PyInvestmentValueError(f'start must be less than end.'
+            raise PyInvestmentValueError(f'start must be less than end. '
                                          f'start: {start}, end: {end}')
 
     def is_trade_day(self, dt: str):

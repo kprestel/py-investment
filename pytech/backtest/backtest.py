@@ -100,11 +100,9 @@ class Backtest(object):
             iterations += 1
             self.logger.info(f'Iteration #{iterations}')
 
-            if self.data_handler.continue_backtest:
-                self.logger.debug('Updating bars.')
+            try:
                 self.data_handler.update_bars()
-            else:
-                self.logger.info('Backtest completed.')
+            except StopIteration:
                 break
 
             # handle events
@@ -112,14 +110,13 @@ class Backtest(object):
                 try:
                     event = self.events.get(False)
                 except queue.Empty:
-                    self.logger.info('Event queue is empty. '
-                                     'Continuing to next day.')
+                    self.logger.info('Continuing to next day.')
                     break
-                else:
-                    if event is not None:
-                        self._process_event(event)
 
-    def _process_event(self, event):
+                if event is not None:
+                    self._process_event(event)
+
+    def _process_event(self, event) -> None:
         self.logger.debug(f'Processing {event.event_type}')
 
         if event.event_type is EventType.MARKET:
@@ -134,5 +131,3 @@ class Backtest(object):
         elif event.event_type is EventType.FILL:
             self.fills += 1
             self.portfolio.update_fill(event)
-        else:
-            return

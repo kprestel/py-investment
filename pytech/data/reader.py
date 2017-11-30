@@ -217,7 +217,7 @@ class BarReader(object):
         :raises: NoDataFoundException if no data is found for the given ticker.
         """
         q = (sa.select([bars])
-             .where(sa.and_(bars.c.date >= date_range.start,
+             .where(sa.and_(bars.c.date >= date_range.start.date(),
                             bars.c.date <= date_range.end + BDay(),
                             bars.c.ticker == ticker)))
 
