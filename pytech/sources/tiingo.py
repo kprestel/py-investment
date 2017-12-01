@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+import pytech.utils as utils
 
 from sources.restclient import (
     RestClient,
@@ -72,7 +73,9 @@ class TiingoClient(RestClient):
 
         resp = self._request(url=url, params=params)
 
-        return pd.read_json(json.dumps(resp.json()))
+        df = pd.read_json(json.dumps(resp.json()))
+        df[utils.DATE_COL] = df[utils.DATE_COL].apply(utils.parse_date)
+        return df
 
     def get_intra_day(self, ticker: str,
                       date_range: DateRange = None,

@@ -32,6 +32,7 @@ from pytech.decorators import write_df
 from pytech.exceptions import DataAccessError
 from pytech.utils import DateRange
 from pytech.sources import TiingoClient, AlphaVantageClient
+from sources.restclient import RestClientError
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class BarReader(object):
                                                check_db, **kwargs)
                 return result.df
             except DataAccessError:
-                raise DataAccessError(f'Could not get data for ticker: '
+                raise RestClientError(f'Could not get data for ticker: '
                                       f'{tickers}')
         else:
             if isinstance(tickers, pd.DataFrame):
@@ -165,7 +166,7 @@ class BarReader(object):
 
         try:
             return self._from_web(ticker, source, date_range, **kwargs)
-        except DataAccessError:
+        except RestClientError:
             logger.warning(f'Error getting data from {source} '
                            f'for ticker: {ticker}', exc_info=1)
             return ReaderResult(ticker, successful=False)
@@ -180,18 +181,19 @@ class BarReader(object):
         _ = kwargs.pop('columns', None)
 
         try:
-            logger.info(
-                f'Making call to {source}. Start date: {date_range.start},'
-                f'End date: {date_range.end}, Ticker: {ticker}')
-            df = pdr.DataReader(ticker,
-                                data_source=source,
-                                start=date_range.start,
-                                end=date_range.end, **kwargs)
+            df = self.tiingo.get_ticker_prices(ticker, date_range)
+            # logger.info(
+            #     f'Making call to {source}. Start date: {date_range.start},'
+            #     f'End date: {date_range.end}, Ticker: {ticker}')
+            # df = pdr.DataReader(ticker,
+            #                     data_source=source,
+            #                     start=date_range.start,
+            #                     end=date_range.end, **kwargs)
             if df.empty:
-                raise RemoteDataError(f'df retrieved was empty for '
+                raise RestClientError(f'df retrieved was empty for '
                                       f'ticker: {ticker}.')
-        except RemoteDataError as e:
-            logger.exception(f'Error occurred getting data from {source}.')
+        except RestClientError as e:
+            logger.exception(e)
             return ReaderResult(ticker, successful=False)
 
         df = utils.rename_bar_cols(df)

@@ -22,12 +22,14 @@ from pytech.utils import DateRange
 
 @pytest.fixture(scope='session')
 def start_date():
-    return '2016-03-10'
+    # return '2016-03-08'
+    return '2012-01-01'
 
 
 @pytest.fixture(scope='session')
 def end_date():
-    return '2017-06-09'
+    # return '2017-06-09'
+    return '2017-12-01'
 
 @pytest.fixture(scope='session')
 def date_range(start_date, end_date):
@@ -136,6 +138,7 @@ def get_test_csv_path(ticker):
 @pytest.fixture(scope='session')
 def ticker_list():
     return {'AAPL', 'MSFT', 'CVS', 'FB'}
+    # return {'MSFT'}
 
 
 @pytest.fixture(scope='session')

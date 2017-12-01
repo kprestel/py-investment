@@ -33,7 +33,9 @@ from pytech.data.schema import (
     asset_snapshot,
     portfolio,
     portfolio_snapshot,
-    metadata
+    metadata,
+    assets,
+    bars,
 )
 
 if TYPE_CHECKING:
@@ -80,7 +82,8 @@ class write(sqlaction):
 
     def __call__(self,
                  stmt: dml_stmts,
-                 vals: Dict[str, Any] = None, *args,
+                 vals: Dict[str, Any] = None,
+                 *args,
                  **kwargs):
         with self.engine.begin() as conn:
             try:
@@ -97,10 +100,17 @@ class write(sqlaction):
         out_df[utils.VOL_COL] = out_df[utils.VOL_COL].astype(dtype='int64')
         out_df = out_df.dropna()
         out_df = out_df[out_df[utils.FROM_DB_COL] == False]
-        out_df = out_df.drop(utils.FROM_DB_COL, axis=1)
+        out_cols = set(out_df.columns)
+        req_cols = set()
+        req_cols.update(utils.REQUIRED_COLS)
+        req_cols.add('ticker')
+        drop_cols = out_cols.difference(req_cols)
+        drop_cols.add(utils.FROM_DB_COL)
+        out_df = out_df.drop(drop_cols, axis=1)
         output = StringIO()
         out_df.to_csv(output, index=index, header=False)
-        output.getvalue()
+        t = output.getvalue()
+        print(t)
         output.seek(0)
         conn = self.engine.raw_connection()
         try:
@@ -108,8 +118,30 @@ class write(sqlaction):
                 cursor.copy_from(output, table, sep=',',
                                  columns=out_df.columns)
                 conn.commit()
-        except pg.IntegrityError:
-            raise
+        except pg.IntegrityError as e:
+            try:
+                ticker = df[utils.TICKER_COL].iat[0]
+                q = sa.select([bars]).where(bars.c.ticker == ticker)
+                with self.engine.begin() as conn:
+                    db_df = pd.read_sql_query(q, conn)
+                tmp_df = pd.concat([db_df, out_df])
+                tmp_df = tmp_df.reset_index(drop=True)
+                grp_df = tmp_df.groupby(tmp_df.date)
+                idx = [x[0] for x in grp_df.groups.values() if len(x) == 1]
+                final_df = tmp_df.reindex(idx)
+                io_ = StringIO()
+                final_df = final_df.fillna('NULL')
+                final_df.to_csv(io_, index=index, header=False)
+                x = io_.getvalue()
+                print(x)
+                io_.seek(0)
+                conn_ = self.engine.raw_connection()
+                with conn_.cursor() as cursor:
+                    cursor.copy_from(io_, table, sep=',',
+                                     columns=final_df.columns)
+                    conn.commit()
+            except KeyError:
+                raise e
         finally:
             conn.close()
 

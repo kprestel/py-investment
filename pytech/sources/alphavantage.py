@@ -57,6 +57,7 @@ class AlphaVantageClient(RestClient):
         resp = super()._request(url, method, stream=True, **kwargs)
         df = pd.read_csv(BytesIO(resp.content), encoding='utf8')
         df = utils.rename_bar_cols(df)
+        df[utils.DATE_COL] = df[utils.DATE_COL].append(utils.parse_date)
         return df
 
     def get_intra_day(self, ticker: str,
@@ -71,8 +72,7 @@ class AlphaVantageClient(RestClient):
 
         params = self._get_base_ts_params(ticker, 'INTRADAY', outputsize)
         params['interval'] = interval
-        df = self._request(None, params=params)
-        return df
+        return self._request(None, params=params)
 
     def get_daily(self, ticker: str,
                   outputsize: str = 'compact') -> pd.DataFrame:
@@ -83,31 +83,26 @@ class AlphaVantageClient(RestClient):
     def get_daily_adj(self, ticker: str,
                       outputsize: str = 'compact') -> pd.DataFrame:
         params = self._get_base_ts_params(ticker, 'DAILY_ADJUSTED', outputsize)
-        df = self._request(None, params=params)
-        return df
+        return self._request(None, params=params)
 
     def get_weekly(self, ticker: str,
                    outputsize: str = 'compact') -> pd.DataFrame:
         params = self._get_base_ts_params(ticker, 'WEEKLY', outputsize)
-        df = self._request(None, params=params)
-        return df
+        return self._request(None, params=params)
 
     def get_weekly_adj(self, ticker: str,
                        outputsize: str = 'compact') -> pd.DataFrame:
         params = self._get_base_ts_params(ticker, 'WEEKLY_ADJUSTED',
                                           outputsize)
-        df = self._request(None, params=params)
-        return df
+        return self._request(None, params=params)
 
     def get_monthly(self, ticker: str,
                     outputsize: str = 'compact') -> pd.DataFrame:
         params = self._get_base_ts_params(ticker, 'MONTHLY', outputsize)
-        df = self._request(None, params=params)
-        return df
+        return self._request(None, params=params)
 
     def get_monthly_adj(self, ticker: str,
                         outputsize: str = 'compact') -> pd.DataFrame:
         params = self._get_base_ts_params(ticker, 'MONTHLY_ADJUSTED',
                                           outputsize)
-        df = self._request(None, params=params)
-        return df
+        return self._request(None, params=params)

@@ -48,6 +48,7 @@ def rename_bar_cols(df: pd.DataFrame) -> pd.DataFrame:
         'Low': LOW_COL,
         'Close': CLOSE_COL,
         'Adj Close': ADJ_CLOSE_COL,
+        'adjusted_close': ADJ_CLOSE_COL,
         'Volume': VOL_COL
     })
 

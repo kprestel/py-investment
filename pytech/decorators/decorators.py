@@ -1,6 +1,7 @@
 from functools import wraps
 
 from pandas.tseries.offsets import BDay
+from sqlalchemy.dialects.postgresql import insert
 
 import pytech.utils as utils
 from pytech.exceptions import (
@@ -104,7 +105,9 @@ def write_df(table: str):
 
             writer = write()
 
-            ins = assets.insert().values(ticker=ticker)
+            # ins = assets.insert().values(ticker=ticker)
+            ins = (insert(assets).values(ticker=ticker)
+                .on_conflict_do_nothing(constraint='asset_pkey'))
             writer(ins)
 
             df.index.freq = BDay()

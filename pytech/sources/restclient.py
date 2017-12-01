@@ -11,10 +11,11 @@ from typing import (
 import requests
 from requests.exceptions import HTTPError
 
+from exceptions import DataAccessError
 from utils.enums import AutoNumber
 
 
-class RestClientError(Exception):
+class RestClientError(DataAccessError):
     pass
 
 
