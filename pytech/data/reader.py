@@ -31,6 +31,7 @@ from pytech.data.schema import (
 from pytech.decorators import write_df
 from pytech.exceptions import DataAccessError
 from pytech.utils import DateRange
+from pytech.sources import TiingoClient, AlphaVantageClient
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,9 @@ YAHOO = 'yahoo'
 GOOGLE = 'google'
 FRED = 'fred'
 FAMA_FRENCH = 'famafrench'
+TIINGO = 'tiingo'
+ALPHA_VANTAGE = 'alpha_vantage'
+_CLIENTS = {TIINGO, ALPHA_VANTAGE}
 
 
 class BarReader(object):
@@ -48,12 +52,14 @@ class BarReader(object):
 
     def __init__(self):
         self.reader = reader()
+        self.tiingo = TiingoClient()
+        self.alpha_vantage = AlphaVantageClient()
 
     @property
     def tickers(self):
         q = sa.select([assets.c.ticker])
         for s in self.reader(q):
-            yield q
+            yield s
 
     def get_data(self,
                  tickers: ticker_input,

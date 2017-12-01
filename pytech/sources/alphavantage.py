@@ -16,7 +16,7 @@ from sources.restclient import (
 )
 
 
-class AlphaVantage(RestClient):
+class AlphaVantageClient(RestClient):
     _valid_intervals = {'1min', '5min', '15min', '30min', '60min'}
     _valid_outputsizes = {'compact', 'full'}
 

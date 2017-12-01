@@ -1,11 +1,11 @@
 # noinspection PyUnresolvedReferences
 import pytest
 
-from sources.alphavantage import AlphaVantage
+from sources.alphavantage import AlphaVantageClient
 
 
 class TestAlphaVantage(object):
-    client = AlphaVantage()
+    client = AlphaVantageClient()
 
     def test_get_intra_day(self):
         df = self.client.get_intra_day('FB')
