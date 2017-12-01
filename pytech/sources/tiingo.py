@@ -27,9 +27,6 @@ class TiingoClient(RestClient):
             'User-Agent': 'pytech-client'
         }
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}(base_url={self.base_url})'
-
     @property
     def base_url(self):
         return self._base_url

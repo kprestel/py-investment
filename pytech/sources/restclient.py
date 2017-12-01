@@ -3,7 +3,10 @@ from abc import (
     ABCMeta,
     abstractmethod,
 )
-from typing import Union
+from typing import (
+    Union,
+    Optional,
+)
 
 import requests
 from requests.exceptions import HTTPError
@@ -39,6 +42,9 @@ class RestClient(metaclass=ABCMeta):
         else:
             self._session = requests
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}(base_url={self.base_url})'
+
     @property
     @abstractmethod
     def headers(self):
@@ -49,7 +55,7 @@ class RestClient(metaclass=ABCMeta):
     def base_url(self):
         raise NotImplementedError
 
-    def _request(self, url: str,
+    def _request(self, url: Optional[str],
                  method: Union[HTTPAction, str] = HTTPAction.GET,
                  **kwargs):
         """
@@ -69,9 +75,13 @@ class RestClient(metaclass=ABCMeta):
         :return: the response.
         """
         method = HTTPAction.check_if_valid(method).name
-        resp = self._session.request(method,
-                                     f'{self.base_url}/{url}',
-                                     headers=self.headers,
+
+        if url is None:
+            url = self.base_url
+        else:
+            url = f'{self.base_url}/{url}'
+
+        resp = self._session.request(method, url, headers=self.headers,
                                      **kwargs)
 
         try:

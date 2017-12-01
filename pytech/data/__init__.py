@@ -1,9 +1,8 @@
 import sqlalchemy as sa
+from .connection import getconn, write, reader
 from .schema import metadata
-from .connection import getconn
-from .handler import BarReader, DataHandler, Bars
+from .reader import BarReader
+from . import handler
 
-# _engine = sa.create_engine('postgresql+psycopg2://', creator=getconn,
-#                            echo=True)
 metadata.create_all(sa.create_engine('postgresql+psycopg2://',
                                      creator=getconn), checkfirst=True)

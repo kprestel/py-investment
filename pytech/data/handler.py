@@ -16,12 +16,11 @@ import numpy as np
 import pandas as pd
 
 import pytech.utils as utils
-from pytech.decorators.decorators import (
+from pytech.decorators import (
     memoize,
     lazy_property,
 )
 from pytech.backtest.event import MarketEvent
-from pytech.data.reader import BarReader
 from pytech.utils import DateRange
 
 

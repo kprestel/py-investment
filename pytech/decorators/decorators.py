@@ -3,9 +3,6 @@ from functools import wraps
 from pandas.tseries.offsets import BDay
 
 import pytech.utils as utils
-from pytech.data._holders import ReaderResult
-from pytech.data.connection import write
-from pytech.data.schema import assets
 from pytech.exceptions import (
     PyInvestmentKeyError,
 )
@@ -60,6 +57,9 @@ def write_df(table: str):
         going to use more memory than required.
     :return: The output of the original function.
     """
+    from pytech.data._holders import ReaderResult
+    from pytech.data import write
+    from pytech.data.schema import assets
 
     def wrapper(f):
         @wraps(f)

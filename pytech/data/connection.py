@@ -108,7 +108,7 @@ class write(sqlaction):
                 cursor.copy_from(output, table, sep=',',
                                  columns=out_df.columns)
                 conn.commit()
-        except pg.IntegrityError as e:
+        except pg.IntegrityError:
             raise
         finally:
             conn.close()

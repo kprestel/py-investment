@@ -42,6 +42,7 @@ def rename_bar_cols(df: pd.DataFrame) -> pd.DataFrame:
 
     return df.rename(columns={
         'Date': DATE_COL,
+        'timestamp': DATE_COL,
         'Open': OPEN_COL,
         'High': HIGH_COL,
         'Low': LOW_COL,
