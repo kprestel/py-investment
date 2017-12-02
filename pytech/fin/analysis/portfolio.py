@@ -13,7 +13,7 @@ from scipy.optimize import (
 )
 
 import pytech.data.reader as reader
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils.pdutils as pd_utils
 from pytech.utils.common_utils import tail
 
 

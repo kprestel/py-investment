@@ -3,7 +3,7 @@ import math
 from abc import ABCMeta, abstractmethod
 from typing import Dict
 
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils.pdutils as pd_utils
 from pytech.backtest.event import SignalEvent
 from pytech.fin.portfolio import Portfolio
 

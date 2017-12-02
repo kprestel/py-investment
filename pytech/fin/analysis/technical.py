@@ -6,7 +6,7 @@ from typing import Union
 
 import pandas as pd
 
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils.pdutils as pd_utils
 
 logger = logging.getLogger(__name__)
 

@@ -15,7 +15,7 @@ from scrapy.utils.project import get_project_settings
 from twisted.internet import reactor
 
 import pytech.utils.dt_utils as dt_utils
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils.pdutils as pd_utils
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)

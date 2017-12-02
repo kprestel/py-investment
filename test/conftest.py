@@ -1,23 +1,28 @@
 import os
-from dateutil.tz import tzutc
-from dateutil.parser import parse
 import queue
 from typing import Dict
 from unittest.mock import MagicMock as Mock
 
 import pandas as pd
 import pytest
+from dateutil.parser import parse
+from dateutil.tz import tzutc
 
 import pytech.trading.blotter as b
-from pytech.fin.portfolio.handler import BasicSignalHandler
+import pytech.utils as utils
 from pytech import TEST_DATA_DIR
-from pytech.data.handler import Bars
 from pytech.data import BarReader
+from pytech.data.handler import Bars
 from pytech.fin.asset.asset import Stock
 from pytech.fin.portfolio import BasicPortfolio
+from pytech.fin.portfolio.handler import BasicSignalHandler
 from pytech.trading.controls import MaxOrderCount
-import pytech.utils as utils
 from pytech.utils import DateRange
+
+
+@pytest.fixture
+def vcr_cassette_path(request, vcr_cassette_name):
+    return os.path.join('vhs', request.module.__name__, vcr_cassette_name)
 
 
 @pytest.fixture(scope='session')

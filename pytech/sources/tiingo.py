@@ -75,14 +75,17 @@ class TiingoClient(RestClient):
         resp = self._request(url=url, params=params)
 
         df = pd.read_json(json.dumps(resp.json()))
+
         if df.empty:
             raise RestClientError('Empty DataFrame was returned')
+
         df[utils.DATE_COL] = df[utils.DATE_COL].apply(utils.parse_date)
         return df
 
     def get_intra_day(self, ticker: str,
                       date_range: DateRange = None,
-                      freq: str = '5min'):
+                      freq: str = '5min',
+                      **kwargs):
         url = f'/iex/{ticker}/prices'
         params = {
             'ticker': ticker,
@@ -97,3 +100,9 @@ class TiingoClient(RestClient):
             raise RestClientError('Empty DataFrame was returned')
         else:
             return df
+
+    def get_historical_data(self, ticker: str,
+                            date_range: DateRange,
+                            freq: str = 'Daily',
+                            adjusted: bool = True):
+        pass

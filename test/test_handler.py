@@ -1,7 +1,7 @@
 import pytest
 from pytest import approx
 import pandas as pd
-import pytech.utils.pandas_utils as pd_utils
+import pytech.utils.pdutils as pd_utils
 import pytech.utils.dt_utils as dt_utils
 from pytech.data.handler import DataHandler, Bars
 
