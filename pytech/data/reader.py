@@ -73,24 +73,15 @@ class BarReader(object):
         Get data and create a :class:`pd.DataFrame` from it.
 
         :param tickers: The ticker(s) that data will be retrieved for.
-        :param source: The data source.  Options:
-
-            * yahoo
-            * google
-            * fred
-            * famafrench
-            * db
-            * anything else pandas_datareader supports
-
-        :param start: Left boundary for range.
-            defaults to 1/1/2010.
-        :param end: Right boundary for range.
-            defaults to today.
+        :param source: The data source.
+        :param date_range: The :class:`DateRange` to get data for.
         :param check_db: Check the database first before making network call.
         :param filter_data: Filter data from the DB. Only used if `check_db` is
             `True`.
         :param kwargs: kwargs are passed blindly to `pandas_datareader`
-        :return: A `dict[ticker, DataFrame]`.
+        :return: a :class:`pd.DataFrame` if only one ticker was requested or a dictionary
+            of :class:`pd.DataFrame`s where the key is the ticker associated with the
+            :class:`pd.DataFrame`
         """
         date_range = date_range or DateRange()
 
@@ -225,10 +216,11 @@ class BarReader(object):
 
         logger.info(f'Checking DB for ticker: {ticker}')
         df = self.reader.df(q)
-        df[utils.FROM_DB_COL] = True
 
         if df.empty:
             raise DataAccessError('DataFrame was empty. No data found.')
+
+        df[utils.FROM_DB_COL] = True
 
         logger.debug(f'Found ticker: {ticker} in DB.')
 
@@ -238,17 +230,15 @@ class BarReader(object):
         # check that all the requested data is present
         if db_start > date_range.start and date_range.is_trade_day('start'):
             # db has less data than requested
-            tmp_dt_range = DateRange(date_range.start, db_start - BDay())
-            lower_df_res = self._from_web(ticker, source, tmp_dt_range)
-            lower_df = lower_df_res.df
+            dt_range_start = DateRange(date_range.start, db_start - BDay())
+            lower_df = self._from_web(ticker, source, dt_range_start).df
         else:
             lower_df = None
 
         if db_end < date_range.end and date_range.is_trade_day('end'):
             # db doesn't have as much data than requested
             dt_range_end = DateRange(db_end, date_range.end)
-            upper_df_res = self._from_web(ticker, source, dt_range_end)
-            upper_df = upper_df_res.df
+            upper_df = self._from_web(ticker, source, dt_range_end).df
         else:
             upper_df = None
 
@@ -270,16 +260,12 @@ def _concat_dfs(lower_df: pd.DataFrame,
         return pd.concat(list(args), join='inner', axis=0)
 
     if lower_df is None and upper_df is None:
-        # everything is already in the df
         return df
     elif lower_df is not None and upper_df is None:
-        # missing only lower data
         return do_concat(df, lower_df)
     elif lower_df is None and upper_df is not None:
-        # missing only upper data
         return do_concat(df, upper_df)
     elif lower_df is not None and upper_df is not None:
-        # both missing
         return do_concat(df, upper_df, lower_df)
     else:
         return df
