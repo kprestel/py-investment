@@ -79,6 +79,7 @@ class AlphaVantageClient(RestClient):
     def get_intra_day(self, ticker: str,
                       date_range: DateRange,
                       freq: str = '5min',
+                      persist: bool = True,
                       **kwargs) -> pd.DataFrame:
         """
         Get intra day trade data and return it in a :class:`pd.DataFrame`.
@@ -95,17 +96,17 @@ class AlphaVantageClient(RestClient):
         :param freq: The interval of the ticks.
 
             Valid options are:
-
                 * 1min
                 * 5min
                 * 15min
                 * 30min
                 * 60min
 
+        :param persist: If `True` write the data to the database. This will
+            occur before any data has been dropped from the `df`.
         :keyword drop_extra: If `True` then any data outside of the requested
             `date_range` will be dropped before being returned.
             Defaults to `False`
-
         :return: The :class:`pd.DataFrame` with the data.
         """
         outputsize = self._get_outputsize(date_range, freq)

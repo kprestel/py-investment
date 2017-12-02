@@ -10,11 +10,16 @@ from sqlalchemy.sql.type_api import TypeEngine
 
 DATE_COL = 'date'
 OPEN_COL = 'open'
+ADJ_OPEN_COL = 'adj_open'
 HIGH_COL = 'high'
+ADJ_HIGH_COL = 'adj_high'
 LOW_COL = 'low'
+ADJ_LOW_COL = 'adj_low'
 CLOSE_COL = 'close'
 ADJ_CLOSE_COL = 'adj_close'
 VOL_COL = 'volume'
+SPLIT_FACTOR = 'split_factor'
+DIVIDEND = 'dividend'
 TICKER_COL = 'ticker'
 FROM_DB_COL = 'from_db'
 
@@ -49,7 +54,11 @@ def rename_bar_cols(df: pd.DataFrame) -> pd.DataFrame:
         'Close': CLOSE_COL,
         'Adj Close': ADJ_CLOSE_COL,
         'adjusted_close': ADJ_CLOSE_COL,
-        'Volume': VOL_COL
+        'Volume': VOL_COL,
+        'dividend amount': DIVIDEND,
+        'divCash': DIVIDEND,
+        'split coefficient': SPLIT_FACTOR,
+        'splitFactor': SPLIT_FACTOR
     })
 
 
@@ -77,7 +86,7 @@ class PgSQLDataBase(pandas.io.sql.SQLDatabase):
             for col, type_ in dtype.items():
                 # noinspection PyTypeChecker
                 if not issubclass(type_, TypeEngine):
-                    raise PyInvestmentTypeError(f'{type_} is not a valid '
+                    raise TypeError(f'{type_} is not a valid '
                                                 f'SQLAlchemy type for col: {col}')
         table = pandas.io.sql.SQLTable(name,
                                        self,

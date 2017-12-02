@@ -13,7 +13,7 @@ class TestTiingoClient(object):
         assert resp is not None
 
     def test_get_ticker_prices(self, date_range):
-        resp = self.client.get_ticker_prices('AAPL', date_range=date_range)
+        resp = self.client.get_historical_data('AAPL', date_range=date_range)
         assert resp is not None
 
     def test_get_intra_day(self):

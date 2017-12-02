@@ -1,11 +1,11 @@
-import os
 import json
-import pandas as pd
-import pytech.utils as utils
+import os
 
+import pandas as pd
+
+import pytech.utils as utils
 from sources.restclient import (
     RestClient,
-    HTTPAction,
     RestClientError,
 )
 from utils import (
@@ -60,13 +60,15 @@ class TiingoClient(RestClient):
         resp = self._request(f'/tiingo/daily/{ticker}')
         return resp.json()
 
-    def get_ticker_prices(self, ticker: str,
-                          date_range: DateRange = None,
-                          freq: str = 'daily',
-                          fmt: str = 'json') -> pd.DataFrame:
+    def get_historical_data(self, ticker: str,
+                            date_range: DateRange = None,
+                            freq: str = 'daily',
+                            adjusted: bool = True,
+                            persist: bool = True,
+                            **kwargs) -> pd.DataFrame:
         url = f'/tiingo/daily/{ticker}/prices'
         params = {
-            'format': fmt,
+            'format': 'json',
             'resampleFreq': freq,
         }
 
@@ -85,6 +87,7 @@ class TiingoClient(RestClient):
     def get_intra_day(self, ticker: str,
                       date_range: DateRange = None,
                       freq: str = '5min',
+                      persist: bool = True,
                       **kwargs):
         url = f'/iex/{ticker}/prices'
         params = {
@@ -100,10 +103,3 @@ class TiingoClient(RestClient):
             raise RestClientError('Empty DataFrame was returned')
         else:
             return df
-
-    def get_historical_data(self, ticker: str,
-                            date_range: DateRange,
-                            freq: str = 'Daily',
-                            adjusted: bool = True,
-                            **kwargs) -> pd.DataFrame:
-        pass

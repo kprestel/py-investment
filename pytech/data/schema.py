@@ -91,12 +91,17 @@ bars = sa.Table(
     'bar',
     metadata,
     sa.Column('date', TIMESTAMP, nullable=False),
-    sa.Column('open', sa.Numeric(16, 2), nullable=False),
-    sa.Column('high', sa.Numeric(16, 2), nullable=False),
-    sa.Column('low', sa.Numeric(16, 2), nullable=False),
-    sa.Column('close', sa.Numeric(16, 2), nullable=False),
+    sa.Column('open', sa.Numeric(16, 2)),
+    sa.Column('high', sa.Numeric(16, 2)),
+    sa.Column('low', sa.Numeric(16, 2)),
+    sa.Column('close', sa.Numeric(16, 2)),
     sa.Column('volume', sa.INTEGER),
-    sa.Column('adj_close', sa.Numeric(16, 2)),  # not all sources have this
+    sa.Column('adj_close', sa.Numeric(16, 2)),
+    sa.Column('adj_open', sa.Numeric(16, 2)),
+    sa.Column('adj_high', sa.Numeric(16, 2)),
+    sa.Column('adj_low', sa.Numeric(16, 2)),
+    sa.Column('dividend', sa.Numeric(16, 2)),
+    sa.Column('split_factor', sa.Numeric(16, 2)),
     sa.Column('ticker', None, sa.ForeignKey('asset.ticker'), nullable=False),
     sa.UniqueConstraint('date', 'ticker', name='uix_date_ticker')
 )

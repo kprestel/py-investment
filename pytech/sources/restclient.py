@@ -12,6 +12,7 @@ from typing import (
 import requests
 from requests.exceptions import HTTPError
 
+from data import write
 from exceptions import DataAccessError
 from utils import DateRange
 from utils.enums import AutoNumber
@@ -40,6 +41,8 @@ class RestClient(metaclass=ABCMeta):
     def __init__(self, *args, **kwargs) -> None:
         self.logger = logging.getLogger(__name__)
 
+        self.writer = write()
+
         if kwargs.get('session'):
             self._session = requests.Session()
         else:
@@ -62,6 +65,7 @@ class RestClient(metaclass=ABCMeta):
     def get_intra_day(self, ticker: str,
                       date_range: DateRange,
                       freq: str = '5min',
+                      persist: bool = True,
                       **kwargs) -> pd.DataFrame:
         """
         Get intra day trade data. How far back data is available will vary from
@@ -74,6 +78,7 @@ class RestClient(metaclass=ABCMeta):
         :param ticker: The ticker to retrieve intra data for.
         :param date_range: The range of dates to get data for.
         :param freq: The frequency of the ticks.
+        :param persist: If `True` write the result to the db.
         :return: A :class:`pd.DataFrame` with the data.
         """
         raise NotImplementedError
@@ -83,6 +88,7 @@ class RestClient(metaclass=ABCMeta):
                             date_range: DateRange,
                             freq: str = 'Daily',
                             adjusted: bool = True,
+                            persist: bool = True,
                             **kwargs) -> pd.DataFrame:
         raise NotImplementedError
 
