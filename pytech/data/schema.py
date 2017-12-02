@@ -95,7 +95,7 @@ bars = sa.Table(
     sa.Column('high', sa.Numeric(16, 2), nullable=False),
     sa.Column('low', sa.Numeric(16, 2), nullable=False),
     sa.Column('close', sa.Numeric(16, 2), nullable=False),
-    sa.Column('volume', sa.INTEGER, nullable=False),
+    sa.Column('volume', sa.INTEGER),
     sa.Column('adj_close', sa.Numeric(16, 2)),  # not all sources have this
     sa.Column('ticker', None, sa.ForeignKey('asset.ticker'), nullable=False),
     sa.UniqueConstraint('date', 'ticker', name='uix_date_ticker')
@@ -169,6 +169,6 @@ portfolio_snapshot = sa.Table(
 )
 
 if __name__ == '__main__':
-    engine = sa.create_engine('postgresql://postgres:pytech@localhost/pytech',
+    engine = sa.create_engine('postgresql://pytech:pytech@localhost/pytech',
                               echo=True)
     metadata.create_all(engine, checkfirst=True)

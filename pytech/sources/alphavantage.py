@@ -13,6 +13,7 @@ from pytech.exceptions import PyInvestmentValueError
 from sources.restclient import (
     HTTPAction,
     RestClient,
+    RestClientError,
 )
 
 
@@ -56,8 +57,11 @@ class AlphaVantageClient(RestClient):
                  **kwargs) -> pd.DataFrame:
         resp = super()._request(url, method, stream=True, **kwargs)
         df = pd.read_csv(BytesIO(resp.content), encoding='utf8')
+        if df.empty:
+            raise RestClientError('Empty DataFrame was returned')
+
         df = utils.rename_bar_cols(df)
-        df[utils.DATE_COL] = df[utils.DATE_COL].append(utils.parse_date)
+        df[utils.DATE_COL] = df[utils.DATE_COL].apply(utils.parse_date)
         return df
 
     def get_intra_day(self, ticker: str,

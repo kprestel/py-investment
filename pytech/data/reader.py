@@ -16,10 +16,8 @@ from typing import (
 
 import numpy as np
 import pandas as pd
-import pandas_datareader as pdr
 import sqlalchemy as sa
 from pandas.tseries.offsets import BDay
-from pandas_datareader._utils import RemoteDataError
 
 import pytech.utils as utils
 from pytech.data._holders import ReaderResult
@@ -30,8 +28,11 @@ from pytech.data.schema import (
 )
 from pytech.decorators import write_df
 from pytech.exceptions import DataAccessError
+from pytech.sources import (
+    AlphaVantageClient,
+    TiingoClient,
+)
 from pytech.utils import DateRange
-from pytech.sources import TiingoClient, AlphaVantageClient
 from sources.restclient import RestClientError
 
 logger = logging.getLogger(__name__)
@@ -181,14 +182,7 @@ class BarReader(object):
         _ = kwargs.pop('columns', None)
 
         try:
-            df = self.tiingo.get_ticker_prices(ticker, date_range)
-            # logger.info(
-            #     f'Making call to {source}. Start date: {date_range.start},'
-            #     f'End date: {date_range.end}, Ticker: {ticker}')
-            # df = pdr.DataReader(ticker,
-            #                     data_source=source,
-            #                     start=date_range.start,
-            #                     end=date_range.end, **kwargs)
+            df = self.tiingo.get_intra_day(ticker, date_range, freq='1min')
             if df.empty:
                 raise RestClientError(f'df retrieved was empty for '
                                       f'ticker: {ticker}.')
@@ -225,9 +219,9 @@ class BarReader(object):
         :raises: NoDataFoundException if no data is found for the given ticker.
         """
         q = (sa.select([bars])
-             .where(sa.and_(bars.c.date >= date_range.start.date(),
-                            bars.c.date <= date_range.end + BDay(),
-                            bars.c.ticker == ticker)))
+            .where(sa.and_(bars.c.date >= date_range.start,
+                           bars.c.date <= date_range.end + BDay(),
+                           bars.c.ticker == ticker)))
 
         logger.info(f'Checking DB for ticker: {ticker}')
         df = self.reader.df(q)
@@ -245,17 +239,16 @@ class BarReader(object):
         if db_start > date_range.start and date_range.is_trade_day('start'):
             # db has less data than requested
             tmp_dt_range = DateRange(date_range.start, db_start - BDay())
-            lower_df_lib_name = self._from_web(ticker, source, tmp_dt_range)
-            lower_df = lower_df_lib_name.df
+            lower_df_res = self._from_web(ticker, source, tmp_dt_range)
+            lower_df = lower_df_res.df
         else:
             lower_df = None
 
         if db_end < date_range.end and date_range.is_trade_day('end'):
             # db doesn't have as much data than requested
-            tmp_dt_range_end = DateRange(db_end, date_range.end)
-            upper_df_lib_name = self._from_web(ticker, source,
-                                               tmp_dt_range_end)
-            upper_df = upper_df_lib_name.df
+            dt_range_end = DateRange(db_end, date_range.end)
+            upper_df_res = self._from_web(ticker, source, dt_range_end)
+            upper_df = upper_df_res.df
         else:
             upper_df = None
 

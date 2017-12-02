@@ -6,6 +6,7 @@ import pytech.utils as utils
 from sources.restclient import (
     RestClient,
     HTTPAction,
+    RestClientError,
 )
 from utils import (
     DateRange,
@@ -61,7 +62,7 @@ class TiingoClient(RestClient):
 
     def get_ticker_prices(self, ticker: str,
                           date_range: DateRange = None,
-                          freq: str ='daily',
+                          freq: str = 'daily',
                           fmt: str = 'json') -> pd.DataFrame:
         url = f'/tiingo/daily/{ticker}/prices'
         params = {
@@ -74,6 +75,8 @@ class TiingoClient(RestClient):
         resp = self._request(url=url, params=params)
 
         df = pd.read_json(json.dumps(resp.json()))
+        if df.empty:
+            raise RestClientError('Empty DataFrame was returned')
         df[utils.DATE_COL] = df[utils.DATE_COL].apply(utils.parse_date)
         return df
 
@@ -88,7 +91,9 @@ class TiingoClient(RestClient):
         params.update(self._get_dt_params(date_range))
 
         resp = self._request(url, params=params)
-        return pd.read_json(json.dumps(resp.json()))
+        df = pd.read_json(json.dumps(resp.json()))
 
-
-
+        if df.empty:
+            raise RestClientError('Empty DataFrame was returned')
+        else:
+            return df

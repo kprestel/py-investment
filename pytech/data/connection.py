@@ -97,20 +97,25 @@ class write(sqlaction):
 
     def df(self, df: pd.DataFrame, table: str, index: bool = False) -> None:
         out_df: pd.DataFrame = df.copy()
-        out_df[utils.VOL_COL] = out_df[utils.VOL_COL].astype(dtype='int64')
+        try:
+            out_df[utils.VOL_COL] = out_df[utils.VOL_COL].astype(dtype='int64')
+        except KeyError:
+            pass
+
         out_df = out_df.dropna()
         out_df = out_df[out_df[utils.FROM_DB_COL] == False]
+
         out_cols = set(out_df.columns)
         req_cols = set()
         req_cols.update(utils.REQUIRED_COLS)
         req_cols.add('ticker')
         drop_cols = out_cols.difference(req_cols)
         drop_cols.add(utils.FROM_DB_COL)
+
         out_df = out_df.drop(drop_cols, axis=1)
         output = StringIO()
         out_df.to_csv(output, index=index, header=False)
-        t = output.getvalue()
-        print(t)
+        output.getvalue()
         output.seek(0)
         conn = self.engine.raw_connection()
         try:
@@ -119,6 +124,7 @@ class write(sqlaction):
                                  columns=out_df.columns)
                 conn.commit()
         except pg.IntegrityError as e:
+            conn_ = self.engine.raw_connection()
             try:
                 ticker = df[utils.TICKER_COL].iat[0]
                 q = sa.select([bars]).where(bars.c.ticker == ticker)
@@ -132,16 +138,16 @@ class write(sqlaction):
                 io_ = StringIO()
                 final_df = final_df.fillna('NULL')
                 final_df.to_csv(io_, index=index, header=False)
-                x = io_.getvalue()
-                print(x)
+                io_.getvalue()
                 io_.seek(0)
-                conn_ = self.engine.raw_connection()
                 with conn_.cursor() as cursor:
                     cursor.copy_from(io_, table, sep=',',
                                      columns=final_df.columns)
-                    conn.commit()
+                    conn_.commit()
             except KeyError:
                 raise e
+            finally:
+                conn_.close()
         finally:
             conn.close()
 
