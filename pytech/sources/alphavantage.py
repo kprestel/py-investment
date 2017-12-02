@@ -9,7 +9,6 @@ from typing import (
 import pandas as pd
 
 import pytech.utils as utils
-from pytech.exceptions import PyInvestmentValueError
 from sources.restclient import (
     HTTPAction,
     RestClient,
@@ -65,6 +64,18 @@ class AlphaVantageClient(RestClient):
         df[utils.DATE_COL] = df[utils.DATE_COL].apply(utils.parse_date)
         return df
 
+    def _get_outputsize(self, date_range: DateRange, freq: str):
+        """
+        Returns the outputsize based on whether the `freq` + `date_range`
+        combination results in a period of greater than 100 ticks.
+        """
+        prng = pd.period_range(date_range.start, date_range.end,
+                               freq=pd.Timedelta(int(freq[0]), freq[1]))
+        if prng.size > 100:
+            return 'full'
+        else:
+            return 'compact'
+
     def get_intra_day(self, ticker: str,
                       date_range: DateRange,
                       freq: str = '5min',
@@ -97,20 +108,13 @@ class AlphaVantageClient(RestClient):
 
         :return: The :class:`pd.DataFrame` with the data.
         """
-        prng = pd.period_range(date_range.start, date_range.end,
-                               freq=pd.Timedelta(freq))
-        if prng.size > 100:
-            outputsize = 'full'
-        else:
-            outputsize = 'compact'
+        outputsize = self._get_outputsize(date_range, freq)
 
         params = self._get_base_ts_params(ticker, 'INTRADAY', outputsize)
         params['interval'] = freq
         df = self._request(params=params)
 
-        drop_extra = kwargs.get('drop_extra', False)
-
-        if drop_extra:
+        if kwargs.get('drop_extra', False):
             df = df[date_range.start:date_range.end]
 
         return df
@@ -118,38 +122,22 @@ class AlphaVantageClient(RestClient):
     def get_historical_data(self, ticker: str,
                             date_range: DateRange,
                             freq: str = 'Daily',
-                            adjusted: bool = True):
-        pass
+                            adjusted: bool = True,
+                            **kwargs) -> pd.DataFrame:
+        ts_param = freq.upper() + '_ADJUSTED' if adjusted else freq.upper()
+        if 'DAILY' in ts_param:
+            outputsize = self._get_outputsize(date_range, '1D')
+        elif 'WEEKLY' in ts_param:
+            outputsize = self._get_outputsize(date_range, '1W')
+        elif 'MONTHLY' in ts_param:
+            outputsize = self._get_outputsize(date_range, '1M')
+        else:
+            raise ValueError(f'{freq} is not a valid frequency')
 
-    def get_daily(self, ticker: str,
-                  outputsize: str = 'compact') -> pd.DataFrame:
-        params = self._get_base_ts_params(ticker, 'DAILY', outputsize)
+        params = self._get_base_ts_params(ticker, ts_param, outputsize)
         df = self._request(params=params)
+
+        if kwargs.get('drop_extra', False):
+            df = df[date_range.start:date_range.end]
+
         return df
-
-    def get_daily_adj(self, ticker: str,
-                      outputsize: str = 'compact') -> pd.DataFrame:
-        params = self._get_base_ts_params(ticker, 'DAILY_ADJUSTED', outputsize)
-        return self._request( params=params)
-
-    def get_weekly(self, ticker: str,
-                   outputsize: str = 'compact') -> pd.DataFrame:
-        params = self._get_base_ts_params(ticker, 'WEEKLY', outputsize)
-        return self._request(params=params)
-
-    def get_weekly_adj(self, ticker: str,
-                       outputsize: str = 'compact') -> pd.DataFrame:
-        params = self._get_base_ts_params(ticker, 'WEEKLY_ADJUSTED',
-                                          outputsize)
-        return self._request(params=params)
-
-    def get_monthly(self, ticker: str,
-                    outputsize: str = 'compact') -> pd.DataFrame:
-        params = self._get_base_ts_params(ticker, 'MONTHLY', outputsize)
-        return self._request(params=params)
-
-    def get_monthly_adj(self, ticker: str,
-                        outputsize: str = 'compact') -> pd.DataFrame:
-        params = self._get_base_ts_params(ticker, 'MONTHLY_ADJUSTED',
-                                          outputsize)
-        return self._request(params=params)

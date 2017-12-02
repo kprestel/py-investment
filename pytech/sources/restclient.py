@@ -82,7 +82,8 @@ class RestClient(metaclass=ABCMeta):
     def get_historical_data(self, ticker: str,
                             date_range: DateRange,
                             freq: str = 'Daily',
-                            adjusted: bool = True):
+                            adjusted: bool = True,
+                            **kwargs) -> pd.DataFrame:
         raise NotImplementedError
 
     def _request(self, url: Optional[str],

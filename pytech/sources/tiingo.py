@@ -104,5 +104,6 @@ class TiingoClient(RestClient):
     def get_historical_data(self, ticker: str,
                             date_range: DateRange,
                             freq: str = 'Daily',
-                            adjusted: bool = True):
+                            adjusted: bool = True,
+                            **kwargs) -> pd.DataFrame:
         pass

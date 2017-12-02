@@ -15,6 +15,26 @@ class TestAlphaVantage(object):
         df = self.client.get_intra_day('FB', date_range)
         assert df is not None
 
-    def test_get_daily(self):
-        df = self.client.get_daily('FB')
+    @pytest.mark.vcr
+    def test_get_historical_daily(self, date_range):
+        df = self.client.get_historical_data('FB',
+                                             date_range,
+                                             'Daily',
+                                             adjusted=True)
+        assert df is not None
+
+    @pytest.mark.vcr
+    def test_get_historical_weekly(self, date_range):
+        df = self.client.get_historical_data('FB',
+                                             date_range,
+                                             'Weekly',
+                                             adjusted=True)
+        assert df is not None
+
+    @pytest.mark.vcr
+    def test_get_historical_monthly(self, date_range):
+        df = self.client.get_historical_data('FB',
+                                             date_range,
+                                             'Monthly',
+                                             adjusted=True)
         assert df is not None

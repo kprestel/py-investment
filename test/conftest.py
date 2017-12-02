@@ -21,8 +21,23 @@ from pytech.utils import DateRange
 
 
 @pytest.fixture
+def vcr_config():
+    return {
+        'filter_query_parameters': ('apikey', 'XXXXXX'),
+        'filter_headers': ('Authorization', 'XXXXXXXX')
+    }
+
+
+@pytest.fixture
 def vcr_cassette_path(request, vcr_cassette_name):
-    return os.path.join('vhs', request.module.__name__, vcr_cassette_name)
+    """
+    Sets the cassette path.
+
+    It is expected that the tests are being run
+    from the project root dir.
+    """
+    return os.path.join('test', 'cassettes', request.module.__name__,
+                        vcr_cassette_name)
 
 
 @pytest.fixture(scope='session')
@@ -36,9 +51,11 @@ def end_date():
     # return '2017-06-09'
     return '2017-12-01'
 
+
 @pytest.fixture(scope='session')
 def date_range(start_date, end_date):
     return DateRange(start_date, end_date)
+
 
 @pytest.fixture(scope='session')
 def _ticker_df_cache():
@@ -118,13 +135,16 @@ def aapl_df():
     """Returns a OHLCV df for Apple."""
     return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}AAPL.csv')
 
+
 @pytest.fixture(scope='session')
 def fb_df():
     """Returns a OHLCV df for Apple."""
     return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}FB.csv')
 
+
 def date_utc(s):
     return parse(s, tzinfos=tzutc)
+
 
 @pytest.fixture(scope='session')
 def cvs_df():
@@ -134,6 +154,7 @@ def cvs_df():
 @pytest.fixture(scope='session')
 def goog_df():
     return pd.read_csv(f'{TEST_DATA_DIR}{os.sep}GOOG.csv')
+
 
 def get_test_csv_path(ticker):
     """Return the path to the test CSV file"""
