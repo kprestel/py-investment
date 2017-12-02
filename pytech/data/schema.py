@@ -1,6 +1,7 @@
 import uuid
 
 import sqlalchemy as sa
+from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import (
     ENUM,
     TEXT,
@@ -39,7 +40,9 @@ tables = frozenset({
     'bar',
     'portfolio',
     'transaction',
-    'ownership'
+    'ownership',
+    'asset_snapshot',
+    'portfolio_snapshot'
 })
 
 assets = sa.Table(
@@ -106,11 +109,6 @@ bars = sa.Table(
     sa.UniqueConstraint('date', 'ticker', name='uix_date_ticker')
 )
 
-# after creating the bar table, turn it into a hyper table.
-# event.listen(bars, 'after_create',
-#              sa.DDL('CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;\n'
-#                     'SELECT create_hypertable("bar", "date");'))
-
 portfolio = sa.Table(
     'portfolio',
     metadata,
@@ -172,6 +170,11 @@ portfolio_snapshot = sa.Table(
     sa.Column('equity', sa.Numeric(16, 2)),
     sa.Column('commission', sa.Numeric(16, 2))
 )
+
+# after creating the bar table, turn it into a hyper table.
+event.listen(metadata, 'after_create',
+             sa.DDL("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;"
+                    "SELECT create_hypertable('bar', 'date');"))
 
 if __name__ == '__main__':
     engine = sa.create_engine('postgresql://pytech:pytech@localhost/pytech',
