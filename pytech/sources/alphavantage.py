@@ -114,6 +114,10 @@ class AlphaVantageClient(RestClient):
         params = self._get_base_ts_params(ticker, 'INTRADAY', outputsize)
         params['interval'] = freq
         df = self._request(params=params)
+        df = utils.clean_df(df, ticker)
+
+        if persist:
+            self._persist_df(df)
 
         if kwargs.get('drop_extra', False):
             df = df[date_range.start:date_range.end]
@@ -124,6 +128,7 @@ class AlphaVantageClient(RestClient):
                             date_range: DateRange,
                             freq: str = 'Daily',
                             adjusted: bool = True,
+                            persist: bool = True,
                             **kwargs) -> pd.DataFrame:
         ts_param = freq.upper() + '_ADJUSTED' if adjusted else freq.upper()
         if 'DAILY' in ts_param:
@@ -137,6 +142,9 @@ class AlphaVantageClient(RestClient):
 
         params = self._get_base_ts_params(ticker, ts_param, outputsize)
         df = self._request(params=params)
+
+        if persist:
+            self._persist_df(df)
 
         if kwargs.get('drop_extra', False):
             df = df[date_range.start:date_range.end]

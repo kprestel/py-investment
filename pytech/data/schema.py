@@ -174,7 +174,8 @@ portfolio_snapshot = sa.Table(
 # after creating the bar table, turn it into a hyper table.
 event.listen(metadata, 'after_create',
              sa.DDL("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;"
-                    "SELECT create_hypertable('bar', 'date');"))
+                    "SELECT create_hypertable('bar', 'date', "
+                    "if_not_exists => TRUE);"))
 
 if __name__ == '__main__':
     engine = sa.create_engine('postgresql://pytech:pytech@localhost/pytech',

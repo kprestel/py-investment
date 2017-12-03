@@ -10,9 +10,10 @@ from typing import (
 )
 
 import requests
+from psycopg2._psycopg import IntegrityError
 from requests.exceptions import HTTPError
 
-from data import write
+from pytech.data import write
 from exceptions import DataAccessError
 from utils import DateRange
 from utils.enums import AutoNumber
@@ -91,6 +92,14 @@ class RestClient(metaclass=ABCMeta):
                             persist: bool = True,
                             **kwargs) -> pd.DataFrame:
         raise NotImplementedError
+
+    def _persist_df(self, df: pd.DataFrame,
+                    table: str = 'bar',
+                    index: bool = False) -> None:
+        try:
+            self.writer.df(df, table=table, index=index)
+        except IntegrityError:
+            self.logger.exception('Unable to insert data frame to db.')
 
     def _request(self, url: Optional[str],
                  method: Union[HTTPAction, str] = HTTPAction.GET,

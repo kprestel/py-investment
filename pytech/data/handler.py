@@ -8,21 +8,21 @@ from abc import (
 from typing import (
     Dict,
     Iterable,
-    Union,
     List,
+    Union,
 )
 
 import numpy as np
 import pandas as pd
 
 import pytech.utils as utils
-from data import BarReader
-from pytech.decorators import (
-    memoize,
-    lazy_property,
-)
 from pytech.backtest.event import MarketEvent
+from pytech.decorators import (
+    lazy_property,
+    memoize,
+)
 from pytech.utils import DateRange
+from ..data import BarReader
 
 
 class DataHandler(metaclass=ABCMeta):

@@ -4,7 +4,7 @@ import os
 import pandas as pd
 
 import pytech.utils as utils
-from sources.restclient import (
+from .restclient import (
     RestClient,
     RestClientError,
 )
@@ -69,7 +69,7 @@ class TiingoClient(RestClient):
         url = f'/tiingo/daily/{ticker}/prices'
         params = {
             'format': 'json',
-            'resampleFreq': freq,
+            'resampleFreq': freq.lower(),
         }
 
         params.update(self._get_dt_params(date_range))
@@ -81,7 +81,11 @@ class TiingoClient(RestClient):
         if df.empty:
             raise RestClientError('Empty DataFrame was returned')
 
-        df[utils.DATE_COL] = df[utils.DATE_COL].apply(utils.parse_date)
+        df = utils.clean_df(df, ticker)
+
+        if persist:
+            self._persist_df(df)
+
         return df
 
     def get_intra_day(self, ticker: str,
@@ -101,5 +105,10 @@ class TiingoClient(RestClient):
 
         if df.empty:
             raise RestClientError('Empty DataFrame was returned')
-        else:
-            return df
+
+        df = utils.clean_df(df, ticker)
+
+        if persist:
+            self._persist_df(df)
+
+        return df

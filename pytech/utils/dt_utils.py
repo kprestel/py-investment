@@ -4,17 +4,12 @@ from typing import (
     Union,
 )
 
-
 import pandas as pd
 import pandas_market_calendars as mcal
 import pytz
 from pandas.api.types import is_number
 
-from pytech.exceptions import (
-    PyInvestmentTypeError,
-    PyInvestmentValueError,
-    PyInvestmentKeyError,
-)
+from exceptions import DateParsingError
 
 date_type = Union[dt.datetime, pd.Timestamp, str]
 
@@ -36,15 +31,13 @@ def parse_date(date_to_parse: date_type,
     try:
         cal = mcal.get_calendar(exchange)
     except KeyError:
-        raise PyInvestmentKeyError(f'{exchange} is not a valid exchange.')
+        raise KeyError(f'{exchange} is not a valid exchange.')
 
     if isinstance(date_to_parse, str):
         try:
             date_to_parse = parse(date_to_parse)
-        except ValueError as e:
-            raise PyInvestmentValueError(e)
-        except TypeError as ex:
-            raise PyInvestmentTypeError(ex)
+        except (TypeError, AttributeError):
+            raise DateParsingError(date=date_to_parse)
 
     exchange_time = cal.close_time
 
@@ -141,8 +134,8 @@ class DateRange(object):
             raise NotImplementedError('TODO.')
 
         if self.start > self.end:
-            raise PyInvestmentValueError(f'start must be less than end. '
-                                         f'start: {start}, end: {end}')
+            raise ValueError(f'start must be less than end. '
+                             f'start: {start}, end: {end}')
 
     def is_trade_day(self, dt: str):
         if dt == 'start':
@@ -150,8 +143,7 @@ class DateRange(object):
         elif dt == 'end':
             return is_trade_day(self.end)
         else:
-            raise PyInvestmentValueError(f'{dt} is not valid. Must be '
-                                         f'"start" or "end"')
+            raise ValueError(f'{dt} is not valid. Must be "start" or "end"')
 
     @property
     def dt_index(self):

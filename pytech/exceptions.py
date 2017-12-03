@@ -31,9 +31,9 @@ class PyInvestmentError(Exception):
 class PyInvestmentTypeError(PyInvestmentError, TypeError):
     """Generic TypeErrors that are raised from PyInvestment"""
 
-
-class PyInvestmentValueError(PyInvestmentError, ValueError):
-    """Generic ValueErrors that are raised from PyInvestment"""
+class DateParsingError(PyInvestmentTypeError, TypeError, AttributeError):
+    """Raised when there is an error parsing a date."""
+    msg = 'Unable to parse {date} into a date.'
 
 
 class AssetExistsError(PyInvestmentError):

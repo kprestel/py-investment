@@ -1,13 +1,15 @@
-from typing import Dict
 from io import StringIO
+from typing import Dict
 
 import pandas as pd
 import pandas.io.sql
-from pytech.exceptions import PyInvestmentTypeError
-
-# constants for the expected column names of ALL data DataFrames
 from sqlalchemy.sql.type_api import TypeEngine
 
+from exceptions import (
+    DateParsingError,
+)
+
+# constants for the expected column names of ALL data DataFrames
 DATE_COL = 'date'
 OPEN_COL = 'open'
 ADJ_OPEN_COL = 'adj_open'
@@ -23,29 +25,68 @@ DIVIDEND = 'dividend'
 TICKER_COL = 'ticker'
 FROM_DB_COL = 'from_db'
 
-REQUIRED_COLS = frozenset({
+COLS = frozenset({
     DATE_COL,
     OPEN_COL,
+    ADJ_OPEN_COL,
     HIGH_COL,
+    ADJ_HIGH_COL,
     LOW_COL,
+    ADJ_LOW_COL,
     CLOSE_COL,
     ADJ_CLOSE_COL,
-    VOL_COL
+    VOL_COL,
+    SPLIT_FACTOR,
+    TICKER_COL,
+    DIVIDEND
 })
 
 
-def rename_bar_cols(df: pd.DataFrame) -> pd.DataFrame:
+def clean_df(df: pd.DataFrame, ticker: str = None) -> pd.DataFrame:
+    """
+    Calls :func:`rename_bar_cols` and :func:`parse_date_col`.
+
+    This is just a shortcut to clean a :class:`pd.DataFrame` for use throughout
+    the project.
+    """
+    df = rename_bar_cols(df, ticker=ticker)
+    df = parse_date_col(df)
+    return df
+
+
+def parse_date_col(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Use the :func:`.parse_date` to convert the `DATE_COL` into the standard
+    format.
+
+    :param df: The :class:`pd.DataFrame` with a `DATE_COL`.
+    :return: The df with a formatted `DATE_COL`.
+    :raises: KeyError if there is no `DATE_COL`.
+    :raises: DateParsingError if all dates can't be parsed.
+    """
+    from . import parse_date
+    try:
+        df[DATE_COL] = df[DATE_COL].apply(parse_date)
+    except KeyError as e:
+        raise KeyError(f'No {DATE_COL} found.') from e
+    except DateParsingError as exc:
+        raise DateParsingError('Unable to parse all dates.') from exc
+    return df
+
+
+def rename_bar_cols(df: pd.DataFrame, ticker: str = None) -> pd.DataFrame:
     """
     Rename the default return columns from Yahoo to the format that the
     DB expects.
 
-    :param DataFrame df: The ``DataFrame`` that needs the columns renamed.
+    :param df: The ``DataFrame`` that needs the columns renamed.
+    :param ticker: If provided this will be set as the `TICKER_COL`.
     :return: The same `DataFrame` passed in but with new column names.
     """
-    if set(df.columns) == REQUIRED_COLS:
+    if set(df.columns) == COLS:
         return df
 
-    return df.rename(columns={
+    df = df.rename(columns={
         'Date': DATE_COL,
         'timestamp': DATE_COL,
         'Open': OPEN_COL,
@@ -60,6 +101,11 @@ def rename_bar_cols(df: pd.DataFrame) -> pd.DataFrame:
         'split coefficient': SPLIT_FACTOR,
         'splitFactor': SPLIT_FACTOR
     })
+
+    if ticker is not None and TICKER_COL not in df.columns:
+        df[TICKER_COL] = ticker
+
+    return df
 
 
 def roll(df: pd.DataFrame, window: int):
@@ -87,7 +133,7 @@ class PgSQLDataBase(pandas.io.sql.SQLDatabase):
                 # noinspection PyTypeChecker
                 if not issubclass(type_, TypeEngine):
                     raise TypeError(f'{type_} is not a valid '
-                                                f'SQLAlchemy type for col: {col}')
+                                    f'SQLAlchemy type for col: {col}')
         table = pandas.io.sql.SQLTable(name,
                                        self,
                                        frame=frame,
@@ -107,4 +153,3 @@ class PgSQLDataBase(pandas.io.sql.SQLDatabase):
         with conn.cursor() as cur:
             cur.copy_from(output, name, sep=',')
             cur.commit()
-

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 import pytech.utils as utils
-from pytech.data._holders import ReaderResult
+from pytech.data import ReaderResult
 from pytech.decorators.decorators import (
     memoize,
     write_df,

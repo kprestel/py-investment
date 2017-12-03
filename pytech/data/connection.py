@@ -4,7 +4,9 @@ This module holds all database connection functionality.
 import logging
 import os
 from abc import ABCMeta
-from io import StringIO
+from io import (
+    StringIO,
+)
 from typing import (
     Any,
     Dict,
@@ -17,6 +19,7 @@ from typing import (
 import pandas as pd
 import psycopg2 as pg
 import sqlalchemy as sa
+from psycopg2._psycopg import AsIs
 from sqlalchemy.dialects.postgresql import (
     Insert,
     insert,
@@ -31,16 +34,17 @@ from sqlalchemy.sql import (
 import pytech.utils as utils
 from pytech.data.schema import (
     asset_snapshot,
+    bars,
+    metadata,
     portfolio,
     portfolio_snapshot,
-    metadata,
     assets,
-    bars,
 )
 
 if TYPE_CHECKING:
     from fin.portfolio import Portfolio
     from fin.asset.owned_asset import OwnedAsset
+    from io import IOBase
 
 dml_stmts = Union[Insert, Update, Delete]
 
@@ -92,7 +96,7 @@ class write(sqlaction):
                 else:
                     res = conn.execute(stmt, vals)
                 return res
-            except IntegrityError as e:
+            except IntegrityError:
                 raise
 
     def df(self, df: pd.DataFrame, table: str, index: bool = False) -> None:
@@ -103,51 +107,81 @@ class write(sqlaction):
             pass
 
         out_df = out_df.dropna()
-        out_df = out_df[out_df[utils.FROM_DB_COL] == False]
+        try:
+            out_df = out_df[out_df[utils.FROM_DB_COL] == False]
+        except KeyError:
+            pass
 
         out_cols = set(out_df.columns)
-        req_cols = set()
-        req_cols.update(utils.REQUIRED_COLS)
-        req_cols.add('ticker')
-        drop_cols = out_cols.difference(req_cols)
-        drop_cols.add(utils.FROM_DB_COL)
+        drop_cols = out_cols.difference(utils.COLS)
 
         out_df = out_df.drop(drop_cols, axis=1)
         output = StringIO()
         out_df.to_csv(output, index=index, header=False)
         output.getvalue()
         output.seek(0)
+        ticker = df[utils.TICKER_COL].iat[0]
+        ins = (insert(assets).values(ticker=ticker)
+            .on_conflict_do_nothing(constraint='asset_pkey'))
+        self(ins)
+
+        try:
+            # noinspection PyTypeChecker
+            self._copy_from(output, table, out_df.columns)
+        except pg.IntegrityError as e:
+            if table != 'bar':
+                raise NotImplementedError(
+                    'Fixing IntegrityErrors is only implemented for '
+                    'the bar table currently.') from e
+
+            self.logger.warning(f'{e.pgerror}. Attempting to insert new '
+                                'rows only.')
+            try:
+                ticker = df[utils.TICKER_COL].iat[0]
+            except KeyError:
+                raise KeyError(
+                    f'Must have {utils.TICKER_COL} to be inserted.') from e
+
+            q = sa.select([bars]).where(bars.c.ticker == ticker)
+
+            with self.engine.begin() as conn:
+                arg_dict = {
+                    'date': {
+                        'utc': True,
+                        'infer_datetime_format': True
+                    }
+                }
+                db_df = pd.read_sql_query(q, conn, parse_dates=arg_dict)
+
+            tmp_df = pd.concat([db_df, out_df])
+            tmp_df = tmp_df.reset_index(drop=True)
+            grp_df = tmp_df.groupby(tmp_df.date)
+            idx = [x[0] for x in grp_df.groups.values() if len(x) == 1]
+            final_df = tmp_df.reindex(idx)
+            io_ = StringIO()
+            final_df = final_df.fillna('NULL')
+            final_df.to_csv(io_, index=index, header=False)
+            io_.getvalue()
+            io_.seek(0)
+            try:
+                # noinspection PyTypeChecker
+                self._copy_from(io_, table, columns=final_df.columns)
+            except pg.IntegrityError as exc:
+                raise exc from e
+
+    def _copy_from(self,
+                   f: 'IOBase',
+                   table: str,
+                   columns: Iterable,
+                   sep: str = ','):
         conn = self.engine.raw_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.copy_from(output, table, sep=',',
-                                 columns=out_df.columns)
+                table = f'"{table}"'
+                cursor.copy_from(f, AsIs(table), sep=sep, columns=columns)
                 conn.commit()
-        except pg.IntegrityError as e:
-            conn_ = self.engine.raw_connection()
-            try:
-                ticker = df[utils.TICKER_COL].iat[0]
-                q = sa.select([bars]).where(bars.c.ticker == ticker)
-                with self.engine.begin() as conn:
-                    db_df = pd.read_sql_query(q, conn)
-                tmp_df = pd.concat([db_df, out_df])
-                tmp_df = tmp_df.reset_index(drop=True)
-                grp_df = tmp_df.groupby(tmp_df.date)
-                idx = [x[0] for x in grp_df.groups.values() if len(x) == 1]
-                final_df = tmp_df.reindex(idx)
-                io_ = StringIO()
-                final_df = final_df.fillna('NULL')
-                final_df.to_csv(io_, index=index, header=False)
-                io_.getvalue()
-                io_.seek(0)
-                with conn_.cursor() as cursor:
-                    cursor.copy_from(io_, table, sep=',',
-                                     columns=final_df.columns)
-                    conn_.commit()
-            except KeyError:
-                raise e
-            finally:
-                conn_.close()
+        except TypeError as e:
+            print(e)
         finally:
             conn.close()
 
