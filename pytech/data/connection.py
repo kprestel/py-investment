@@ -14,12 +14,12 @@ from typing import (
     Optional,
     TYPE_CHECKING,
     Union,
+    List,
 )
 
 import pandas as pd
 import psycopg2 as pg
 import sqlalchemy as sa
-from psycopg2._psycopg import AsIs
 from sqlalchemy.dialects.postgresql import (
     Insert,
     insert,
@@ -115,7 +115,7 @@ class write(sqlaction):
         out_cols = set(out_df.columns)
         drop_cols = out_cols.difference(utils.COLS)
 
-        out_df = out_df.drop(drop_cols, axis=1)
+        out_df: pd.DataFrame = out_df.drop(drop_cols, axis=1)
         output = StringIO()
         out_df.to_csv(output, index=index, header=False)
         output.getvalue()
@@ -126,62 +126,73 @@ class write(sqlaction):
         self(ins)
 
         try:
-            # noinspection PyTypeChecker
             self._copy_from(output, table, out_df.columns)
         except pg.IntegrityError as e:
-            if table != 'bar':
-                raise NotImplementedError(
-                    'Fixing IntegrityErrors is only implemented for '
-                    'the bar table currently.') from e
+            self._insert_diff(df, e, out_df, table)
 
-            self.logger.warning(f'{e.pgerror}. Attempting to insert new '
-                                'rows only.')
-            try:
-                ticker = df[utils.TICKER_COL].iat[0]
-            except KeyError:
-                raise KeyError(
-                    f'Must have {utils.TICKER_COL} to be inserted.') from e
+    def _insert_diff(self, df: pd.DataFrame,
+                     exception: pg.IntegrityError,
+                     out_df: pd.DataFrame,
+                     table: str):
+        """
+        Insert the data that is not already in the database.
 
-            q = sa.select([bars]).where(bars.c.ticker == ticker)
-
-            with self.engine.begin() as conn:
-                arg_dict = {
-                    'date': {
-                        'utc': True,
-                        'infer_datetime_format': True
-                    }
+        :param df: The original :class:`pd.DataFrame`
+        :param exception: The original exception. Should be a
+            :class:`pg.IntegrityError`.
+        :param out_df: The :class:`pd.DataFrame` that was being written to the
+            database that caused the original exception.
+        :param table: The table to insert the data to.
+        """
+        if table != 'bar':
+            raise NotImplementedError(
+                'Fixing IntegrityErrors is only implemented for '
+                'the bar table currently.') from exception
+        self.logger.warning(f'{exception.pgerror}. Attempting to insert new '
+                            'rows only.')
+        try:
+            ticker = df[utils.TICKER_COL].iat[0]
+        except KeyError:
+            raise KeyError(
+                f'Must have {utils.TICKER_COL} to be inserted.') from exception
+        q = sa.select([bars]).where(bars.c.ticker == ticker)
+        with self.engine.begin() as conn:
+            parse_dt_args = {
+                'date': {
+                    'utc': True,
+                    'infer_datetime_format': True
                 }
-                db_df = pd.read_sql_query(q, conn, parse_dates=arg_dict)
-
-            tmp_df = pd.concat([db_df, out_df])
-            tmp_df = tmp_df.reset_index(drop=True)
-            grp_df = tmp_df.groupby(tmp_df.date)
-            idx = [x[0] for x in grp_df.groups.values() if len(x) == 1]
-            final_df = tmp_df.reindex(idx)
-            io_ = StringIO()
-            final_df = final_df.fillna('NULL')
-            final_df.to_csv(io_, index=index, header=False)
-            io_.getvalue()
-            io_.seek(0)
-            try:
-                # noinspection PyTypeChecker
-                self._copy_from(io_, table, columns=final_df.columns)
-            except pg.IntegrityError as exc:
-                raise exc from e
+            }
+            db_df = pd.read_sql_query(q, conn, parse_dates=parse_dt_args,
+                                      index_col=utils.DATE_COL)
+        out_df = out_df.set_index(utils.DATE_COL)
+        final_df = out_df[~out_df.index.isin(db_df.index)]
+        io_ = StringIO()
+        final_df = final_df.fillna('NULL')
+        final_df.to_csv(io_, index=True, header=False)
+        io_.getvalue()
+        io_.seek(0)
+        try:
+            self._copy_from(io_, table, columns=final_df.columns.tolist())
+        except pg.IntegrityError as e:
+            raise e from exception
 
     def _copy_from(self,
-                   f: 'IOBase',
+                   f: StringIO,
                    table: str,
-                   columns: Iterable,
+                   columns: List,
                    sep: str = ','):
+        # if 'date' is the index it won't be in the columns
+        if utils.DATE_COL not in columns:
+            columns.insert(0, utils.DATE_COL)
         conn = self.engine.raw_connection()
         try:
             with conn.cursor() as cursor:
-                table = f'"{table}"'
-                cursor.copy_from(f, AsIs(table), sep=sep, columns=columns)
+                self.logger.debug(f'table: {table}')
+                cursor.copy_from(f, table, sep=sep, columns=columns)
                 conn.commit()
         except TypeError as e:
-            print(e)
+            raise e
         finally:
             conn.close()
 

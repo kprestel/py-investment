@@ -142,6 +142,7 @@ class AlphaVantageClient(RestClient):
 
         params = self._get_base_ts_params(ticker, ts_param, outputsize)
         df = self._request(params=params)
+        df[utils.TICKER_COL] = ticker
 
         if persist:
             self._persist_df(df)
