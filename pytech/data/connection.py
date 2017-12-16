@@ -148,8 +148,9 @@ class write(sqlaction):
             raise NotImplementedError(
                 'Fixing IntegrityErrors is only implemented for '
                 'the bar table currently.') from exception
-        self.logger.warning(f'{exception.pgerror}. Attempting to insert new '
-                            'rows only.')
+        self.logger.info(f'Handling IntegrityError. Attempting to insert new '
+                         'rows only.')
+
         try:
             ticker = df[utils.TICKER_COL].iat[0]
         except KeyError:
@@ -165,11 +166,19 @@ class write(sqlaction):
             }
             db_df = pd.read_sql_query(q, conn, parse_dates=parse_dt_args,
                                       index_col=utils.DATE_COL)
-        out_df = out_df.set_index(utils.DATE_COL)
-        final_df = out_df[~out_df.index.isin(db_df.index)]
+
+        db_df = db_df.dropna(axis=1, how='all')
+        db_cols = set(db_df.columns.tolist())
+        out_cols = set(out_df.columns.tolist())
+        if db_cols != out_cols:
+            final_df = out_df
+        else:
+            out_df = out_df.set_index(utils.DATE_COL)
+            final_df = out_df[~out_df.index.isin(db_df.index)]
+
         io_ = StringIO()
         final_df = final_df.fillna('NULL')
-        final_df.to_csv(io_, index=True, header=False)
+        final_df.to_csv(io_, index=False, header=False)
         io_.getvalue()
         io_.seek(0)
         try:

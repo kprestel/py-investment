@@ -42,14 +42,16 @@ COLS = frozenset({
 })
 
 
-def clean_df(df: pd.DataFrame, ticker: str = None) -> pd.DataFrame:
+def clean_df(df: pd.DataFrame,
+             ticker: str = None,
+             adjusted: bool = False) -> pd.DataFrame:
     """
     Calls :func:`rename_bar_cols` and :func:`parse_date_col`.
 
     This is just a shortcut to clean a :class:`pd.DataFrame` for use throughout
     the project.
     """
-    df = rename_bar_cols(df, ticker=ticker)
+    df = rename_bar_cols(df, ticker=ticker, adjusted=adjusted)
     df = parse_date_col(df)
     return df
 
@@ -74,7 +76,9 @@ def parse_date_col(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def rename_bar_cols(df: pd.DataFrame, ticker: str = None) -> pd.DataFrame:
+def rename_bar_cols(df: pd.DataFrame,
+                    ticker: str = None,
+                    adjusted: bool = False) -> pd.DataFrame:
     """
     Rename the default return columns from Yahoo to the format that the
     DB expects.
@@ -83,24 +87,43 @@ def rename_bar_cols(df: pd.DataFrame, ticker: str = None) -> pd.DataFrame:
     :param ticker: If provided this will be set as the `TICKER_COL`.
     :return: The same `DataFrame` passed in but with new column names.
     """
-    if set(df.columns) == COLS:
-        return df
-
-    df = df.rename(columns={
-        'Date': DATE_COL,
-        'timestamp': DATE_COL,
-        'Open': OPEN_COL,
-        'High': HIGH_COL,
-        'Low': LOW_COL,
-        'Close': CLOSE_COL,
-        'Adj Close': ADJ_CLOSE_COL,
-        'adjusted_close': ADJ_CLOSE_COL,
-        'Volume': VOL_COL,
-        'dividend amount': DIVIDEND,
-        'divCash': DIVIDEND,
-        'split coefficient': SPLIT_FACTOR,
-        'splitFactor': SPLIT_FACTOR
-    })
+    if adjusted:
+        df = df.rename(columns={
+            'Date': DATE_COL,
+            'timestamp': DATE_COL,
+            'Open': ADJ_OPEN_COL,
+            'open': ADJ_OPEN_COL,
+            'High': ADJ_HIGH_COL,
+            'high': ADJ_HIGH_COL,
+            'Low': ADJ_LOW_COL,
+            'low': ADJ_LOW_COL,
+            'Close': ADJ_CLOSE_COL,
+            'close': ADJ_CLOSE_COL,
+            'Adj Close': ADJ_CLOSE_COL,
+            'adjusted_close': ADJ_CLOSE_COL,
+            'Volume': VOL_COL,
+            'volume': VOL_COL,
+            'dividend amount': DIVIDEND,
+            'divCash': DIVIDEND,
+            'split coefficient': SPLIT_FACTOR,
+            'splitFactor': SPLIT_FACTOR
+        })
+    else:
+        df = df.rename(columns={
+            'Date': DATE_COL,
+            'timestamp': DATE_COL,
+            'Open': OPEN_COL,
+            'High': HIGH_COL,
+            'Low': LOW_COL,
+            'Close': CLOSE_COL,
+            'Adj Close': ADJ_CLOSE_COL,
+            'adjusted_close': ADJ_CLOSE_COL,
+            'Volume': VOL_COL,
+            'dividend amount': DIVIDEND,
+            'divCash': DIVIDEND,
+            'split coefficient': SPLIT_FACTOR,
+            'splitFactor': SPLIT_FACTOR
+        })
 
     if ticker is not None and TICKER_COL not in df.columns:
         df[TICKER_COL] = ticker
