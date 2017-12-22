@@ -14,9 +14,9 @@ from psycopg2._psycopg import IntegrityError
 from requests.exceptions import HTTPError
 
 from pytech.data import write
-from exceptions import DataAccessError
-from utils import DateRange
-from utils.enums import AutoNumber
+from pytech.exceptions import DataAccessError
+from pytech.utils import DateRange
+from pytech.utils.enums import AutoNumber
 
 
 class RestClientError(DataAccessError):

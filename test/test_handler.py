@@ -42,30 +42,30 @@ class TestYahooDataHandler(object):
         assert bars is not None
         # yahoo_data_handler.update_bars()
         aapl_close = (bars.latest_bar_value('AAPL', pd_utils.CLOSE_COL))
-        aapl_close_expected = 101.17
+        aapl_close_expected = 145.74
         assert aapl_close == approx(aapl_close_expected)
         aapl_open = (bars.latest_bar_value('AAPL', pd_utils.OPEN_COL))
-        aapl_open_expected = 101.410004
+        aapl_open_expected = 145.74
         assert aapl_open == approx(aapl_open_expected)
 
         fb_close = (bars.latest_bar_value('FB', pd_utils.CLOSE_COL))
-        fb_close_expected = 107.32
+        fb_close_expected = 38.23
         assert fb_close == approx(fb_close_expected)
 
         fb_open = (bars.latest_bar_value('FB', pd_utils.OPEN_COL))
-        fb_open_expected = 107.910004
+        fb_open_expected = 42.05
         assert fb_open == approx(fb_open_expected)
 
         bars.update_bars()
 
         aapl_close = (bars.latest_bar_value(
                 'AAPL', pd_utils.CLOSE_COL))
-        aapl_close_expected = 102.26
+        aapl_close_expected = 145.74
         assert aapl_close == approx(aapl_close_expected)
 
         fb_close = (bars.latest_bar_value(
                 'FB', pd_utils.CLOSE_COL))
-        fb_close_expected = 109.410004
+        fb_close_expected = 34.03
         assert fb_close == approx(fb_close_expected)
 
         with pytest.raises(KeyError):
@@ -78,17 +78,17 @@ class TestYahooDataHandler(object):
         :param Bars bars:
         """
         test_date = bars.get_latest_bar_dt('AAPL')
-        assert test_date == dt_utils.parse_date('2016-03-10')
+        assert test_date == dt_utils.parse_date('2017-06-26 21:12:00')
 
         bars.update_bars()
 
         test_date = bars.get_latest_bar_dt('AAPL')
-        assert test_date == dt_utils.parse_date('2016-03-11')
+        assert test_date == dt_utils.parse_date('2017-06-26 21:13:00')
 
         bars.update_bars()
 
         test_date = bars.get_latest_bar_dt('AAPL')
-        assert test_date == dt_utils.parse_date('2016-03-14')
+        assert test_date == dt_utils.parse_date('2017-06-26 21:14:00')
 
     def test_get_latest_bar(self, bars):
         """
@@ -100,13 +100,13 @@ class TestYahooDataHandler(object):
         bar = bars.get_latest_bar('AAPL')
         dt = dt_utils.parse_date(bar.name)
         adj_close = bar[pd_utils.CLOSE_COL]
-        aapl_close_expected = 101.17
-        assert dt == dt_utils.parse_date('2016-03-10')
+        aapl_close_expected = 145.74
+        assert dt == dt_utils.parse_date('2017-06-26 21:12:00')
         assert adj_close == approx(aapl_close_expected)
         bars.update_bars()
         bar = bars.get_latest_bar('AAPL')
         dt = dt_utils.parse_date(bar.name)
-        assert dt == dt_utils.parse_date('2016-03-11')
+        assert dt == dt_utils.parse_date('2017-06-26 21:13:00')
 
     def test_make_agg_df(self, bars: Bars):
         """Test creating the agg df"""

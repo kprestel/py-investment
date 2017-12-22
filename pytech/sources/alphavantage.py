@@ -9,12 +9,12 @@ from typing import (
 import pandas as pd
 
 import pytech.utils as utils
-from sources.restclient import (
+from .restclient import (
     HTTPAction,
     RestClient,
     RestClientError,
 )
-from utils import DateRange
+from pytech.utils import DateRange
 
 
 class AlphaVantageClient(RestClient):
@@ -60,8 +60,6 @@ class AlphaVantageClient(RestClient):
         if df.empty:
             raise RestClientError('Empty DataFrame was returned')
 
-        df = utils.rename_bar_cols(df)
-        df[utils.DATE_COL] = df[utils.DATE_COL].apply(utils.parse_date)
         return df
 
     def _get_outputsize(self, date_range: DateRange, freq: str):
@@ -107,9 +105,17 @@ class AlphaVantageClient(RestClient):
         :keyword drop_extra: If `True` then any data outside of the requested
             `date_range` will be dropped before being returned.
             Defaults to `False`
+        :keyword outputsize: Set the output size.
+            * full
+                * all available data
+            * compact
+                * last 100 records
         :return: The :class:`pd.DataFrame` with the data.
         """
-        outputsize = self._get_outputsize(date_range, freq)
+        if 'outputsize' in kwargs:
+            outputsize = kwargs.pop('outputsize')
+        else:
+            outputsize =  self._get_outputsize(date_range, freq)
 
         params = self._get_base_ts_params(ticker, 'INTRADAY', outputsize)
         params['interval'] = freq

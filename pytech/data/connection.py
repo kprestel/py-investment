@@ -48,6 +48,8 @@ if TYPE_CHECKING:
 
 dml_stmts = Union[Insert, Update, Delete]
 
+logger = logging.getLogger(__name__)
+
 
 def getconn():
     """Creates a :class:``psycopg2.pool.ThreadedConnectionPool``"""
@@ -241,11 +243,16 @@ class write(sqlaction):
 
         :param portfolio_: the portfolio to write
         """
-        ins = insert(portfolio_snapshot).values(portfolio_id=portfolio_.id,
-                                                date=cur_dt,
-                                                cash=portfolio_.cash,
-                                                equity=portfolio_.equity,
-                                                commission=portfolio_.total_commission)
+        ins = (insert(portfolio_snapshot).values(portfolio_id=portfolio_.id,
+                                                 date=cur_dt,
+                                                 cash=portfolio_.cash,
+                                                 equity=portfolio_.equity,
+                                                 commission=portfolio_.total_commission)
+            .on_conflict_do_update(constraint='portfolio_snapshot_pkey',
+                                   set_=dict(date=cur_dt,
+                                             cash=portfolio_.cash,
+                                             equity=portfolio_.equity,
+                                             commission=portfolio_.total_commission)))
         return self._do_insert(ins)
 
     def owned_asset_snapshot(self, assets: Iterable['OwnedAsset'],
@@ -282,5 +289,10 @@ class reader(sqlaction):
     def df(self, query: Select, *args, **kwargs):
         with self.engine.begin() as conn:
             df = pd.read_sql_query(query, conn)
-            df.index = df.date
+            try:
+                df = utils.parse_date_col(df)
+            except KeyError:
+                logging.info(f'No {utils.DATE_COL} found in df.')
+            else:
+                df.index = df.date
             return df

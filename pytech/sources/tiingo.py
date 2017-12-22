@@ -8,7 +8,7 @@ from .restclient import (
     RestClient,
     RestClientError,
 )
-from utils import (
+from pytech.utils import (
     DateRange,
     Dict,
 )

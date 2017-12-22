@@ -32,8 +32,8 @@ from pytech.sources import (
     AlphaVantageClient,
     TiingoClient,
 )
-from pytech.utils import DateRange
-from sources.restclient import RestClientError
+from ..utils import DateRange
+from pytech.sources.restclient import RestClientError
 
 logger = logging.getLogger(__name__)
 
@@ -230,8 +230,19 @@ class BarReader(object):
         # check that all the requested data is present
         if db_start > date_range.start and date_range.is_trade_day('start'):
             # db has less data than requested
-            dt_range_start = DateRange(date_range.start, db_start - BDay())
-            lower_df = self._from_web(ticker, source, dt_range_start).df
+
+            dt_range_start = None
+            try:
+                dt_range_start = DateRange(date_range.start, db_start - BDay())
+            except ValueError:
+                try:
+                    dt_range_start = DateRange(date_range.start, db_start)
+                except ValueError:
+                    logger.warning('Unable to get lower dt_range_start')
+            if dt_range_start is not None:
+                lower_df = self._from_web(ticker, source, dt_range_start).df
+            else:
+                lower_df = None
         else:
             lower_df = None
 

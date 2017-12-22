@@ -3,9 +3,10 @@ from typing import Dict
 
 import pandas as pd
 import pandas.io.sql
+import pytz
 from sqlalchemy.sql.type_api import TypeEngine
 
-from exceptions import (
+from pytech.exceptions import (
     DateParsingError,
 )
 
@@ -68,7 +69,7 @@ def parse_date_col(df: pd.DataFrame) -> pd.DataFrame:
     """
     from . import parse_date
     try:
-        df[DATE_COL] = df[DATE_COL].apply(parse_date)
+        df[DATE_COL] = df[DATE_COL].apply(parse_date, tz=pytz.UTC)
     except KeyError as e:
         raise KeyError(f'No {DATE_COL} found.') from e
     except DateParsingError as exc:
@@ -88,6 +89,11 @@ def rename_bar_cols(df: pd.DataFrame,
     :return: The same `DataFrame` passed in but with new column names.
     """
     if adjusted:
+        if 'close' in df.columns and 'adjusted_close' in df.columns:
+            df = df.drop('close', axis=1)
+        elif 'Close' in df.columns and 'Adj Close' in df.columns:
+            df = df.drop('Close', axis=1)
+
         df = df.rename(columns={
             'Date': DATE_COL,
             'timestamp': DATE_COL,

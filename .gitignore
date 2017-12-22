@@ -100,3 +100,7 @@ ddl_v1.uml
 resources/
 /ddl_v1.uml
 /ddl_v1.png
+# Ignore files cached by Hypothesis...
+.hypothesis/
+# except for the examples directory
+!.hypothesis/examples/

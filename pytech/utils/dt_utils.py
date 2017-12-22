@@ -7,17 +7,19 @@ from typing import (
 import pandas as pd
 import pandas_market_calendars as mcal
 import pytz
-from pandas.api.types import is_number
 
-from exceptions import DateParsingError
+from pytech.exceptions import DateParsingError
+from . import digits
 
-date_type = Union[dt.datetime, pd.Timestamp, str]
+date_type = Union[dt.datetime, pd.Timestamp, str, int]
 
 NYSE = mcal.get_calendar('NYSE')
 
 
 def parse_date(date_to_parse: date_type,
-               exchange: str = 'NYSE') -> dt.datetime:
+               exchange: str = 'NYSE',
+               tz: pytz.timezone = None,
+               default_time: str = 'close_time') -> dt.datetime:
     """
     Converts strings or datetime objects to UTC timestamps.
 
@@ -25,9 +27,21 @@ def parse_date(date_to_parse: date_type,
     :param exchange: the exchange being used, defaults to NYSE.
         This is used to set the time in the event that the `date_date_to_parse`
         does not have a time set.
-    :return: ``pandas.TimeStamp``
+    :param tz:
+    :param default_time: The time to use in the event that the `date_to_parse`
+        does not have a `time`.
+        * close_time
+        * open_time
+
+    :return: ``dt.datetime``
     """
     from dateutil.parser import parse
+    if date_to_parse is None:
+        raise DateParsingError('None is not a valid date')
+
+    if isinstance(date_to_parse, pd.Timestamp):
+        date_to_parse = date_to_parse.to_pydatetime()
+
     try:
         cal = mcal.get_calendar(exchange)
     except KeyError:
@@ -39,26 +53,44 @@ def parse_date(date_to_parse: date_type,
         except (TypeError, AttributeError):
             raise DateParsingError(date=date_to_parse)
 
-    exchange_time = cal.close_time
+    exchange_time = getattr(cal, default_time)
+    date_to_parse = replace_time(date_to_parse, exchange_time)
 
-    repl = {}
-    for attr in ("hour", "minute", "second", "microsecond"):
-        value = getattr(date_to_parse, attr, False)
-        if value:
-            repl[attr] = value
-        else:
-            repl[attr] = getattr(exchange_time, attr)
-
-    date_to_parse = date_to_parse.replace(**repl)
-
-    try:
-        if date_to_parse.tz is None:
-            date_to_parse = date_to_parse.replace(tzinfo=cal.tz)
-    except AttributeError:
-        if date_to_parse.tzinfo is None:
-            date_to_parse = date_to_parse.replace(tzinfo=cal.tz)
+    if date_to_parse.tzinfo is None and tz is None:
+        date_to_parse = date_to_parse.replace(tzinfo=cal.tz)
+    elif date_to_parse.tzinfo is None and tz is not None:
+        date_to_parse = date_to_parse.replace(tzinfo=tz)
 
     return date_to_parse.astimezone(pytz.UTC)
+
+
+def replace_time(dt_: Union[dt.date, dt.datetime],
+                 time_: dt.time) -> dt.datetime:
+    """
+    Takes a time object and replaces the `time` of the `dt_` if is it not set
+
+    :param dt_:
+    :param time_:
+    :return:
+    """
+    try:
+        repl = {}
+        for attr in ("hour", "minute", "second", "microsecond"):
+            value = getattr(dt_, attr, False)
+            if value:
+                repl[attr] = value
+            else:
+                repl[attr] = getattr(time_, attr)
+
+        if isinstance(dt_, dt.date):
+            dt_ = dt.datetime(dt_.year,
+                              dt_.month,
+                              dt_.day)
+
+        dt_ = dt_.replace(**repl)
+        return dt_
+    except AttributeError as e:
+        raise DateParsingError(date=dt_) from e
 
 
 def get_default_date(is_start_date):
@@ -69,30 +101,46 @@ def get_default_date(is_start_date):
         return parse_date(dt.datetime.now(pytz.UTC))
 
 
-def sanitize_dates(start, end) -> Tuple[dt.datetime, dt.datetime]:
+def sanitize_dates(start: date_type,
+                   end: date_type) -> Tuple[dt.datetime, dt.datetime]:
     """
     Return a tuple of (start, end)
 
     if start is `None` then default is 1/1/2010
     if end is `None` then default is today.
     """
-    if is_number(start):
-        # treat ints as a year
-        start = dt.datetime(start, 1, 1)
-    start = parse_date(start)
 
-    if is_number(end):
-        end = dt.datetime(end, 1, 1)
-    end = parse_date(end)
+    def int_to_dt(n):
+        digits_ = digits(n)
+        if digits_ == 4:
+            # treat ints as a year
+            return parse_date(dt.datetime(n, 1, 1))
+        else:
+            return parse_date(n)
 
-    if start is None:
-        start = dt.datetime(2010, 1, 1)
+    try:
+        start = parse_date(start)
+    except DateParsingError as e:
+        if start is None:
+            start = dt.datetime(2010, 1, 1)
+        elif isinstance(start, int):
+            start = int_to_dt(start)
+        else:
+            raise e
+        start = parse_date(start)
 
-    if end is None:
-        end = dt.datetime.now(pytz.UTC)
-        end = prev_weekday(end)
+    try:
+        end = parse_date(end)
+    except DateParsingError as e:
+        if end is None:
+            end = dt.datetime.now(pytz.UTC)
+            end = prev_weekday(end)
+        elif isinstance(end, int):
+            end = int_to_dt(end)
+        else:
+            raise e
+        end = parse_date(end)
 
-    # return parse_date(start), parse_date(end)
     return start, end
 
 

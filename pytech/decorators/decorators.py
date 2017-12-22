@@ -1,12 +1,16 @@
+import logging
 from functools import wraps
 
 from pandas.tseries.offsets import BDay
+from psycopg2._psycopg import IntegrityError
 from sqlalchemy.dialects.postgresql import insert
 
 import pytech.utils as utils
 from pytech.exceptions import (
     PyInvestmentKeyError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def memoize(obj):

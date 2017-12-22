@@ -1,6 +1,7 @@
 """
 Collection of functions and classes that can be used anywhere.
 """
+import math
 import uuid
 import logging
 from typing import (
@@ -43,6 +44,16 @@ def iterable_to_set(iterable):
 def tail(n: int, iterable: Iterable):
     """Return an iterator over the last `n` items"""
     return iter(collections.deque(iterable, maxlen=n))
+
+def digits(n: int) -> int:
+    """Returns the number of digits in an `int`"""
+    if n > 0:
+        return int(math.log10(n)) + 1
+    elif n == 0:
+        return 1
+    else:
+        return int(math.log10(-n)) + 2
+
 
 
 class Borg(object):

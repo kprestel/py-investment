@@ -17,6 +17,8 @@ from pytech.utils.enums import (
 )
 import datetime as dt
 
+import pytech.utils as utils
+
 class TestOrder(object):
     """Tests for the base order class"""
     def test_get_order(self):
@@ -53,8 +55,7 @@ class TestMarketOrder(object):
         assert market_buy_order.qty == 100
         assert market_buy_order.id == '1'
         assert market_buy_order.status is OrderStatus.OPEN
-        assert market_buy_order.created == (pd.Timestamp(created)
-                                            .replace(tzinfo=pytz.UTC))
+        assert market_buy_order.created == utils.parse_date(created)
         assert market_buy_order.order_type is OrderType.MARKET
         assert market_buy_order.check_triggers(123, dt.datetime.now())
 

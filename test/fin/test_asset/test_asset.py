@@ -17,10 +17,11 @@ class TestStock(object):
 
     def test_avg_return(self, fb: Stock):
         ret = fb.avg_return()
-        expected = 0.28324148486970485
+        expected = 0.22356025708184016
         assert expected == pytest.approx(ret)
 
     def test_cagr(self, fb: Stock):
         cagr = fb.cagr()
-        assert 0.284574337866 == pytest.approx(cagr)
+        expected = 0.3438747369751147
+        assert expected == pytest.approx(cagr)
 

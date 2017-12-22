@@ -29,7 +29,6 @@ def _calc_beta(df: pd.DataFrame) -> pd.Series:
     market returns in column 0.
     """
     x = df.values[:, [0]]
-    # noinspection PyUnresolvedReferences
     x = np.concatenate([np.ones_like(x), x], axis=1)
     beta = np.linalg.pinv(x.T.dot(x)).dot(x.T).dot(df.values[:, 1:])
     return pd.Series(beta[1], df.columns[1:], name=df.index[-1])
@@ -90,7 +89,6 @@ class Asset(metaclass=ABCMeta):
             subclass and the value is the reference to the class
         :rtype: dict
         """
-
         if subclass_dict is None:
             subclass_dict = {}
         else:

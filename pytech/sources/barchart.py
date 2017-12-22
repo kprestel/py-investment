@@ -1,8 +1,10 @@
 import os
+import pandas as pd
 from typing import Iterable
 
 from sources.restclient import RestClient
 import pytech.utils as utils
+from utils import DateRange
 
 
 class BarChartClient(RestClient):
@@ -44,5 +46,15 @@ class BarChartClient(RestClient):
         resp = self._request(url, params=params)
 
         return resp.json()
+
+    def get_intra_day(self, ticker: str, date_range: DateRange,
+                      freq: str = '5min', persist: bool = True,
+                      **kwargs) -> pd.DataFrame:
+        pass
+
+    def get_historical_data(self, ticker: str, date_range: DateRange,
+                            freq: str = 'Daily', adjusted: bool = True,
+                            persist: bool = True, **kwargs) -> pd.DataFrame:
+        pass
 
 
