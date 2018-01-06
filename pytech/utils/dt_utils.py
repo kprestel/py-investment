@@ -7,6 +7,7 @@ from typing import (
 import pandas as pd
 import pandas_market_calendars as mcal
 import pytz
+from pandas_market_calendars import MarketCalendar
 
 from pytech.exceptions import DateParsingError
 from . import digits
@@ -54,6 +55,8 @@ def parse_date(date_to_parse: date_type,
             raise DateParsingError(date=date_to_parse)
 
     exchange_time = getattr(cal, default_time)
+    if exchange_time.tzinfo is None:
+        exchange_time = exchange_time.replace(tzinfo=cal.tz)
     date_to_parse = replace_time(date_to_parse, exchange_time)
 
     if date_to_parse.tzinfo is None and tz is None:
@@ -65,7 +68,8 @@ def parse_date(date_to_parse: date_type,
 
 
 def replace_time(dt_: Union[dt.date, dt.datetime],
-                 time_: dt.time) -> dt.datetime:
+                 time_: dt.time,
+                 force: bool = False) -> dt.datetime:
     """
     Takes a time object and replaces the `time` of the `dt_` if is it not set
 
@@ -75,9 +79,9 @@ def replace_time(dt_: Union[dt.date, dt.datetime],
     """
     try:
         repl = {}
-        for attr in ("hour", "minute", "second", "microsecond"):
+        for attr in ('hour', 'minute', 'second', 'microsecond', 'tzinfo'):
             value = getattr(dt_, attr, False)
-            if value:
+            if value and not force:
                 repl[attr] = value
             else:
                 repl[attr] = getattr(time_, attr)
@@ -102,7 +106,11 @@ def get_default_date(is_start_date):
 
 
 def sanitize_dates(start: date_type,
-                   end: date_type) -> Tuple[dt.datetime, dt.datetime]:
+                   end: date_type,
+                   exchange: Union[str, MarketCalendar] = 'NYSE',
+                   tz: pytz.timezone = None,
+                   default_time: str = 'close_time') -> Tuple[
+    dt.datetime, dt.datetime]:
     """
     Return a tuple of (start, end)
 
@@ -110,16 +118,21 @@ def sanitize_dates(start: date_type,
     if end is `None` then default is today.
     """
 
+    def _parse_date(dt_):
+        return parse_date(dt_, exchange=exchange,
+                          tz=tz, default_time=default_time)
+
     def int_to_dt(n):
         digits_ = digits(n)
         if digits_ == 4:
             # treat ints as a year
-            return parse_date(dt.datetime(n, 1, 1))
+            return _parse_date(dt.datetime(n, 1, 1))
+
         else:
-            return parse_date(n)
+            return _parse_date(n)
 
     try:
-        start = parse_date(start)
+        start = _parse_date(start)
     except DateParsingError as e:
         if start is None:
             start = dt.datetime(2010, 1, 1)
@@ -127,43 +140,82 @@ def sanitize_dates(start: date_type,
             start = int_to_dt(start)
         else:
             raise e
-        start = parse_date(start)
+        start = _parse_date(start)
+
+    if not is_trade_day(start, exchange=exchange):
+        start = prev_trade_day(start, exchange)
 
     try:
-        end = parse_date(end)
+        end = _parse_date(end)
     except DateParsingError as e:
         if end is None:
             end = dt.datetime.now(pytz.UTC)
-            end = prev_weekday(end)
         elif isinstance(end, int):
             end = int_to_dt(end)
         else:
             raise e
-        end = parse_date(end)
+        end = _parse_date(end)
+
+    if not is_trade_day(end, exchange=exchange):
+        end = prev_trade_day(end, exchange)
+
+    if start >= end:
+        if start.date() == end.date():
+            if not isinstance(exchange, MarketCalendar):
+                exchange = mcal.get_calendar(exchange)
+
+            open_time = getattr(exchange, 'open_time')
+            close_time = getattr(exchange, 'close_time')
+
+            start = replace_time(start, open_time, force=True)
+            end = replace_time(end, close_time, force=True)
+
+            start = start.replace(tzinfo=exchange.tz).astimezone(pytz.UTC)
+
+            if not is_trade_day(start, exchange):
+                start = prev_trade_day(start, exchange=exchange)
+
+            end = end.replace(tzinfo=exchange.tz).astimezone(pytz.UTC)
+
+            if not is_trade_day(end, exchange):
+                end = prev_trade_day(end, exchange=exchange)
+        else:
+            raise ValueError(f'start date: {start} cannot be greater than '
+                             f'or equal to end date: {end}')
 
     return start, end
 
 
-def is_trade_day(a_dt: date_type):
+def is_trade_day(a_dt: date_type, exchange: Union[MarketCalendar, str] = NYSE):
     """
     True if `dt` is a weekday.
 
     Monday = 1
     Sunday = 7
     """
-    return a_dt.isoweekday() < 6 and a_dt.date() not in NYSE.holidays().holidays
+    try:
+        holidays = exchange.holidays().holidays
+    except AttributeError:
+        holidays = mcal.get_calendar(exchange).holidays().holidays
+
+    try:
+        dt_ = a_dt.date()
+    except AttributeError:
+        dt_ = a_dt
+
+    return a_dt.isoweekday() < 6 and dt_ not in holidays
 
 
-def prev_weekday(a_dt: date_type):
+def prev_trade_day(a_dt: date_type, exchange):
     """
     Returns last weekday from a given date.
 
     If the given date is a weekday it will be returned.
     """
-    if is_trade_day(a_dt):
+    if is_trade_day(a_dt, exchange=exchange):
         return a_dt
 
-    while a_dt.isoweekday() > 5:
+    while not is_trade_day(a_dt, exchange=exchange):
         a_dt -= dt.timedelta(days=1)
     return a_dt
 
@@ -187,9 +239,9 @@ class DateRange(object):
 
     def is_trade_day(self, dt: str):
         if dt == 'start':
-            return is_trade_day(self.start)
+            return is_trade_day(self.start, self.cal)
         elif dt == 'end':
-            return is_trade_day(self.end)
+            return is_trade_day(self.end, self.cal)
         else:
             raise ValueError(f'{dt} is not valid. Must be "start" or "end"')
 

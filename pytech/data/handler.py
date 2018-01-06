@@ -14,6 +14,7 @@ from typing import (
 
 import numpy as np
 import pandas as pd
+import pytz
 
 import pytech.utils as utils
 from pytech.backtest.event import MarketEvent
@@ -272,7 +273,7 @@ class Bars(DataHandler):
         except KeyError:
             raise KeyError(f'Could not find {ticker} in latest_ticker_data')
         else:
-            return utils.parse_date(bars_list[-1].name)
+            return utils.parse_date(bars_list[-1].name, tz=pytz.UTC)
 
     def latest_bar_value(self, ticker, col, n=1):
         """

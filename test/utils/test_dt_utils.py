@@ -1,44 +1,67 @@
 import datetime as dt
+from typing import Union
 
-import pytest
-import pytz
 import pandas as pd
 import pandas_market_calendars as mcal
+import pytest
+import pytz
 from hypothesis import (
+    assume,
     given,
-    reproduce_failure,
 )
-from hypothesis.extra.numpy import datetime64_dtypes
-from hypothesis.extra.pytz import timezones
 from hypothesis.strategies import (
-    datetimes,
-    data,
-    sampled_from,
-    one_of,
-    none,
     dates,
+    datetimes,
+    one_of,
+    sampled_from,
 )
 
 import pytech.utils as utils
 
-aware_dts = one_of(datetimes(max_value=dt.datetime.now(),
-                             min_value=dt.datetime(2010, 1, 1),
-                             timezones=one_of(timezones(), none())),
-                   dates(max_value=dt.date.today(), min_value=dt.date.today()))
+dts = one_of(datetimes(max_value=dt.datetime.now(),
+                       min_value=dt.datetime(2010, 1, 1)),
+             dates(max_value=dt.date.today(), min_value=dt.date(2010, 1, 1)))
 
+tzs = sampled_from((pytz.UTC, pytz.timezone('America/New_York'),
+                   pytz.timezone('America/Chicago'),
+                   pytz.timezone('US/Eastern'),
+                   None)
+                   )
 
-@pytest.mark.parametrize('start,end,start_expected,end_expected', [
-    (None, None, dt.datetime(2010, 1, 1),
-     utils.prev_weekday(dt.datetime.today())),
-    (2011, 2016, dt.datetime(2011, 1, 1), dt.datetime(2016, 1, 1)),
-    (dt.datetime(2010, 6, 1), dt.datetime(2017, 1, 1),
-     dt.datetime(2010, 6, 1), dt.datetime(2017, 1, 1))
-])
-def test_sanitize_dates(start, end, start_expected, end_expected):
-    """Check date() to avoid issues with seconds"""
-    start, end = utils.sanitize_dates(start, end)
-    assert start.date() == start_expected.date()
-    assert end.date() == end_expected.date()
+@given(dts, dts, tzs, sampled_from(('NYSE', 'CME', 'ICE')),
+       sampled_from(('close_time', 'open_time')))
+def test_sanitize_dates(start, end, tz, cal, default_time):
+    assume(type(start) == type(end))
+    assume(start < end)
+    if isinstance(start, dt.datetime):
+        start = start.replace(tzinfo=tz)
+        end = end.replace(tzinfo=tz)
+
+    test_start, test_end = utils.sanitize_dates(start, end,
+                                                exchange=cal,
+                                                tz=tz,
+                                                default_time=default_time)
+
+    start = _clean_expected_dt(start, tz, cal, default_time)
+    end = _clean_expected_dt(end, tz, cal, default_time)
+
+    if not utils.is_trade_day(start, exchange=cal):
+        start = utils.prev_trade_day(start, exchange=cal)
+
+    if not utils.is_trade_day(end, exchange=cal):
+        end = utils.prev_trade_day(end, exchange=cal)
+
+    if start >= end:
+        start = _clean_expected_dt(start, tz, cal, 'open_time', force=True)
+        if not utils.is_trade_day(start, exchange=cal):
+            start = utils.prev_trade_day(start, exchange=cal)
+
+        end = _clean_expected_dt(end, tz, cal, 'close_time', force=True)
+        if not utils.is_trade_day(end, exchange=cal):
+            end = utils.prev_trade_day(end, exchange=cal)
+
+    assert start == test_start
+    assert end == test_end
 
 
 @pytest.mark.parametrize('adate,expected', [
@@ -54,7 +77,7 @@ def test_is_weekday(adate, expected):
     (dt.datetime(2017, 5, 7), dt.datetime(2017, 5, 5))
 ])
 def test_prev_weekday(adate, expected):
-    assert utils.prev_weekday(adate) == expected
+    assert utils.prev_trade_day(adate, 'NYSE') == expected
 
 
 @pytest.mark.parametrize('dt,expected,exchange,tz', [
@@ -70,30 +93,41 @@ def test_parse_date_(dt, expected, exchange, tz):
     assert test_dt == expected
 
 
-@given(aware_dts, timezones(), data(),
-       sampled_from(('close_time', 'open_time')))
-def test_parse_date(dt_, tz1, data, default_time):
-    cal = data.draw(sampled_from(('NYSE', 'CME', 'ICE')))
-    try:
-        tz1 = dt_.tzinfo
-    except AttributeError:
-        tz1 = None
-    test = utils.parse_date(dt_, exchange=cal, tz=tz1,
-                            default_time=default_time)
+def _clean_expected_dt(dt_: Union[dt.datetime, dt.date],
+                       tz1: pytz.timezone,
+                       cal: str,
+                       default_time: str,
+                       force: bool = False):
     cal = mcal.get_calendar(cal)
     exchange_time = getattr(cal, default_time)
+    if exchange_time.tzinfo is None:
+        exchange_time = exchange_time.replace(tzinfo=cal.tz)
     if isinstance(dt_, dt.date) and not isinstance(dt_, dt.datetime):
         dt_ = dt.datetime(dt_.year, dt_.month, dt_.day, exchange_time.hour,
                           exchange_time.minute, exchange_time.second,
                           exchange_time.microsecond, tzinfo=cal.tz)
         dt_ = dt_.astimezone(pytz.UTC)
     elif isinstance(dt_, dt.datetime):
-        dt_ = utils.replace_time(dt_, exchange_time)
+        dt_ = utils.replace_time(dt_, exchange_time, force)
+        # dt_ = dt_.replace(tzinfo=cal.tz).astimezone(pytz.UTC)
         if dt_.tzinfo is None and tz1 is None:
             dt_ = dt_.replace(tzinfo=cal.tz)
         elif dt_.tzinfo is None:
             dt_ = dt_.replace(tzinfo=tz1)
         dt_ = dt_.astimezone(pytz.UTC)
+    return dt_
+
+
+@given(dts, sampled_from(('NYSE', 'CME', 'ICE')),
+       sampled_from(('close_time', 'open_time')))
+def test_parse_date(dt_, cal, default_time):
+    try:
+        tz1 = dt_.tzinfo
+    except AttributeError:
+        tz1 = None
+    test = utils.parse_date(dt_, exchange=cal, tz=tz1,
+                            default_time=default_time)
+    dt_ = _clean_expected_dt(dt_, tz1, cal, default_time)
     assert test == dt_
 
 

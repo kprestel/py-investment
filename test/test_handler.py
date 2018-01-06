@@ -1,4 +1,5 @@
 import pytest
+import pytz
 from pytest import approx
 import pandas as pd
 import pytech.utils.pdutils as pd_utils
@@ -42,10 +43,10 @@ class TestYahooDataHandler(object):
         assert bars is not None
         # yahoo_data_handler.update_bars()
         aapl_close = (bars.latest_bar_value('AAPL', pd_utils.CLOSE_COL))
-        aapl_close_expected = 145.74
+        aapl_close_expected = 145.21
         assert aapl_close == approx(aapl_close_expected)
         aapl_open = (bars.latest_bar_value('AAPL', pd_utils.OPEN_COL))
-        aapl_open_expected = 145.74
+        aapl_open_expected = 145.21
         assert aapl_open == approx(aapl_open_expected)
 
         fb_close = (bars.latest_bar_value('FB', pd_utils.CLOSE_COL))
@@ -60,7 +61,7 @@ class TestYahooDataHandler(object):
 
         aapl_close = (bars.latest_bar_value(
                 'AAPL', pd_utils.CLOSE_COL))
-        aapl_close_expected = 145.74
+        aapl_close_expected = 145.21
         assert aapl_close == approx(aapl_close_expected)
 
         fb_close = (bars.latest_bar_value(
@@ -78,17 +79,20 @@ class TestYahooDataHandler(object):
         :param Bars bars:
         """
         test_date = bars.get_latest_bar_dt('AAPL')
-        assert test_date == dt_utils.parse_date('2017-06-26 21:12:00')
+        expected = dt_utils.parse_date('2017-06-20 15:44:00', tz=pytz.UTC)
+        assert expected == test_date
 
         bars.update_bars()
 
         test_date = bars.get_latest_bar_dt('AAPL')
-        assert test_date == dt_utils.parse_date('2017-06-26 21:13:00')
+        expected = dt_utils.parse_date('2017-06-20 15:45:00', tz=pytz.UTC)
+        assert expected == test_date
 
         bars.update_bars()
 
         test_date = bars.get_latest_bar_dt('AAPL')
-        assert test_date == dt_utils.parse_date('2017-06-26 21:14:00')
+        expected = dt_utils.parse_date('2017-06-20 15:46:00', tz=pytz.UTC)
+        assert expected == test_date
 
     def test_get_latest_bar(self, bars):
         """
@@ -98,15 +102,17 @@ class TestYahooDataHandler(object):
         :return:
         """
         bar = bars.get_latest_bar('AAPL')
-        dt = dt_utils.parse_date(bar.name)
-        adj_close = bar[pd_utils.CLOSE_COL]
-        aapl_close_expected = 145.74
-        assert dt == dt_utils.parse_date('2017-06-26 21:12:00')
-        assert adj_close == approx(aapl_close_expected)
+        dt = dt_utils.parse_date(bar.name, tz=pytz.UTC)
+        close = bar[pd_utils.CLOSE_COL]
+        aapl_close_expected = 145.21
+        expected_dt = dt_utils.parse_date('2017-06-20 15:44:00', tz=pytz.UTC)
+        assert expected_dt == dt
+        assert close == approx(aapl_close_expected)
         bars.update_bars()
         bar = bars.get_latest_bar('AAPL')
-        dt = dt_utils.parse_date(bar.name)
-        assert dt == dt_utils.parse_date('2017-06-26 21:13:00')
+        dt = dt_utils.parse_date(bar.name, tz=pytz.UTC)
+        expected_dt = dt_utils.parse_date('2017-06-20 15:45:00', tz=pytz.UTC)
+        assert expected_dt == dt
 
     def test_make_agg_df(self, bars: Bars):
         """Test creating the agg df"""
