@@ -83,7 +83,11 @@ def write_df(table: str):
             writer(ins)
 
             df.index.freq = BDay()
-            writer.df(df, table)
+            try:
+                writer.df(df, table)
+            except IntegrityError as e:
+                logger.warning(f'Unable to insert df. {e.pgerror}')
+
             return ReaderResult(ticker, df)
 
         return eval_and_write

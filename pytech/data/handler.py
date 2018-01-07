@@ -151,6 +151,8 @@ class Bars(DataHandler):
         """
         comb_index = None
         df_dict = self._get_data()
+        for v in df_dict.values():
+            v.index.name = utils.DATE_COL
         out = {}
 
         for t in self.tickers:

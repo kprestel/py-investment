@@ -80,19 +80,6 @@ def test_prev_weekday(adate, expected):
     assert utils.prev_trade_day(adate, 'NYSE') == expected
 
 
-@pytest.mark.parametrize('dt,expected,exchange,tz', [
-    (dt.datetime(2017, 6, 1), dt.datetime(2017, 6, 1, 16, tzinfo=pytz.UTC),
-     'NYSE', pytz.UTC),
-    (dt.datetime(2017, 5, 1), dt.datetime(2017, 5, 1, 16, tzinfo=pytz.UTC),
-     'NYSE', pytz.UTC),
-    (pd.to_datetime(dt.datetime(2017, 6, 1, 20, 56, tzinfo=pytz.UTC)),
-     dt.datetime(2017, 6, 1, 20, 56, tzinfo=pytz.UTC), 'NYSE', pytz.UTC)
-])
-def test_parse_date_(dt, expected, exchange, tz):
-    test_dt = utils.parse_date(date_to_parse=dt, exchange=exchange, tz=tz)
-    assert test_dt == expected
-
-
 def _clean_expected_dt(dt_: Union[dt.datetime, dt.date],
                        tz1: pytz.timezone,
                        cal: str,
@@ -109,7 +96,6 @@ def _clean_expected_dt(dt_: Union[dt.datetime, dt.date],
         dt_ = dt_.astimezone(pytz.UTC)
     elif isinstance(dt_, dt.datetime):
         dt_ = utils.replace_time(dt_, exchange_time, force)
-        # dt_ = dt_.replace(tzinfo=cal.tz).astimezone(pytz.UTC)
         if dt_.tzinfo is None and tz1 is None:
             dt_ = dt_.replace(tzinfo=cal.tz)
         elif dt_.tzinfo is None:

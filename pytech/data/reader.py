@@ -267,8 +267,8 @@ def _concat_dfs(lower_df: pd.DataFrame,
     """
 
     def do_concat(*args) -> pd.DataFrame:
-        # noinspection PyTypeChecker
-        return pd.concat(list(args), join='inner', axis=0)
+        dfs = [x for x in args if not x.empty or x is None]
+        return pd.concat(dfs, join='inner', axis=0)
 
     if lower_df is None and upper_df is None:
         return df
@@ -280,16 +280,3 @@ def _concat_dfs(lower_df: pd.DataFrame,
         return do_concat(df, upper_df, lower_df)
     else:
         return df
-
-
-def load_from_csv(path: str,
-                  start: dt.datetime = None,
-                  end: dt.datetime = None) -> None:
-    """
-    Load a list of tickers from a CSV, and download the data for the
-    requested period.
-
-    :param path: The path to the CSV file.
-    :param start: The start date to use for the data download.
-    :param end: The end date to use for the data download.
-    """

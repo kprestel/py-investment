@@ -4,6 +4,7 @@ return values these functions easier.
 """
 
 import pandas as pd
+import pytech.utils as utils
 
 
 class ReaderResult(object):
@@ -28,3 +29,11 @@ class ReaderResult(object):
             self.df = df
         self.ticker = ticker
         self.successful = successful
+        self._validate_df()
+
+    def _validate_df(self):
+        if self.df.empty:
+            return
+
+        if isinstance(self.df.index, pd.DatetimeIndex):
+            self.df.index.name = utils.DATE_COL

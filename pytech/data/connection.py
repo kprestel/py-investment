@@ -150,6 +150,7 @@ class write(sqlaction):
             raise NotImplementedError(
                 'Fixing IntegrityErrors is only implemented for '
                 'the bar table currently.') from exception
+
         self.logger.info(f'Handling IntegrityError. Attempting to insert new '
                          'rows only.')
 
@@ -158,6 +159,7 @@ class write(sqlaction):
         except KeyError:
             raise KeyError(
                 f'Must have {utils.TICKER_COL} to be inserted.') from exception
+
         q = sa.select([bars]).where(bars.c.ticker == ticker)
         with self.engine.begin() as conn:
             parse_dt_args = {
@@ -171,15 +173,27 @@ class write(sqlaction):
 
         db_df = db_df.dropna(axis=1, how='all')
         db_cols = set(db_df.columns.tolist())
+
+        if db_df.index.name == 'date':
+            db_cols.add('date')
+
         out_cols = set(out_df.columns.tolist())
+
         if db_cols != out_cols:
             final_df = out_df
         else:
             out_df = out_df.set_index(utils.DATE_COL)
             final_df = out_df[~out_df.index.isin(db_df.index)]
 
+        if final_df.empty:
+            self.logger.info('No new data inserted into db.')
+            return
+
         io_ = StringIO()
         final_df = final_df.fillna('NULL')
+        if utils.DATE_COL not in final_df.columns:
+            if utils.DATE_COL == final_df.index.name:
+                final_df.insert(0, utils.DATE_COL, final_df.index)
         final_df.to_csv(io_, index=False, header=False)
         io_.getvalue()
         io_.seek(0)
