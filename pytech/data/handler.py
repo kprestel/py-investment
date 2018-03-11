@@ -32,9 +32,7 @@ class DataHandler(metaclass=ABCMeta):
     def __init__(self,
                  events: queue.Queue,
                  tickers: Iterable[str],
-                 date_range: DateRange,
-                 asset_lib_name: str = 'pytech.bars',
-                 market_lib_name: str = 'pytech.market') -> None:
+                 date_range: DateRange) -> None:
         """
         All child classes MUST call this constructor.
 
@@ -52,12 +50,9 @@ class DataHandler(metaclass=ABCMeta):
         self.events: queue.Queue = events
         self.tickers: List[str] = []
         self.tickers.extend(tickers)
-        # self._ticker_data = {}
         self.latest_ticker_data = {}
         self.continue_backtest: bool = True
         self.date_range: DateRange = date_range or DateRange()
-        self.asset_lib_name: str = asset_lib_name
-        self.market_lib_name: str = market_lib_name
         self.asset_reader: BarReader = BarReader()
         self.mkt_reader: BarReader = BarReader()
 
@@ -134,15 +129,11 @@ class Bars(DataHandler):
                  events: queue.Queue,
                  tickers: Iterable,
                  date_range: DateRange,
-                 source: str = 'yahoo',
-                 asset_lib_name: str = 'pytech.bars',
-                 market_lib_name: str = 'pytech.market'):
+                 source: str = 'yahoo'):
         self.source = source
         super().__init__(events=events,
                          tickers=tickers,
-                         date_range=date_range,
-                         asset_lib_name=asset_lib_name,
-                         market_lib_name=market_lib_name)
+                         date_range=date_range)
 
     def _populate_ticker_data(self) -> Dict[str, Iterable[pd.Series]]:
         """
@@ -158,17 +149,25 @@ class Bars(DataHandler):
         for t in self.tickers:
             out[t] = df_dict[t]
 
-            # TODO needed?
             if comb_index is None:
-                comb_index = out[t].index.get_level_values(utils.DATE_COL)
+                comb_index = out[t].index
             else:
-                comb_index.union(out[t].index.get_level_values(utils.DATE_COL))
+                comb_index = comb_index ^ out[t].index
 
             self.latest_ticker_data[t] = []
 
+        comb_index = comb_index[~comb_index.duplicated(keep='first')]
+
         for t in self.tickers:
+            out[t] = out[t][~out[t].index.duplicated(keep='first')]
+            # TODO: back filling is not the best behavior I don't think but
+            # I don't know the correct behavior.
+            # The issue is that sometimes a ticker(s) will have more data than
+            # the rest and that breaks things.
+            # method='pad' is the desired behavior I think but there are too
+            # many implications of that. Need to think through this.
+            out[t] = out[t].reindex(comb_index, method='bfill')
             out[t] = out[t].iterrows()
-            # self.ticker_data[t] = (self.ticker_data[t].iterrows())
         return out
 
     @memoize
@@ -293,7 +292,6 @@ class Bars(DataHandler):
         except KeyError:
             raise KeyError(f'Could not find {ticker} in latest_ticker_data')
 
-        # ADJ_CLOSE is only in data from yahoo
         if hasattr(bars_list[-1], col):
             return np.array([getattr(bar, col) for bar in bars_list])
         elif col == utils.ADJ_CLOSE_COL and hasattr(bars_list[-1],

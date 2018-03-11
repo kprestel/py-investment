@@ -2,9 +2,9 @@ import os
 import pandas as pd
 from typing import Iterable
 
-from sources.restclient import RestClient
+from pytech.sources.restclient import RestClient
 import pytech.utils as utils
-from utils import DateRange
+from pytech.utils import DateRange
 
 
 class BarChartClient(RestClient):

@@ -2,13 +2,13 @@ from typing import Dict
 
 import numpy as np
 import pytest
-from fin.asset.owned_asset import OwnedAsset
+from pytech.fin.asset.owned_asset import OwnedAsset
 from pytech.backtest.event import MarketEvent
 from pytech.fin.portfolio import BasicPortfolio
 from pytech.fin.portfolio.portfolio import (
     Portfolio,
 )
-from utils.enums import Position
+from pytech.utils.enums import Position
 
 
 class TestBasicPortfolio(object):

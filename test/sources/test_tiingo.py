@@ -2,7 +2,7 @@
 import datetime as dt
 import pytest
 from pytech.sources.tiingo import TiingoClient
-from utils import DateRange
+from pytech.utils import DateRange
 
 
 class TestTiingoClient(object):

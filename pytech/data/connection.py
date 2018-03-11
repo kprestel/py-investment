@@ -302,11 +302,12 @@ class reader(sqlaction):
 
     def df(self, query: Select, *args, **kwargs):
         with self.engine.begin() as conn:
-            df = pd.read_sql_query(query, conn)
-            try:
-                df = utils.parse_date_col(df)
-            except KeyError:
-                logging.info(f'No {utils.DATE_COL} found in df.')
-            else:
-                df.index = df.date
+            df = pd.read_sql_query(query, conn, index_col='date',
+                                   parse_dates={
+                                       'date': {
+                                           'utc': True,
+                                           'format': '%Y-%m-%d %H:%M%S'
+                                       }
+                                   })
+            df = df.sort_index()
             return df

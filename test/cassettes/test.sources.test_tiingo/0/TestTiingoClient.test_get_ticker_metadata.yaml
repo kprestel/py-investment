@@ -22,13 +22,13 @@ interactions:
         its products worldwide through its retail stores, online stores, and direct
         sales force, as well as through third-party cellular network carriers, wholesalers,
         retailers, and value-added resellers. In February 2012, the Company acquired
-        app-search engine Chomp.","startDate":"1980-12-12","endDate":"2017-12-21","name":"Apple
+        app-search engine Chomp.","startDate":"1980-12-12","endDate":"2018-01-12","name":"Apple
         Inc","exchangeCode":"NASDAQ","ticker":"AAPL"}'}
     headers:
       Allow: ['GET, HEAD, OPTIONS']
       Content-Length: ['1066']
       Content-Type: [application/json]
-      Date: ['Fri, 22 Dec 2017 15:20:49 GMT']
+      Date: ['Sun, 14 Jan 2018 17:18:16 GMT']
       Server: [nginx/1.10.1]
       Vary: ['Accept, Cookie']
       X-Frame-Options: [SAMEORIGIN]

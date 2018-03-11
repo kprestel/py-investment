@@ -171,15 +171,20 @@ class BarReader(object):
                   **kwargs) -> ReaderResult:
         """Retrieve data from a web source"""
         _ = kwargs.pop('columns', None)
+        freq = kwargs.pop('freq', '1min')
 
         try:
-            df = self.tiingo.get_intra_day(ticker, date_range, freq='1min')
+            df = self.tiingo.get_intra_day(ticker, date_range, freq=freq)
             if df.empty:
                 raise RestClientError(f'df retrieved was empty for '
                                       f'ticker: {ticker}.')
         except RestClientError as e:
-            logger.exception(e)
-            return ReaderResult(ticker, successful=False)
+            logger.warning(f'Unable to retrieve intra day data for '
+                           f'ticker: {ticker}. Attempting to get historical '
+                           f'data.')
+            df = self.tiingo.get_historical_data(ticker, date_range)
+            if df.empty:
+                return ReaderResult(ticker, successful=False)
 
         df = utils.rename_bar_cols(df)
         df[utils.TICKER_COL] = ticker

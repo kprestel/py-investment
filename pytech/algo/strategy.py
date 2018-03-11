@@ -8,7 +8,7 @@ from queue import Queue
 import pandas as pd
 
 import pytech.utils.pdutils as pd_utils
-from exceptions import InvalidEventTypeError
+from pytech.exceptions import InvalidEventTypeError
 from pytech.backtest.event import (
     MarketEvent,
     SignalEvent,

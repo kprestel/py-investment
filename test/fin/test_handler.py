@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
-from backtest.event import SignalEvent
-from fin.portfolio.handler import (
+from pytech.backtest.event import SignalEvent
+from pytech.fin.portfolio.handler import (
     SignalHandler,
     BasicSignalHandler,
 )

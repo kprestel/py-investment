@@ -11,16 +11,6 @@ from pytech.data.handler import DataHandler, Bars
 class TestDataHandler(object):
     """Test the base abstract class"""
 
-    def test_constructor(self):
-        """Should always raise a TypeError because it is an abstract class."""
-        with pytest.raises(TypeError):
-            DataHandler()
-
-
-# noinspection PyTypeChecker
-class TestYahooDataHandler(object):
-    """Test the :class:`YahooDataHandler`"""
-
     def test_constructor(self, events, ticker_list, date_range):
         """Test the constructor"""
         handler = Bars(events, ticker_list, date_range)
@@ -42,31 +32,31 @@ class TestYahooDataHandler(object):
         """
         assert bars is not None
         # yahoo_data_handler.update_bars()
-        aapl_close = (bars.latest_bar_value('AAPL', pd_utils.CLOSE_COL))
-        aapl_close_expected = 145.21
-        assert aapl_close == approx(aapl_close_expected)
+        aapl_close = bars.latest_bar_value('AAPL', pd_utils.CLOSE_COL)
+        aapl_close_expected = 143.93
+        assert approx(aapl_close_expected) == aapl_close
         aapl_open = (bars.latest_bar_value('AAPL', pd_utils.OPEN_COL))
-        aapl_open_expected = 145.21
-        assert aapl_open == approx(aapl_open_expected)
+        aapl_open_expected = 143.87
+        assert approx(aapl_open_expected) == aapl_open
 
         fb_close = (bars.latest_bar_value('FB', pd_utils.CLOSE_COL))
-        fb_close_expected = 38.23
+        fb_close_expected = 142.28
         assert fb_close == approx(fb_close_expected)
 
         fb_open = (bars.latest_bar_value('FB', pd_utils.OPEN_COL))
-        fb_open_expected = 42.05
+        fb_open_expected = 141.93
         assert fb_open == approx(fb_open_expected)
 
         bars.update_bars()
 
         aapl_close = (bars.latest_bar_value(
                 'AAPL', pd_utils.CLOSE_COL))
-        aapl_close_expected = 145.21
+        aapl_close_expected = 143.93
         assert aapl_close == approx(aapl_close_expected)
 
         fb_close = (bars.latest_bar_value(
                 'FB', pd_utils.CLOSE_COL))
-        fb_close_expected = 34.03
+        fb_close_expected = 141.73
         assert fb_close == approx(fb_close_expected)
 
         with pytest.raises(KeyError):

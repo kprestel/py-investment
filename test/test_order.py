@@ -1,9 +1,7 @@
 # noinspection PyUnresolvedReferences
 import pytest
-import pandas as pd
-import pytz
 
-from backtest.event import SignalEvent
+from pytech.backtest.event import SignalEvent
 from pytech.trading.order import (
     Order,
     MarketOrder,

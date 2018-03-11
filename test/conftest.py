@@ -18,7 +18,42 @@ from pytech.fin.portfolio import BasicPortfolio
 from pytech.fin.portfolio.handler import BasicSignalHandler
 from pytech.trading.controls import MaxOrderCount
 from pytech.utils import DateRange
+import pytech.data.schema as schema
+from testing.postgresql import Postgresql
 
+
+
+@pytest.fixture(scope='session')
+def database_uri(pg_server):
+    print(pg_server)
+    with Postgresql(
+            postgres_args='-c TimeZone=UTC '
+                          '-c fsync=off '
+                          '-c synchronous_commit=off '
+                          '-c full_page_writes=off '
+                          '-c checkpoint_timeout=30min '
+                          '-c bgwriter_delay=10000ms') as pgdb:
+        yield pgdb.url()
+
+
+
+
+@pytest.fixture(autouse=True)
+def init_db(postgresql_db):
+    engine = postgresql_db.engine
+    schema.trade_actions.create(bind=engine)
+    schema.order_types.create(bind=engine)
+    schema.order_sub_types.create(bind=engine)
+    postgresql_db.create_table(schema.assets)
+    postgresql_db.create_table(schema.orders)
+    postgresql_db.create_table(schema.trade)
+    postgresql_db.create_table(schema.bars)
+    postgresql_db.create_table(schema.portfolio)
+    postgresql_db.create_table(schema.transaction)
+    postgresql_db.create_table(schema.ownership)
+    postgresql_db.create_table(schema.asset_snapshot)
+    postgresql_db.create_table(schema.portfolio_snapshot)
+    postgresql_db.install_extension('timescaledb')
 
 @pytest.fixture
 def vcr_config():
@@ -37,18 +72,16 @@ def vcr_cassette_path(request, vcr_cassette_name):
     from the project root dir.
     """
     return os.path.join('test', 'cassettes', request.module.__name__,
-                        vcr_cassette_name)
+                        str(request.param_index), vcr_cassette_name)
 
 
 @pytest.fixture(scope='session')
 def start_date():
-    # return '2016-03-08'
     return '2012-01-01'
 
 
 @pytest.fixture(scope='session')
 def end_date():
-    # return '2017-06-09'
     return '2017-12-01'
 
 

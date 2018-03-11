@@ -1,9 +1,8 @@
 # noinspection PyUnresolvedReferences
 import pytest
-import vcr
 
-from sources.alphavantage import AlphaVantageClient
-from utils import DateRange
+from pytech.sources.alphavantage import AlphaVantageClient
+from pytech.utils import DateRange
 
 
 class TestAlphaVantage(object):

@@ -1,0 +1,6 @@
+FROM timescale/timescaledb:latest
+COPY create-user.sh /docker-entrypoint-initdb.d/create-user.sh
+RUN chmod +x /docker-entrypoint-initdb.d/create-user.sh
+
+ENTRYPOINT ["./backup_init.sh"]
+CMD ["postgres"]

@@ -1,0 +1,14 @@
+version: '3.1'
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile-test
+    container_name: pytech-test
+#    image: timescale/timescaledb
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: 'postgres'
+      POSTGRES_PASSWORD: 'postgres'
