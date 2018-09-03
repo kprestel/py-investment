@@ -9,5 +9,8 @@ from .connection import (
 from .reader import BarReader
 from .schema import metadata
 
-metadata.create_all(sa.create_engine('postgresql+psycopg2://',
+try:
+    metadata.create_all(sa.create_engine('postgresql+psycopg2://',
                                      creator=getconn), checkfirst=True)
+except:
+    pass

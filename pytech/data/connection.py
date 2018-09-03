@@ -24,7 +24,10 @@ from sqlalchemy.dialects.postgresql import (
     Insert,
     insert,
 )
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import (
+    IntegrityError,
+    OperationalError,
+)
 from sqlalchemy.sql import (
     Delete,
     Select,
@@ -70,16 +73,25 @@ def getconn():
 
 
 class sqlaction(metaclass=ABCMeta):
-    _engine = sa.create_engine('postgresql+psycopg2://', creator=getconn,
-                               echo=True)
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        metadata.create_all(self._engine, checkfirst=True)
+        self._tables_created = None
+
+    def _create_tables(self) -> None:
+        if self._tables_created:
+            return
+        try:
+            metadata.create_all(self.engine, checkfirst=True)
+            self._tables_created = True
+        except OperationalError:
+            self._tables_created = False
 
     @utils.class_property
     @classmethod
     def engine(cls):
+        cls._engine = sa.create_engine('postgresql+psycopg2://', creator=getconn,
+                                   echo=True)
         return cls._engine
 
 
@@ -91,6 +103,9 @@ class write(sqlaction):
                  vals: Dict[str, Any] = None,
                  *args,
                  **kwargs):
+        if not self._tables_created:
+            self._create_tables()
+
         with self.engine.begin() as conn:
             try:
                 if vals is None:
@@ -106,13 +121,13 @@ class write(sqlaction):
         try:
             out_df[utils.VOL_COL] = out_df[utils.VOL_COL].astype(dtype='int64')
         except KeyError:
-            pass
+            self.logger.debug(f"Couldn't find {utils.VOL_COL} in out_df.")
 
         out_df = out_df.dropna()
         try:
             out_df = out_df[out_df[utils.FROM_DB_COL] == False]
         except KeyError:
-            pass
+            self.logger.debug(f"Couldn't find {utils.FROM_DB_COL} in out_df.")
 
         out_cols = set(out_df.columns)
         drop_cols = out_cols.difference(utils.COLS)
@@ -248,7 +263,7 @@ class write(sqlaction):
         elif on_conflict is None:
             ins = ins.on_conflict_do_nothing(constraint='portfolio_pkey')
 
-        return self._do_insert(ins)
+        return self(ins)
 
     def portfolio_snapshot(self, portfolio_: 'Portfolio',
                            cur_dt: 'utils.date_type'):
@@ -267,7 +282,7 @@ class write(sqlaction):
                                              cash=portfolio_.cash,
                                              equity=portfolio_.equity,
                                              commission=portfolio_.total_commission)))
-        return self._do_insert(ins)
+        return self(ins)
 
     def owned_asset_snapshot(self, assets: Iterable['OwnedAsset'],
                              portfolio_id: str,
@@ -285,10 +300,6 @@ class write(sqlaction):
                     for asset in assets
                 ])
 
-    def _do_insert(self, ins: Insert):
-        with self.engine.begin() as conn:
-            res = conn.execute(ins)
-            return res
 
 
 class reader(sqlaction):

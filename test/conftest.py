@@ -36,9 +36,11 @@ def database_uri(pg_server):
         yield pgdb.url()
 
 
+@pytest.fixture(scope='session', autouse=True)
+def docker_db(docker_db):
+    return docker_db
 
-
-@pytest.fixture(autouse=True)
+@pytest.fixture()
 def init_db(postgresql_db):
     engine = postgresql_db.engine
     schema.trade_actions.create(bind=engine)

@@ -39,7 +39,8 @@ class TestWrite(object):
 
 
 class TestRead(object):
-    reader_ = reader()
-    q = select([portfolio])
-    for row in reader_(q):
-        assert row is not None
+    def test_read(self):
+        reader_ = reader()
+        q = select([portfolio])
+        for row in reader_(q):
+            assert row is not None

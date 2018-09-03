@@ -35,11 +35,11 @@ class TestDataHandler(object):
         aapl_close = bars.latest_bar_value('AAPL', pd_utils.CLOSE_COL)
         aapl_close_expected = 143.93
         assert approx(aapl_close_expected) == aapl_close
-        aapl_open = (bars.latest_bar_value('AAPL', pd_utils.OPEN_COL))
+        aapl_open = bars.latest_bar_value('AAPL', pd_utils.OPEN_COL)
         aapl_open_expected = 143.87
         assert approx(aapl_open_expected) == aapl_open
 
-        fb_close = (bars.latest_bar_value('FB', pd_utils.CLOSE_COL))
+        fb_close = bars.latest_bar_value('FB', pd_utils.CLOSE_COL)
         fb_close_expected = 142.28
         assert fb_close == approx(fb_close_expected)
 
@@ -49,13 +49,11 @@ class TestDataHandler(object):
 
         bars.update_bars()
 
-        aapl_close = (bars.latest_bar_value(
-                'AAPL', pd_utils.CLOSE_COL))
+        aapl_close = bars.latest_bar_value('AAPL', pd_utils.CLOSE_COL)
         aapl_close_expected = 143.93
         assert aapl_close == approx(aapl_close_expected)
 
-        fb_close = (bars.latest_bar_value(
-                'FB', pd_utils.CLOSE_COL))
+        fb_close = bars.latest_bar_value('FB', pd_utils.CLOSE_COL)
         fb_close_expected = 141.73
         assert fb_close == approx(fb_close_expected)
 

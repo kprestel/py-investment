@@ -1,0 +1,9 @@
+{
+  "test/data/test_readers.py::TestBarReader::()::test_get_data[FB]": true,
+  "test/data/test_readers.py::TestBarReader::()::test_get_data[MSFT]": true,
+  "test/fin/test_asset/test_asset.py::TestStock::()::test_avg_return": true,
+  "test/fin/test_asset/test_asset.py::TestStock::()::test_cagr": true,
+  "test/test_handler.py::TestDataHandler::()::test_get_latest_bar": true,
+  "test/test_handler.py::TestDataHandler::()::test_get_latest_bar_dt": true,
+  "test/test_handler.py::TestDataHandler::()::test_get_latest_bar_value": true
+}
