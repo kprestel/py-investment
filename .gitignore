@@ -10,6 +10,7 @@ pip-selfcheck.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *$py.class
+*.egg-info/
 
 # C extensions
 .idea
@@ -46,6 +47,8 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
+.pytest_cache/
+.pytest_cache/*
 
 # Translations
 # Django stuff:

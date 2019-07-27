@@ -10,8 +10,6 @@ clean-pyc:
 
 test-cmd:
 	python -m pytest --verbose  --vcr-record-mode=new_episodes --color=yes \
-	--pg-extensions=timescaledb --pg-image=timescaledb/timescaledb:latest \
-	--pg-name:pytech-test --pg-reuse \
 	$(TEST_PATH)
 
 

@@ -1,6 +1,8 @@
-FROM timescale/timescaledb:latest
-COPY create-user.sh /docker-entrypoint-initdb.d/create-user.sh
-RUN chmod +x /docker-entrypoint-initdb.d/create-user.sh
+FROM timescale/timescaledb:latest-pg9.6
+# COPY create-user.sh /docker-entrypoint-initdb.d/create-user.sh
+# RUN chmod +x /docker-entrypoint-initdb.d/create-user.sh
+ENV POSTGRES_USER=pytech \
+POSTGRES_PASSWORD=pytech
 
-ENTRYPOINT ["./backup_init.sh"]
-CMD ["postgres"]
+#ENTRYPOINT ["./backup_init.sh"]
+#CMD ["postgres"]

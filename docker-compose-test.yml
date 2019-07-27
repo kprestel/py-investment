@@ -6,9 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile-test
     container_name: pytech-test
-#    image: timescale/timescaledb
+    image: timescale/timescaledb
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: 'postgres'
-      POSTGRES_PASSWORD: 'postgres'
+      POSTGRES_USER: 'pytech'
+      POSTGRES_PASSWORD: 'pytech'
