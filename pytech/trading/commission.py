@@ -26,7 +26,7 @@ class AbstractCommissionModel(metaclass=ABCMeta):
         :rtype: float or None
         """
 
-        raise (NotImplementedError('calculate must be overridden'))
+        raise (NotImplementedError("calculate must be overridden"))
 
 
 class PerOrderCommissionModel(AbstractCommissionModel):

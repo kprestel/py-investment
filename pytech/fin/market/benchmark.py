@@ -3,7 +3,7 @@ import pandas_datareader.data as web
 
 
 class BenchMark(object):
-    def __init__(self, start_date=None, end_date=None, ticker='^GPSC'):
+    def __init__(self, start_date=None, end_date=None, ticker="^GPSC"):
 
         if start_date is None:
             self.start_date = dt_utils.get_default_date(is_start_date=True)
@@ -17,5 +17,6 @@ class BenchMark(object):
 
         self.ticker = ticker
 
-        self.ohlcv = web.DataReader(ticker, 'yahoo', start=self.start_date,
-                                    end=self.end_date)
+        self.ohlcv = web.DataReader(
+            ticker, "yahoo", start=self.start_date, end=self.end_date
+        )

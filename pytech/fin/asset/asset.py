@@ -1,9 +1,6 @@
 import datetime as dt
 import logging
-from abc import (
-    ABCMeta,
-    abstractmethod,
-)
+from abc import ABCMeta, abstractmethod
 from typing import Tuple
 
 import numpy as np
@@ -11,15 +8,12 @@ import pandas as pd
 
 import pytech.utils as utils
 from pytech.data import ReaderResult
-from pytech.decorators.decorators import (
-    memoize,
-    write_df,
-)
+from pytech.decorators.decorators import memoize, write_df
 from pytech.data.reader import BarReader
 from pytech.fin.market.market import Market
 from pytech.utils import DateRange
 
-BETA_STORE = 'pytech.beta'
+BETA_STORE = "pytech.beta"
 
 
 def _calc_beta(df: pd.DataFrame) -> pd.Series:
@@ -55,9 +49,7 @@ class Asset(metaclass=ABCMeta):
     :class:``~pytech.portfolio.Portfolio`` tries to trade it an exception will occur.
     """
 
-    def __init__(self,
-                 ticker: str,
-                 date_range: DateRange = None):
+    def __init__(self, ticker: str, date_range: DateRange = None):
         self.ticker = ticker
         self.asset_type = self.__class__.__name__
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -73,8 +65,10 @@ class Asset(metaclass=ABCMeta):
         if isinstance(ohlcv, pd.DataFrame) or isinstance(ohlcv, pd.Series):
             self._ohlcv = ohlcv
         else:
-            raise TypeError('data must be a pandas DataFrame or Series. '
-                            f'{type(ohlcv)} was provided.')
+            raise TypeError(
+                "data must be a pandas DataFrame or Series. "
+                f"{type(ohlcv)} was provided."
+            )
 
     @classmethod
     def get_subclass_dict(cls, subclass_dict=None):
@@ -108,10 +102,13 @@ class Asset(metaclass=ABCMeta):
 
 
 class Stock(Asset):
-    def __init__(self, ticker: str,
-                 date_range: DateRange,
-                 source: str = 'yahoo',
-                 lib_name: str = 'pytech.bars'):
+    def __init__(
+        self,
+        ticker: str,
+        date_range: DateRange,
+        source: str = "yahoo",
+        lib_name: str = "pytech.bars",
+    ):
         self.source = source
         self.reader = BarReader()
         self.lib_name = lib_name
@@ -124,10 +121,8 @@ class Stock(Asset):
     def last_price(self, col=utils.CLOSE_COL):
         return self.df[col][-1]
 
-    @write_df('beta')
-    def _rolling_beta(self,
-                      col=utils.CLOSE_COL,
-                      window: int = 30) -> ReaderResult:
+    @write_df("beta")
+    def _rolling_beta(self, col=utils.CLOSE_COL, window: int = 30) -> ReaderResult:
         """
         Calculate the rolling beta over a given window.
 
@@ -137,16 +132,12 @@ class Stock(Asset):
         """
         stock_pct_change = pd.DataFrame(self.returns(col))
         mkt_pct_change = pd.DataFrame(self.market.market[col].pct_change())
-        df: pd.DataFrame = pd.concat([mkt_pct_change, stock_pct_change],
-                                     axis=1)
-        betas = pd.concat([_calc_beta(sdf)
-                           for sdf in utils.roll(df, window)], axis=1).T
-        betas['ticker'] = self.ticker
+        df: pd.DataFrame = pd.concat([mkt_pct_change, stock_pct_change], axis=1)
+        betas = pd.concat([_calc_beta(sdf) for sdf in utils.roll(df, window)], axis=1).T
+        betas["ticker"] = self.ticker
         return ReaderResult(self.ticker, betas)
 
-    def rolling_beta(self,
-                     col=utils.CLOSE_COL,
-                     window: int = 30) -> pd.DataFrame:
+    def rolling_beta(self, col=utils.CLOSE_COL, window: int = 30) -> pd.DataFrame:
         """
         Calculate the rolling beta over a given window.
 

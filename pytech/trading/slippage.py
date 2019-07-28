@@ -29,5 +29,4 @@ class AbstractSlippageModel(metaclass=ABCMeta):
         :rtype: Trade
         """
 
-        raise NotImplementedError(
-            'process_order must be overridden by child classes')
+        raise NotImplementedError("process_order must be overridden by child classes")

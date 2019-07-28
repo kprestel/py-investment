@@ -1,24 +1,12 @@
 import logging
 import math
-from abc import (
-    ABCMeta,
-    abstractmethod,
-)
-from typing import (
-    List,
-    TYPE_CHECKING,
-)
+from abc import ABCMeta, abstractmethod
+from typing import List, TYPE_CHECKING
 
 import pytech.utils as utils
-from pytech.exceptions import (
-    InsufficientFundsError,
-    InvalidSignalTypeError,
-)
+from pytech.exceptions import InsufficientFundsError, InvalidSignalTypeError
 from pytech.backtest.event import SignalEvent
-from pytech.utils.enums import (
-    SignalType,
-    TradeAction,
-)
+from pytech.utils.enums import SignalType, TradeAction
 
 if TYPE_CHECKING:
     from pytech.fin.portfolio import Portfolio
@@ -40,9 +28,12 @@ class SignalHandler(metaclass=ABCMeta):
         self.logger = logging.getLogger(__name__)
         self.raise_on_warnings = raise_on_warnings
 
-    def handle_signal(self, portfolio: 'Portfolio',
-                      triggered_orders: List['AnyOrder'],
-                      signal: SignalEvent):
+    def handle_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         """
         Must handle a signal event.
 
@@ -58,8 +49,9 @@ class SignalHandler(metaclass=ABCMeta):
             state of the ``portfolio``
         """
         if not isinstance(signal, SignalEvent):
-            raise TypeError('signal must be a SignalEvent. '
-                            f'{type(signal)} was provided.')
+            raise TypeError(
+                "signal must be a SignalEvent. " f"{type(signal)} was provided."
+            )
 
         if signal.signal_type is SignalType.EXIT:
             self._handle_exit_signal(portfolio, triggered_orders, signal)
@@ -76,9 +68,12 @@ class SignalHandler(metaclass=ABCMeta):
         else:
             raise InvalidSignalTypeError(signal_type=type(signal.signal_type))
 
-    def _handle_trade_signal(self, portfolio: 'Portfolio',
-                             triggered_orders: List['AnyOrder'],
-                             signal: SignalEvent):
+    def _handle_trade_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         """
         Handle a trade :class:`SignalEvent`.
 
@@ -96,9 +91,12 @@ class SignalHandler(metaclass=ABCMeta):
         except AttributeError:
             self._handle_general_trade_signal(signal)
 
-    def _handle_hold_signal(self, portfolio: 'Portfolio',
-                            triggered_orders: List['AnyOrder'],
-                            signal: SignalEvent):
+    def _handle_hold_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         """
         Handle a ``HOLD`` :class:`SignalEvent`
 
@@ -108,9 +106,12 @@ class SignalHandler(metaclass=ABCMeta):
         """
         portfolio.blotter.hold_all_orders_for_asset(signal.ticker)
 
-    def _handle_cancel_signal(self, portfolio: 'Portfolio',
-                              triggered_orders: List['AnyOrder'],
-                              signal: SignalEvent):
+    def _handle_cancel_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         """
         Handle a ``CANCEL`` :class:`SignalEvent`
 
@@ -118,14 +119,19 @@ class SignalHandler(metaclass=ABCMeta):
         :param signal:
         :return:
         """
-        portfolio.blotter.cancel_all_orders_for_asset(signal.ticker,
-                                                      upper_price=signal.upper_price,
-                                                      lower_price=signal.lower_price,
-                                                      order_type=signal.order_type)
+        portfolio.blotter.cancel_all_orders_for_asset(
+            signal.ticker,
+            upper_price=signal.upper_price,
+            lower_price=signal.lower_price,
+            order_type=signal.order_type,
+        )
 
-    def _handle_exit_signal(self, portfolio: 'Portfolio',
-                            triggered_orders: List['AnyOrder'],
-                            signal: SignalEvent):
+    def _handle_exit_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         """
         Handle an ``EXIT`` :class:`SignalEvent`.
 
@@ -140,21 +146,27 @@ class SignalHandler(metaclass=ABCMeta):
             action = TradeAction.BUY
         else:
             raise ValueError(
-                f'Cannot exit from a position that is not owned. '
-                f'Owned qty is 0 for ticker: {signal.ticker}.')
+                f"Cannot exit from a position that is not owned. "
+                f"Owned qty is 0 for ticker: {signal.ticker}."
+            )
 
-        portfolio.blotter.place_order(self,
-                                      signal.ticker,
-                                      qty,
-                                      action,
-                                      signal.order_type,
-                                      signal.stop_price,
-                                      signal.limit_price)
+        portfolio.blotter.place_order(
+            self,
+            signal.ticker,
+            qty,
+            action,
+            signal.order_type,
+            signal.stop_price,
+            signal.limit_price,
+        )
 
     @abstractmethod
-    def _handle_long_signal(self, portfolio: 'Portfolio',
-                            triggered_orders: List['AnyOrder'],
-                            signal: SignalEvent):
+    def _handle_long_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         """
         Handle a ``LONG`` :class:`SignalEvent`
 
@@ -165,9 +177,12 @@ class SignalHandler(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def _handle_short_signal(self, portfolio: 'Portfolio',
-                             triggered_orders: List['AnyOrder'],
-                             signal: SignalEvent):
+    def _handle_short_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
 
         """
         Handle a ``SHORT`` :class:`SignalEvent`.
@@ -179,9 +194,12 @@ class SignalHandler(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def _handle_general_trade_signal(self, portfolio: 'Portfolio',
-                                     triggered_orders: List['AnyOrder'],
-                                     signal: SignalEvent):
+    def _handle_general_trade_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         """
         Handle an ambiguous ``TRADE`` :class:`SignalEvent`. It is up to the
         child classes to determine how to handle this.
@@ -196,12 +214,15 @@ class SignalHandler(metaclass=ABCMeta):
 class BasicSignalHandler(SignalHandler):
     """A basic implementation of a Signal handler."""
 
-    def __init__(self, raise_on_warnings: bool = True,
-                 include_cash: bool = False,
-                 max_weight: float = .25,
-                 min_weight: float = .05,
-                 target_weight: float = .15,
-                 price_col: str = utils.ADJ_CLOSE_COL) -> None:
+    def __init__(
+        self,
+        raise_on_warnings: bool = True,
+        include_cash: bool = False,
+        max_weight: float = 0.25,
+        min_weight: float = 0.05,
+        target_weight: float = 0.15,
+        price_col: str = utils.ADJ_CLOSE_COL,
+    ) -> None:
         """
         Constructor for the signal handler.
 
@@ -238,54 +259,70 @@ class BasicSignalHandler(SignalHandler):
 
         self.price_col = price_col
 
-    def _handle_short_signal(self, portfolio: 'Portfolio',
-                             triggered_orders: List['AnyOrder'],
-                             signal: SignalEvent):
+    def _handle_short_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         pass
 
-    def _handle_hold_signal(self, portfolio: 'Portfolio',
-                            triggered_orders: List['AnyOrder'],
-                            signal: SignalEvent):
+    def _handle_hold_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         super()._handle_hold_signal(portfolio, triggered_orders, signal)
 
-    def _handle_long_signal(self, portfolio: 'Portfolio',
-                            triggered_orders: List['AnyOrder'],
-                            signal: SignalEvent):
+    def _handle_long_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         if signal.ticker in triggered_orders:
-            self.logger.info(f'ticker: {signal.ticker} already had an order'
-                             f'triggered. Not acting on signal.')
+            self.logger.info(
+                f"ticker: {signal.ticker} already had an order"
+                f"triggered. Not acting on signal."
+            )
             return
 
-        current_weight = portfolio.get_asset_weight(signal.ticker,
-                                                    self.include_cash)
-        if (current_weight >= self.max_weight
-            or current_weight <= (self.max_weight * -1)):
-            self.logger.info(f'ticker: {signal.ticker} is over the max_weight '
-                             f'of {self.max_weight} at a current weight of '
-                             f'f{current_weight}. Not acting on signal.')
+        current_weight = portfolio.get_asset_weight(signal.ticker, self.include_cash)
+        if current_weight >= self.max_weight or current_weight <= (
+            self.max_weight * -1
+        ):
+            self.logger.info(
+                f"ticker: {signal.ticker} is over the max_weight "
+                f"of {self.max_weight} at a current weight of "
+                f"f{current_weight}. Not acting on signal."
+            )
             return
 
         price = portfolio.bars.latest_bar_value(signal.ticker, self.price_col)
         qty = self._get_target_qty(price, portfolio, signal)
 
         if portfolio.check_liquidity(price, qty):
-            portfolio.blotter.place_order(portfolio, qty=qty,
-                                          **signal.__dict__)
+            portfolio.blotter.place_order(portfolio, qty=qty, **signal.__dict__)
         elif self.raise_on_warnings:
             raise InsufficientFundsError(ticker=signal.ticker)
         else:
-            self.logger.warning(f'Attempted to place an order for '
-                                f'{signal.ticker} but lack sufficient funds.')
+            self.logger.warning(
+                f"Attempted to place an order for "
+                f"{signal.ticker} but lack sufficient funds."
+            )
 
-
-    def _handle_general_trade_signal(self, portfolio: 'Portfolio',
-                                     triggered_orders: List['AnyOrder'],
-                                     signal: SignalEvent):
+    def _handle_general_trade_signal(
+        self,
+        portfolio: "Portfolio",
+        triggered_orders: List["AnyOrder"],
+        signal: SignalEvent,
+    ):
         pass
 
-    def _get_target_qty(self, price: float,
-                        portfolio: 'Portfolio',
-                        signal: SignalEvent) -> int:
+    def _get_target_qty(
+        self, price: float, portfolio: "Portfolio", signal: SignalEvent
+    ) -> int:
         if self.include_cash or portfolio.total_asset_mv == 0.0:
             mv = portfolio.total_value
         else:

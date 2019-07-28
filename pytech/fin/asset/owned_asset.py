@@ -18,11 +18,14 @@ class OwnedAsset(object):
     in a user's :class:`pytech.fin.portfolio.Portfolio`.
     """
 
-    def __init__(self, ticker: str,
-                 shares_owned: int,
-                 position: Position,
-                 avg_share_price: float,
-                 purchase_date: 'utils.date_type' = None) -> None:
+    def __init__(
+        self,
+        ticker: str,
+        shares_owned: int,
+        position: Position,
+        avg_share_price: float,
+        purchase_date: "utils.date_type" = None,
+    ) -> None:
         self.ticker = ticker
         self.position = Position.check_if_valid(position)
 
@@ -48,7 +51,7 @@ class OwnedAsset(object):
         if isinstance(shares_owned, numbers.Integral):
             self._shares_owned = shares_owned
         else:
-            raise TypeError('shares_owned MUST be an integer.')
+            raise TypeError("shares_owned MUST be an integer.")
 
     @property
     def ticker(self) -> str:
@@ -89,11 +92,11 @@ class OwnedAsset(object):
         :rtype: OwnedAsset
         """
         owned_asset_dict = {
-            'ticker': trade.ticker,
-            'position': asset_position,
-            'shares_owned': trade.qty,
-            'average_share_price': trade.avg_price_per_share,
-            'purchase_date': trade.trade_date
+            "ticker": trade.ticker,
+            "position": asset_position,
+            "shares_owned": trade.qty,
+            "average_share_price": trade.avg_price_per_share,
+            "purchase_date": trade.trade_date,
         }
 
         return cls(**owned_asset_dict)
@@ -111,7 +114,8 @@ class OwnedAsset(object):
 
         try:
             self.average_share_price_paid = (
-                self.total_position_value / self.shares_owned)
+                self.total_position_value / self.shares_owned
+            )
         except ZeroDivisionError:
             return None
         else:
@@ -147,8 +151,7 @@ class OwnedAsset(object):
         self.latest_price_time = utils.parse_date(price_date)
 
         if self.position is Position.SHORT:
-            self.total_position_value = (
-                (self.latest_price * self.shares_owned) * -1)
+            self.total_position_value = (self.latest_price * self.shares_owned) * -1
         else:
             self.total_position_value = self.latest_price * self.shares_owned
 
@@ -159,10 +162,10 @@ class OwnedAsset(object):
         """
         self.update_total_position_value()
         return (self.total_position_value + self.total_position_cost) / (
-            self.total_position_cost * -1)
+            self.total_position_cost * -1
+        )
 
-    def market_correlation(self, use_portfolio_benchmark=True,
-                           market_ticker='^GSPC'):
+    def market_correlation(self, use_portfolio_benchmark=True, market_ticker="^GSPC"):
         """
         Compute the correlation between a :class: Stock's return and the market return.
         :param use_portfolio_benchmark:
@@ -175,12 +178,11 @@ class OwnedAsset(object):
         """
 
         pct_change = self._get_pct_change(
-            use_portfolio_benchmark=use_portfolio_benchmark,
-            market_ticker=market_ticker)
+            use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker
+        )
         return pct_change.stock_pct_change.corr(pct_change.market_pct_change)
 
-    def calculate_beta(self, use_portfolio_benchmark=True,
-                       market_ticker='^GSPC'):
+    def calculate_beta(self, use_portfolio_benchmark=True, market_ticker="^GSPC"):
         """
         Compute the beta for the :class: Stock
 
@@ -192,14 +194,13 @@ class OwnedAsset(object):
             The beta for the given Stock
         """
         pct_change = self._get_pct_change(
-            use_portfolio_benchmark=use_portfolio_benchmark,
-            market_ticker=market_ticker)
+            use_portfolio_benchmark=use_portfolio_benchmark, market_ticker=market_ticker
+        )
         covar = pct_change.stock_pct_change.cov(pct_change.market_pct_change)
         variance = pct_change.market_pct_change.var()
         return covar / variance
 
-    def _get_pct_change(self, use_portfolio_benchmark=True,
-                        market_ticker='^GSPC'):
+    def _get_pct_change(self, use_portfolio_benchmark=True, market_ticker="^GSPC"):
         """
         Get the percentage change over the :class: Stock's start and end dates for both the asset as well as the market
 
@@ -209,20 +210,18 @@ class OwnedAsset(object):
             Any valid ticker symbol to use as the market.
         :return: TimeSeries
         """
-        pct_change = namedtuple('Pct_Change',
-                                'market_pct_change stock_pct_change')
+        pct_change = namedtuple("Pct_Change", "market_pct_change stock_pct_change")
         if use_portfolio_benchmark:
             market_df = self.portfolio.benchmark
         else:
-            market_df = web.DataReader(market_ticker, 'yahoo',
-                                       start=self.start_date,
-                                       end=self.end_date)
-        market_pct_change = pd.Series(
-            market_df['adj_close'].pct_change(periods=1))
-        stock_pct_change = pd.Series(
-            self.ohlcv['adj_close'].pct_change(periods=1))
-        return pct_change(market_pct_change=market_pct_change,
-                          stock_pct_change=stock_pct_change)
+            market_df = web.DataReader(
+                market_ticker, "yahoo", start=self.start_date, end=self.end_date
+            )
+        market_pct_change = pd.Series(market_df["adj_close"].pct_change(periods=1))
+        stock_pct_change = pd.Series(self.ohlcv["adj_close"].pct_change(periods=1))
+        return pct_change(
+            market_pct_change=market_pct_change, stock_pct_change=stock_pct_change
+        )
 
     def _get_portfolio_benchmark(self):
         """

@@ -4,10 +4,7 @@ Collection of functions and classes that can be used anywhere.
 import math
 import uuid
 import logging
-from typing import (
-    Iterable,
-    Any,
-)
+from typing import Iterable, Any
 
 import collections
 
@@ -37,13 +34,15 @@ def iterable_to_set(iterable):
         return set(iterable)
     except TypeError:
         raise PyInvestmentTypeError(
-            'iterable must be an iterable with hashable '
-            f'contents! {iterable} is not an iterable!')
+            "iterable must be an iterable with hashable "
+            f"contents! {iterable} is not an iterable!"
+        )
 
 
 def tail(n: int, iterable: Iterable):
     """Return an iterator over the last `n` items"""
     return iter(collections.deque(iterable, maxlen=n))
+
 
 def digits(n: int) -> int:
     """Returns the number of digits in an `int`"""
@@ -55,9 +54,9 @@ def digits(n: int) -> int:
         return int(math.log10(-n)) + 2
 
 
-
 class Borg(object):
     """A mixin class to make an object act like a singleton"""
+
     _shared_state = {}
 
     def __init__(self):

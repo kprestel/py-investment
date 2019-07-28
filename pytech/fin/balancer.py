@@ -11,11 +11,14 @@ from pytech.fin.portfolio import Portfolio
 class AbstractBalancer(metaclass=ABCMeta):
     """Base class for all balancers."""
 
-    def __init__(self,
-                 portfolio: Portfolio,
-                 allow_market_orders=True,
-                 price_col=pd_utils.ADJ_CLOSE_COL,
-                 *args, **kwargs):
+    def __init__(
+        self,
+        portfolio: Portfolio,
+        allow_market_orders=True,
+        price_col=pd_utils.ADJ_CLOSE_COL,
+        *args,
+        **kwargs,
+    ):
         """
         Constructor for :class:`AbstractBalancer`.
 
@@ -32,9 +35,7 @@ class AbstractBalancer(metaclass=ABCMeta):
         self.bars = self.portfolio.bars
 
     @abstractmethod
-    def __call__(self,
-                 signal: SignalEvent,
-                 *args, **kwargs):
+    def __call__(self, signal: SignalEvent, *args, **kwargs):
         """
         Balance the portfolio based on whatever methodology chosen.
 
@@ -50,21 +51,23 @@ class AbstractBalancer(metaclass=ABCMeta):
 
         :return:
         """
-        raise NotImplementedError('Must implement balance(portfolio)')
+        raise NotImplementedError("Must implement balance(portfolio)")
 
 
 class AlwaysBalancedBalancer(AbstractBalancer):
     """Portfolio weights are always equal."""
 
-    def __init__(self,
-                 portfolio: Portfolio,
-                 allow_market_orders: bool = True,
-                 price_col: str = pd_utils.ADJ_CLOSE_COL,
-                 include_cash=False,
-                 cash_reserves: float = .1,
-                 *args, **kwargs):
-        super().__init__(portfolio, allow_market_orders, price_col,
-                         *args, **kwargs)
+    def __init__(
+        self,
+        portfolio: Portfolio,
+        allow_market_orders: bool = True,
+        price_col: str = pd_utils.ADJ_CLOSE_COL,
+        include_cash=False,
+        cash_reserves: float = 0.1,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(portfolio, allow_market_orders, price_col, *args, **kwargs)
         self.include_cash = include_cash
         self.cash_reserves = cash_reserves
 
@@ -91,17 +94,12 @@ class AlwaysBalancedBalancer(AbstractBalancer):
             # target_qty, target_mv, target_pct = self._get_targets(portfolio,
             #                                                       signal.ticker)
 
-    def _get_target_qty(self,
-                        ticker: str,
-                        target_pct: float,
-                        total_mv: float):
+    def _get_target_qty(self, ticker: str, target_pct: float, total_mv: float):
         price = self.bars.latest_bar_value(ticker, self.price_col)
 
         return int(math.floor((target_pct * total_mv) / price))
 
-    def _get_targets(self,
-                     portfolio: Portfolio,
-                     ticker: str) -> (int, float, float):
+    def _get_targets(self, portfolio: Portfolio, ticker: str) -> (int, float, float):
         """Return the target share quantity for a given event."""
         target_pct = 1 / (len(portfolio.owned_assets) + 1)
 
@@ -111,14 +109,13 @@ class AlwaysBalancedBalancer(AbstractBalancer):
             total_mv = portfolio.total_asset_mv
 
         latest_adj_close = portfolio.bars.latest_bar_value(
-                ticker, pd_utils.ADJ_CLOSE_COL)
+            ticker, pd_utils.ADJ_CLOSE_COL
+        )
 
-        target_qty = int(
-            math.floor((target_pct * total_mv) / latest_adj_close))
+        target_qty = int(math.floor((target_pct * total_mv) / latest_adj_close))
 
         target_mv = target_qty * latest_adj_close
 
-        self.logger.debug(f'target_qty: {target_qty}')
+        self.logger.debug(f"target_qty: {target_qty}")
 
         return target_qty, target_mv, target_pct
-

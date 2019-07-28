@@ -5,11 +5,18 @@ from scipy.optimize import newton
 
 class TVM(object):
     """Do TVM stuff here."""
+
     begin, end = 0, 1
 
-    def __init__(self, periods: float = 0.0, rate: float = 0.0,
-                 pv: float = 0.0, pmt: float = 0.0,
-                 fv: float = 0.0, mode: int = end):
+    def __init__(
+        self,
+        periods: float = 0.0,
+        rate: float = 0.0,
+        pv: float = 0.0,
+        pmt: float = 0.0,
+        fv: float = 0.0,
+        mode: int = end,
+    ):
         """
         Constructor stuff...
         :param periods: The number of periods to use in the tvm calculations.
@@ -41,30 +48,35 @@ class TVM(object):
         """Calculate present value."""
         if self.pmt == 0.0:
             return -((self.periods * self.rate) / 360 - self.fv)
-        return -(self.pv * self.discount_factor
-                 + (1 - self.discount_factor) * self.pva)
+        return -(self.pv * self.discount_factor + (1 - self.discount_factor) * self.pva)
 
     def calc_fv(self):
-        return (-(self.pv + (1 - self.discount_factor) * self.pva)
-                / self.discount_factor)
+        return -(self.pv + (1 - self.discount_factor) * self.pva) / self.discount_factor
 
     def calc_pmt(self):
         if self.mode == TVM.begin:
-            return ((self.pv + self.fv * self.discount_factor)
-                    * self.rate / (self.discount_factor - 1) / (1 + self.rate))
+            return (
+                (self.pv + self.fv * self.discount_factor)
+                * self.rate
+                / (self.discount_factor - 1)
+                / (1 + self.rate)
+            )
         else:
-            return ((self.pv + self.fv * self.discount_factor)
-                    * self.rate / (self.discount_factor - 1))
+            return (
+                (self.pv + self.fv * self.discount_factor)
+                * self.rate
+                / (self.discount_factor - 1)
+            )
 
     def calc_periods(self):
-        discount = ((-self.discount_factor - self.pv)
-                    / (self.fv - self.discount_factor))
+        discount = (-self.discount_factor - self.pv) / (self.fv - self.discount_factor)
         return -log(discount) / log(1 + self.rate)
 
     def calc_rate(self):
         def fv_(r, self):
-            return (-(self.pv + (1 - self.discount_factor) * self.pva)
-                    / self.discount_factor)
+            return (
+                -(self.pv + (1 - self.discount_factor) * self.pva)
+                / self.discount_factor
+            )
 
-        return newton(func=fv_, x0=.05, args=(self,),
-                      maxiter=1000, tol=0.00001)
+        return newton(func=fv_, x0=0.05, args=(self,), maxiter=1000, tol=0.00001)

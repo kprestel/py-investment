@@ -1,13 +1,7 @@
 import logging
 import pandas as pd
-from abc import (
-    ABCMeta,
-    abstractmethod,
-)
-from typing import (
-    Union,
-    Optional,
-)
+from abc import ABCMeta, abstractmethod
+from typing import Union, Optional
 
 import requests
 from psycopg2._psycopg import IntegrityError
@@ -35,7 +29,7 @@ class HTTPAction(AutoNumber):
         if name is not None:
             return name
         else:
-            raise RestClientError('Invalid HTTP Action')
+            raise RestClientError("Invalid HTTP Action")
 
 
 class RestClient(metaclass=ABCMeta):
@@ -44,13 +38,13 @@ class RestClient(metaclass=ABCMeta):
 
         self.writer = write()
 
-        if kwargs.get('session'):
+        if kwargs.get("session"):
             self._session = requests.Session()
         else:
             self._session = requests
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(base_url={self.base_url})'
+        return f"{self.__class__.__name__}(base_url={self.base_url})"
 
     @property
     @abstractmethod
@@ -63,11 +57,14 @@ class RestClient(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def get_intra_day(self, ticker: str,
-                      date_range: DateRange,
-                      freq: str = '5min',
-                      persist: bool = True,
-                      **kwargs) -> pd.DataFrame:
+    def get_intra_day(
+        self,
+        ticker: str,
+        date_range: DateRange,
+        freq: str = "5min",
+        persist: bool = True,
+        **kwargs,
+    ) -> pd.DataFrame:
         """
         Get intra day trade data. How far back data is available will vary from
         source to source.
@@ -85,25 +82,31 @@ class RestClient(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def get_historical_data(self, ticker: str,
-                            date_range: DateRange,
-                            freq: str = 'Daily',
-                            adjusted: bool = True,
-                            persist: bool = True,
-                            **kwargs) -> pd.DataFrame:
+    def get_historical_data(
+        self,
+        ticker: str,
+        date_range: DateRange,
+        freq: str = "Daily",
+        adjusted: bool = True,
+        persist: bool = True,
+        **kwargs,
+    ) -> pd.DataFrame:
         raise NotImplementedError
 
-    def _persist_df(self, df: pd.DataFrame,
-                    table: str = 'bar',
-                    index: bool = False) -> None:
+    def _persist_df(
+        self, df: pd.DataFrame, table: str = "bar", index: bool = False
+    ) -> None:
         try:
             self.writer.df(df, table=table, index=index)
         except IntegrityError:
-            self.logger.exception('Unable to insert data frame to db.')
+            self.logger.exception("Unable to insert data frame to db.")
 
-    def _request(self, url: Optional[str],
-                 method: Union[HTTPAction, str] = HTTPAction.GET,
-                 **kwargs):
+    def _request(
+        self,
+        url: Optional[str],
+        method: Union[HTTPAction, str] = HTTPAction.GET,
+        **kwargs,
+    ):
         """
         Make the HTTP request and return the response.
 
@@ -125,10 +128,9 @@ class RestClient(metaclass=ABCMeta):
         if url is None:
             url = self.base_url
         else:
-            url = f'{self.base_url}/{url}'
+            url = f"{self.base_url}/{url}"
 
-        resp = self._session.request(method, url, headers=self.headers,
-                                     **kwargs)
+        resp = self._session.request(method, url, headers=self.headers, **kwargs)
 
         try:
             resp.raise_for_status()

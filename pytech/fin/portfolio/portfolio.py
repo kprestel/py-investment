@@ -1,40 +1,22 @@
 import logging
 import queue
 import uuid
-from abc import (
-    ABCMeta,
-    abstractmethod,
-)
-from typing import (
-    Dict,
-    Iterable,
-    List,
-    TYPE_CHECKING,
-)
+from abc import ABCMeta, abstractmethod
+from typing import Dict, Iterable, List, TYPE_CHECKING
 
 import pandas as pd
 
 import pytech.utils as utils
-from pytech.backtest.event import (
-    FillEvent,
-    SignalEvent,
-)
+from pytech.backtest.event import FillEvent, SignalEvent
 from pytech.data.connection import write
 from pytech.data.handler import DataHandler
 from pytech.fin.asset.owned_asset import OwnedAsset
 from pytech.utils import DateRange
 
 if TYPE_CHECKING:
-    from pytech.trading import (
-        AnyOrder,
-        Blotter,
-    )
+    from pytech.trading import AnyOrder, Blotter
 from pytech.trading.trade import Trade
-from pytech.utils.enums import (
-    EventType,
-    Position,
-    TradeAction,
-)
+from pytech.utils.enums import EventType, Position, TradeAction
 from pytech.exceptions import (
     InsufficientFundsError,
     InvalidEventTypeError,
@@ -57,23 +39,25 @@ class Portfolio(metaclass=ABCMeta):
     """
 
     # stores all of the ticks portfolio position.
-    POSITION_COLLECTION = 'portfolio'
+    POSITION_COLLECTION = "portfolio"
     # stores the latest tick portfolio position.
-    TICK_COLLECTION = 'portfolio_tick'
+    TICK_COLLECTION = "portfolio_tick"
 
-    def __init__(self,
-                 data_handler: DataHandler,
-                 events: queue.Queue,
-                 date_range: DateRange,
-                 blotter: 'Blotter',
-                 initial_capital: float = 100_000.00,
-                 raise_on_warnings=False) -> None:
+    def __init__(
+        self,
+        data_handler: DataHandler,
+        events: queue.Queue,
+        date_range: DateRange,
+        blotter: "Blotter",
+        initial_capital: float = 100_000.00,
+        raise_on_warnings=False,
+    ) -> None:
         self._id = uuid.uuid4()
         self.date_range = date_range or DateRange()
         self.logger = logging.getLogger(__name__)
         self.bars: DataHandler = data_handler
         self.events: queue.Queue = events
-        self.blotter: 'Blotter' = blotter
+        self.blotter: "Blotter" = blotter
         self._initial_capital: float = initial_capital
         self.cash: float = initial_capital
         self.ticker_list: List[str] = self.bars.tickers
@@ -108,8 +92,9 @@ class Portfolio(metaclass=ABCMeta):
         elif utils.is_iterable(val):
             self._signal_handlers = val
         else:
-            raise PyInvestmentTypeError('signal_handlers must be an iterable. '
-                                        f'{type(val)} was given.')
+            raise PyInvestmentTypeError(
+                "signal_handlers must be an iterable. " f"{type(val)} was given."
+            )
 
     @property
     def initial_capital(self):
@@ -151,7 +136,7 @@ class Portfolio(metaclass=ABCMeta):
         Acts on a :class:`SignalEvent` to generate new orders based on the
         portfolio logic.
         """
-        raise NotImplementedError('Must implement update_signal()')
+        raise NotImplementedError("Must implement update_signal()")
 
     @abstractmethod
     def update_fill(self, event):
@@ -159,7 +144,7 @@ class Portfolio(metaclass=ABCMeta):
         Updates the portfolio current positions and holdings based on a
         :class:`FillEvent`.
         """
-        raise NotImplementedError('Must implement update_fill()')
+        raise NotImplementedError("Must implement update_fill()")
 
     def check_liquidity(self, avg_price_per_share: float, qty: int) -> bool:
         """
@@ -192,7 +177,7 @@ class Portfolio(metaclass=ABCMeta):
         try:
             return self.owned_assets[ticker].total_position_value
         except KeyError:
-            raise KeyError(f'Ticker: {ticker} is not currently owned.')
+            raise KeyError(f"Ticker: {ticker} is not currently owned.")
 
     def current_weights(self, include_cash: bool = False) -> Dict[str, float]:
         """
@@ -206,7 +191,7 @@ class Portfolio(metaclass=ABCMeta):
         weights = {}
         if include_cash:
             total_mv = self.total_value
-            weights['cash'] = self.cash / total_mv
+            weights["cash"] = self.cash / total_mv
         else:
             total_mv = self.total_asset_mv
 
@@ -215,8 +200,7 @@ class Portfolio(metaclass=ABCMeta):
 
         return weights
 
-    def get_asset_weight(self, ticker: str,
-                         include_cash: bool = False) -> float:
+    def get_asset_weight(self, ticker: str, include_cash: bool = False) -> float:
         """
         Return the current weight an asset accounts for in the ``portfolio``.
 
@@ -242,45 +226,51 @@ class Portfolio(metaclass=ABCMeta):
         a :class:`MarketEvent`
         """
         if event.event_type is not EventType.MARKET:
-            raise InvalidEventTypeError(expected=EventType.MARKET,
-                                        event_type=event.event_type)
+            raise InvalidEventTypeError(
+                expected=EventType.MARKET, event_type=event.event_type
+            )
 
         # get an element from the set
         latest_dt = self.bars.get_latest_bar_dt(next(iter(self.ticker_list)))
-        self.logger.debug(f'latest_dt={latest_dt}')
+        self.logger.debug(f"latest_dt={latest_dt}")
         # update the blotter's current date
         self.blotter.current_dt = latest_dt
         self.blotter.check_order_triggers()
 
         for owned_asset in self:
-            adj_close = self.bars.latest_bar_value(owned_asset.ticker,
-                                                   utils.ADJ_CLOSE_COL)
+            adj_close = self.bars.latest_bar_value(
+                owned_asset.ticker, utils.ADJ_CLOSE_COL
+            )
             owned_asset.update_total_position_value(adj_close, latest_dt)
 
-        self.logger.debug('Writing current portfolio state to DB.')
+        self.logger.debug("Writing current portfolio state to DB.")
         self.writer.portfolio_snapshot(self, latest_dt)
         if self.owned_assets:
-            self.writer.owned_asset_snapshot(self.owned_assets.values(),
-                                             self.id,
-                                             latest_dt)
+            self.writer.owned_asset_snapshot(
+                self.owned_assets.values(), self.id, latest_dt
+            )
 
 
 class BasicPortfolio(Portfolio):
     """Here for testing and stuff."""
 
-    def __init__(self,
-                 data_handler: DataHandler,
-                 events: queue.Queue,
-                 date_range: DateRange,
-                 blotter: 'Blotter',
-                 initial_capital: float = 100000.00,
-                 raise_on_warnings=False):
-        super().__init__(data_handler,
-                         events,
-                         date_range,
-                         blotter,
-                         initial_capital,
-                         raise_on_warnings)
+    def __init__(
+        self,
+        data_handler: DataHandler,
+        events: queue.Queue,
+        date_range: DateRange,
+        blotter: "Blotter",
+        initial_capital: float = 100_000.00,
+        raise_on_warnings=False,
+    ):
+        super().__init__(
+            data_handler,
+            events,
+            date_range,
+            blotter,
+            initial_capital,
+            raise_on_warnings,
+        )
 
     def _update_from_trade(self, trade: Trade):
         self.cash += trade.trade_cost()
@@ -297,8 +287,7 @@ class BasicPortfolio(Portfolio):
         in all shares being sold.
         """
         owned_asset = self.owned_assets[trade.ticker]
-        updated_asset = owned_asset.make_trade(trade.qty,
-                                               trade.avg_price_per_share)
+        updated_asset = owned_asset.make_trade(trade.qty, trade.avg_price_per_share)
 
         if updated_asset is None:
             del self.owned_assets[trade.ticker]
@@ -315,25 +304,25 @@ class BasicPortfolio(Portfolio):
         else:
             asset_position = Position.LONG
 
-        self.owned_assets[trade.ticker] = OwnedAsset.from_trade(trade,
-                                                                asset_position)
+        self.owned_assets[trade.ticker] = OwnedAsset.from_trade(trade, asset_position)
 
     def update_fill(self, event: FillEvent):
         if not event.event_type == EventType.FILL:
-            raise InvalidEventTypeError(expected=type(EventType.SIGNAL),
-                                        event_type=type(event.event_type))
+            raise InvalidEventTypeError(
+                expected=type(EventType.SIGNAL), event_type=type(event.event_type)
+            )
 
         order = self.blotter[event.order_id]
         if self.check_liquidity(event.price, event.available_volume):
-            trade = self.blotter.make_trade(order,
-                                            event.price,
-                                            event.dt,
-                                            event.available_volume)
+            trade = self.blotter.make_trade(
+                order, event.price, event.dt, event.available_volume
+            )
             self._update_from_trade(trade)
         else:
             self.logger.warning(
-                'Insufficient funds available to execute trade for '
-                f'ticker: {order.ticker}')
+                "Insufficient funds available to execute trade for "
+                f"ticker: {order.ticker}"
+            )
             if self.raise_on_warnings:
                 raise InsufficientFundsError(ticker=order.ticker)
 
@@ -345,11 +334,12 @@ class BasicPortfolio(Portfolio):
             # self.events.put(self.generate_naive_order(event))
         else:
             raise InvalidEventTypeError(
-                expected=type(EventType.SIGNAL),
-                event_type=type(event.event_type))
+                expected=type(EventType.SIGNAL), event_type=type(event.event_type)
+            )
 
-    def _process_signal(self, signal: SignalEvent,
-                        triggered_orders: List['AnyOrder']) -> None:
+    def _process_signal(
+        self, signal: SignalEvent, triggered_orders: List["AnyOrder"]
+    ) -> None:
         """
         Call different methods depending on the type of signal received.
 

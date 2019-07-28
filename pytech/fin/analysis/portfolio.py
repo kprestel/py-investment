@@ -1,16 +1,10 @@
 import logging
-from typing import (
-    List,
-    Tuple,
-)
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.optimize import (
-    OptimizeResult,
-    minimize,
-)
+from scipy.optimize import OptimizeResult, minimize
 
 import pytech.data.reader as reader
 import pytech.utils.pdutils as pd_utils
@@ -20,10 +14,13 @@ from pytech.utils.common_utils import tail
 class EfficientFrontier(object):
     """Calculate the optimal portfolio based on the Efficient Frontier"""
 
-    def __init__(self, tickers: List[str] = None,
-                 rf: float = None,
-                 asset_lib_name: str = 'pytech.bars',
-                 market_lib_name: str = 'pytech.market'):
+    def __init__(
+        self,
+        tickers: List[str] = None,
+        rf: float = None,
+        asset_lib_name: str = "pytech.bars",
+        market_lib_name: str = "pytech.market",
+    ):
         self.logger = logging.getLogger(__name__)
         self.asset_lib_name = asset_lib_name
         self.market_lib_name = market_lib_name
@@ -46,7 +43,7 @@ class EfficientFrontier(object):
     def rf(self, val):
         if val is None:
             # TODO update this to be dynamic AF.
-            self._rf = .015
+            self._rf = 0.015
         else:
             self._rf = val
 
@@ -110,11 +107,20 @@ class EfficientFrontier(object):
         weights = self._solve_weights(returns, covar)
         tan_mean, tan_var = _mean_var(weights, returns, covar)
         front_mean, front_var = self._solve_frontier(returns, covar)
-        return _FrontierResult(self.tickers, weights, tan_mean, tan_var,
-                               front_mean, front_var, covar, returns)
+        return _FrontierResult(
+            self.tickers,
+            weights,
+            tan_mean,
+            tan_var,
+            front_mean,
+            front_var,
+            covar,
+            returns,
+        )
 
-    def _solve_frontier(self, returns: np.array,
-                        covar: np.array) -> Tuple[np.ndarray, np.ndarray]:
+    def _solve_frontier(
+        self, returns: np.array, covar: np.array
+    ) -> Tuple[np.ndarray, np.ndarray]:
         def fitness(weights, returns, covar, r):
             mean, var = _mean_var(weights, returns, covar)
             penalty = 100 * abs(mean - r)
@@ -129,13 +135,15 @@ class EfficientFrontier(object):
             weights = np.ones([assets]) / assets
             # no shorts.
             b_ = [(0, 1) for _ in range(assets)]
-            c_ = ({'type': 'eq', 'fun': lambda weights: sum(weights) - 1.0})
-            optimized = minimize(fitness,
-                                 weights,
-                                 (returns, covar, r),
-                                 method='SLSQP',
-                                 constraints=c_,
-                                 bounds=b_)
+            c_ = {"type": "eq", "fun": lambda weights: sum(weights) - 1.0}
+            optimized = minimize(
+                fitness,
+                weights,
+                (returns, covar, r),
+                method="SLSQP",
+                constraints=c_,
+                bounds=b_,
+            )
             if not optimized.success:
                 raise BaseException(optimized.message)
             frontier_mean.append(r)
@@ -143,8 +151,7 @@ class EfficientFrontier(object):
 
         return np.array(frontier_mean), np.array(frontier_var)
 
-    def _solve_weights(self, returns: np.array,
-                       covar: np.matrix) -> OptimizeResult:
+    def _solve_weights(self, returns: np.array, covar: np.matrix) -> OptimizeResult:
         """
         Solve for the optimal weights.
 
@@ -162,13 +169,15 @@ class EfficientFrontier(object):
         base_weights = np.ones([assets]) / assets
         # weights can be positive or negative
         b_ = [(0, 1) for _ in range(assets)]
-        c_ = ({'type': 'eq', 'fun': lambda weights: sum(weights) - 1.0})
-        optimized = minimize(fitness,
-                             base_weights,
-                             (returns, covar, self.rf),
-                             method='SLSQP',
-                             constraints=c_,
-                             bounds=b_)
+        c_ = {"type": "eq", "fun": lambda weights: sum(weights) - 1.0}
+        optimized = minimize(
+            fitness,
+            base_weights,
+            (returns, covar, self.rf),
+            method="SLSQP",
+            constraints=c_,
+            bounds=b_,
+        )
         if not optimized.success:
             raise BaseException(optimized.message)
         else:
@@ -178,8 +187,9 @@ class EfficientFrontier(object):
 class _FrontierResult(object):
     """Holds the results of the Frontier calculations."""
 
-    def __init__(self, tickers, weights, tan_mean, tan_var, front_mean,
-                 front_var, covar, returns):
+    def __init__(
+        self, tickers, weights, tan_mean, tan_var, front_mean, front_var, covar, returns
+    ):
         self.tickers = tickers
         self.weights = weights
         self.tan_mean = tan_mean
@@ -190,37 +200,34 @@ class _FrontierResult(object):
         self.returns = returns
 
     def __str__(self):
-        df = pd.DataFrame({'Weight': self.weights}, index=self.tickers)
+        df = pd.DataFrame({"Weight": self.weights}, index=self.tickers)
         c = pd.DataFrame(self.covar, columns=self.tickers, index=self.tickers)
-        return (f'Weights: \n{df.T}\n'
-                f'Covariances: \n{c}')
+        return f"Weights: \n{df.T}\n" f"Covariances: \n{c}"
 
-    def plot(self, frontier_label: str = 'Frontier',
-             auto_plot: bool = False):
-        plt.style.use('ggplot')
-        plt.scatter([self.covar[i, i] ** .5
-                     for i in range(len(self.tickers))],
-                    self.returns,
-                    marker='x')
+    def plot(self, frontier_label: str = "Frontier", auto_plot: bool = False):
+        plt.style.use("ggplot")
+        plt.scatter(
+            [self.covar[i, i] ** 0.5 for i in range(len(self.tickers))],
+            self.returns,
+            marker="x",
+        )
 
         for n in range(len(self.tickers)):
-            plt.text(self.covar[n, n] ** .5,
-                     self.returns[n],
-                     f'  {self.tickers[n]}',
-                     verticalalignment='center')
+            plt.text(
+                self.covar[n, n] ** 0.5,
+                self.returns[n],
+                f"  {self.tickers[n]}",
+                verticalalignment="center",
+            )
 
-        plt.text(self.tan_var ** .5,
-                 self.tan_mean,
-                 '   tangent',
-                 verticalalignment='center')
-        plt.scatter(self.tan_var ** .5,
-                    self.tan_mean)
-        plt.plot(self.front_var ** .5,
-                 self.front_mean,
-                 label=frontier_label)
+        plt.text(
+            self.tan_var ** 0.5, self.tan_mean, "   tangent", verticalalignment="center"
+        )
+        plt.scatter(self.tan_var ** 0.5, self.tan_mean)
+        plt.plot(self.front_var ** 0.5, self.front_mean, label=frontier_label)
         plt.grid(True)
-        plt.xlabel('variance')
-        plt.ylabel('mean')
+        plt.xlabel("variance")
+        plt.ylabel("mean")
         if auto_plot:
             plt.show()
         else:
@@ -239,6 +246,6 @@ def _mean_var(weights, returns, covar):
     return _mean(weights, returns), _var(weights, covar)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     f = EfficientFrontier()
     r = f()

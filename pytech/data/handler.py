@@ -1,16 +1,8 @@
 import datetime as dt
 import logging
 import queue
-from abc import (
-    ABCMeta,
-    abstractmethod,
-)
-from typing import (
-    Dict,
-    Iterable,
-    List,
-    Union,
-)
+from abc import ABCMeta, abstractmethod
+from typing import Dict, Iterable, List, Union
 
 import numpy as np
 import pandas as pd
@@ -18,21 +10,17 @@ import pytz
 
 import pytech.utils as utils
 from pytech.backtest.event import MarketEvent
-from pytech.decorators import (
-    lazy_property,
-    memoize,
-)
+from pytech.decorators import lazy_property, memoize
 from pytech.utils import DateRange
 from ..data import BarReader
 
 
 class DataHandler(metaclass=ABCMeta):
-    CHUNK_SIZE = 'D'
+    CHUNK_SIZE = "D"
 
-    def __init__(self,
-                 events: queue.Queue,
-                 tickers: Iterable[str],
-                 date_range: DateRange) -> None:
+    def __init__(
+        self, events: queue.Queue, tickers: Iterable[str], date_range: DateRange
+    ) -> None:
         """
         All child classes MUST call this constructor.
 
@@ -68,7 +56,7 @@ class DataHandler(metaclass=ABCMeta):
         :param str ticker: The ticker to retrieve the bar for.
         :return: The latest update bar for the given ticker.
         """
-        raise NotImplementedError('Must implement get_latest_bar()')
+        raise NotImplementedError("Must implement get_latest_bar()")
 
     @abstractmethod
     def get_latest_bars(self, ticker: str, n: int = 1):
@@ -79,7 +67,7 @@ class DataHandler(metaclass=ABCMeta):
         :param int n: The number of bars.
         :return:
         """
-        raise NotImplementedError('Must implement get_latest_bars()')
+        raise NotImplementedError("Must implement get_latest_bars()")
 
     @abstractmethod
     def get_latest_bar_dt(self, ticker: str):
@@ -90,7 +78,7 @@ class DataHandler(metaclass=ABCMeta):
         :return: The datetime of the last bar for the given asset
         :rtype: dt.datetime
         """
-        raise NotImplementedError('Must implement get_latest_bar_dt()')
+        raise NotImplementedError("Must implement get_latest_bar_dt()")
 
     @abstractmethod
     def latest_bar_value(self, ticker: str, val_type, n=1):
@@ -102,7 +90,7 @@ class DataHandler(metaclass=ABCMeta):
         :param n:
         :return:
         """
-        raise NotImplementedError('Must implement get_latest_bar_value()')
+        raise NotImplementedError("Must implement get_latest_bar_value()")
 
     @abstractmethod
     def update_bars(self):
@@ -110,7 +98,7 @@ class DataHandler(metaclass=ABCMeta):
         Pushes the latest bar to the latest symbol structure for all symbols
         in the symbol list.
         """
-        raise NotImplementedError('Must implement update_bars()')
+        raise NotImplementedError("Must implement update_bars()")
 
     @abstractmethod
     def _populate_ticker_data(self):
@@ -121,19 +109,19 @@ class DataHandler(metaclass=ABCMeta):
         This will get called on ``__init__`` and is **NOT** intended to ever
         be called directly by child classes.
         """
-        raise NotImplementedError('Must implement _populate_ticker_data()')
+        raise NotImplementedError("Must implement _populate_ticker_data()")
 
 
 class Bars(DataHandler):
-    def __init__(self,
-                 events: queue.Queue,
-                 tickers: Iterable,
-                 date_range: DateRange,
-                 source: str = 'yahoo'):
+    def __init__(
+        self,
+        events: queue.Queue,
+        tickers: Iterable,
+        date_range: DateRange,
+        source: str = "yahoo",
+    ):
         self.source = source
-        super().__init__(events=events,
-                         tickers=tickers,
-                         date_range=date_range)
+        super().__init__(events=events, tickers=tickers, date_range=date_range)
 
     def _populate_ticker_data(self) -> Dict[str, Iterable[pd.Series]]:
         """
@@ -156,23 +144,24 @@ class Bars(DataHandler):
 
             self.latest_ticker_data[t] = []
 
-        comb_index = comb_index[~comb_index.duplicated(keep='first')]
+        comb_index = comb_index[~comb_index.duplicated(keep="first")]
 
         for t in self.tickers:
-            out[t] = out[t][~out[t].index.duplicated(keep='first')]
+            out[t] = out[t][~out[t].index.duplicated(keep="first")]
             # TODO: back filling is not the best behavior I don't think but
             # I don't know the correct behavior.
             # The issue is that sometimes a ticker(s) will have more data than
             # the rest and that breaks things.
             # method='pad' is the desired behavior I think but there are too
             # many implications of that. Need to think through this.
-            out[t] = out[t].reindex(comb_index, method='bfill')
+            out[t] = out[t].reindex(comb_index, method="bfill")
             out[t] = out[t].iterrows()
         return out
 
     @memoize
-    def make_agg_df(self, col: str = utils.CLOSE_COL,
-                    market_ticker: Union[str, None] = 'SPY') -> pd.DataFrame:
+    def make_agg_df(
+        self, col: str = utils.CLOSE_COL, market_ticker: Union[str, None] = "SPY"
+    ) -> pd.DataFrame:
         """
         Make a df that contains all of the ticker data and write it the db.
 
@@ -189,31 +178,34 @@ class Bars(DataHandler):
 
         if market_ticker is not None and market_ticker not in self.tickers:
             # get the market data if it has not already been fetched
-            market_df: pd.DataFrame = self.mkt_reader.get_data(market_ticker,
-                                                               columns=col,
-                                                               date_range=self.date_range)
+            market_df: pd.DataFrame = self.mkt_reader.get_data(
+                market_ticker, columns=col, date_range=self.date_range
+            )
             if agg_df.empty:
-                agg_df = pd.DataFrame(market_df[col].values,
-                                      index=market_df.index,
-                                      columns=[market_ticker])
+                agg_df = pd.DataFrame(
+                    market_df[col].values,
+                    index=market_df.index,
+                    columns=[market_ticker],
+                )
 
         for t in self.tickers:
             temp_df: pd.DataFrame = df_dict[t].copy()
-            temp_df = pd.DataFrame(temp_df[col].values,
-                                   index=temp_df.index,
-                                   columns=[t])
+            temp_df = pd.DataFrame(
+                temp_df[col].values, index=temp_df.index, columns=[t]
+            )
             if agg_df.empty:
                 agg_df = df_dict[t][[col, utils.TICKER_COL]]
             else:
-                agg_df = pd.merge(agg_df, temp_df, left_index=True,
-                                  right_index=True, how='outer')
+                agg_df = pd.merge(
+                    agg_df, temp_df, left_index=True, right_index=True, how="outer"
+                )
 
         return agg_df
 
     @memoize
-    def _get_data(self,
-                  tickers: Iterable[str] = None,
-                  **kwargs) -> Dict[str, pd.DataFrame]:
+    def _get_data(
+        self, tickers: Iterable[str] = None, **kwargs
+    ) -> Dict[str, pd.DataFrame]:
         """
         Get the data.
 
@@ -226,10 +218,9 @@ class Bars(DataHandler):
         else:
             tickers = self.tickers
 
-        return self.asset_reader.get_data(tickers,
-                                          self.source,
-                                          self.date_range,
-                                          **kwargs)
+        return self.asset_reader.get_data(
+            tickers, self.source, self.date_range, **kwargs
+        )
 
     def _get_new_bar(self, ticker: str):
         """
@@ -246,7 +237,7 @@ class Bars(DataHandler):
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            raise KeyError(f'{ticker} is not available in the given data set.')
+            raise KeyError(f"{ticker} is not available in the given data set.")
         else:
             return bars_list[-1]
 
@@ -264,7 +255,7 @@ class Bars(DataHandler):
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            raise KeyError(f'Could not find {ticker} in latest_ticker_data')
+            raise KeyError(f"Could not find {ticker} in latest_ticker_data")
         else:
             return bars_list[-n:]
 
@@ -272,7 +263,7 @@ class Bars(DataHandler):
         try:
             bars_list = self.latest_ticker_data[ticker]
         except KeyError:
-            raise KeyError(f'Could not find {ticker} in latest_ticker_data')
+            raise KeyError(f"Could not find {ticker} in latest_ticker_data")
         else:
             return utils.parse_date(bars_list[-1].name, tz=pytz.UTC)
 
@@ -290,18 +281,18 @@ class Bars(DataHandler):
         try:
             bars_list = self.get_latest_bars(ticker, n)
         except KeyError:
-            raise KeyError(f'Could not find {ticker} in latest_ticker_data')
+            raise KeyError(f"Could not find {ticker} in latest_ticker_data")
 
         if hasattr(bars_list[-1], col):
             return np.array([getattr(bar, col) for bar in bars_list])
-        elif col == utils.ADJ_CLOSE_COL and hasattr(bars_list[-1],
-                                                    utils.CLOSE_COL):
-            self.logger.warning(f'{col} was requested but was not found, '
-                                f'using {utils.CLOSE_COL} instead.')
-            return np.array(
-                [getattr(bar, utils.CLOSE_COL) for bar in bars_list])
+        elif col == utils.ADJ_CLOSE_COL and hasattr(bars_list[-1], utils.CLOSE_COL):
+            self.logger.warning(
+                f"{col} was requested but was not found, "
+                f"using {utils.CLOSE_COL} instead."
+            )
+            return np.array([getattr(bar, utils.CLOSE_COL) for bar in bars_list])
         else:
-            raise ValueError(f'{col} does not exist in bars.')
+            raise ValueError(f"{col} does not exist in bars.")
 
     def update_bars(self) -> None:
         for ticker in self.tickers:

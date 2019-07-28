@@ -6,9 +6,7 @@ from psycopg2._psycopg import IntegrityError
 from sqlalchemy.dialects.postgresql import insert
 
 import pytech.utils as utils
-from pytech.exceptions import (
-    PyInvestmentKeyError,
-)
+from pytech.exceptions import PyInvestmentKeyError
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +33,7 @@ def optional_arg_decorator(fn):
             return fn(args[0])
 
         else:
+
             def real_decorator(decoratee):
                 return fn(decoratee, *args)
 
@@ -72,21 +71,25 @@ def write_df(table: str):
                 ticker = df[utils.TICKER_COL].iat[0]
             except KeyError:
                 raise PyInvestmentKeyError(
-                    'Decorated functions are required to add a column '
-                    f'"{utils.TICKER_COL}" that contains the ticker.')
+                    "Decorated functions are required to add a column "
+                    f'"{utils.TICKER_COL}" that contains the ticker.'
+                )
 
-            if 'date' not in df.columns and 'date' in df.index.names:
+            if "date" not in df.columns and "date" in df.index.names:
                 df[utils.DATE_COL] = df.index
             writer = write()
-            ins = (insert(assets).values(ticker=ticker)
-                .on_conflict_do_nothing(constraint='asset_pkey'))
+            ins = (
+                insert(assets)
+                .values(ticker=ticker)
+                .on_conflict_do_nothing(constraint="asset_pkey")
+            )
             writer(ins)
 
             df.index.freq = BDay()
             try:
                 writer.df(df, table)
             except IntegrityError as e:
-                logger.warning(f'Unable to insert df. {e.pgerror}')
+                logger.warning(f"Unable to insert df. {e.pgerror}")
 
             return ReaderResult(ticker, df)
 

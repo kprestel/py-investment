@@ -22,18 +22,20 @@ class Trade(object):
     Trades must be created as a result of an :class:``Order`` executing.
     """
 
-    LOGGER_NAME = 'trade'
+    LOGGER_NAME = "trade"
 
-    def __init__(self,
-                 qty: int,
-                 price_per_share: float,
-                 action: TradeAction,
-                 strategy: str,
-                 order: 'Order',
-                 avg_price_per_share: float,
-                 commission: float = 0.0,
-                 trade_date: dt.datetime = None,
-                 ticker: str = None):
+    def __init__(
+        self,
+        qty: int,
+        price_per_share: float,
+        action: TradeAction,
+        strategy: str,
+        order: "Order",
+        avg_price_per_share: float,
+        commission: float = 0.0,
+        trade_date: dt.datetime = None,
+        ticker: str = None,
+    ):
         """
         :param datetime trade_date: corresponding to the date and time of the
             trade date
@@ -91,8 +93,16 @@ class Trade(object):
         return self.trade_value() * -1
 
     @classmethod
-    def from_order(cls, order, trade_date, commission, price_per_share, qty,
-                   avg_price_per_share, strategy=None):
+    def from_order(
+        cls,
+        order,
+        trade_date,
+        commission,
+        price_per_share,
+        qty,
+        avg_price_per_share,
+        strategy=None,
+    ):
         """
         Make a trade from a triggered order object.
 
@@ -117,15 +127,15 @@ class Trade(object):
             strategy = order.order_type.name
 
         trade_dict = {
-            'ticker': order.ticker,
-            'qty': qty,
-            'action': order.action,
-            'price_per_share': price_per_share,
-            'avg_price_per_share': avg_price_per_share,
-            'strategy': strategy,
-            'order': order,
-            'trade_date': trade_date,
-            'commission': commission
+            "ticker": order.ticker,
+            "qty": qty,
+            "action": order.action,
+            "price_per_share": price_per_share,
+            "avg_price_per_share": avg_price_per_share,
+            "strategy": strategy,
+            "order": order,
+            "trade_date": trade_date,
+            "commission": commission,
         }
 
         return cls(**trade_dict)

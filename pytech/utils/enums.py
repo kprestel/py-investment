@@ -24,8 +24,8 @@ class AutoNumber(Enum):
             return None
         elif isinstance(value, cls):
             return value
-        elif hasattr(value, 'name'):
-            value = getattr(value, 'name')
+        elif hasattr(value, "name"):
+            value = getattr(value, "name")
         for name, member in cls.__members__.items():
             if member.name == value.upper():
                 return member
@@ -35,6 +35,7 @@ class AutoNumber(Enum):
 
 class EventType(AutoNumber):
     """Different Event types"""
+
     MARKET = ()
     SIGNAL = ()
     TRADE = ()
@@ -98,6 +99,7 @@ class OrderStatus(AutoNumber):
 
 class OrderType(AutoNumber):
     """Valid Order Types"""
+
     # TODO: document this better
     STOP = ()
     LIMIT = ()
@@ -115,6 +117,7 @@ class OrderType(AutoNumber):
 
 class OrderSubType(AutoNumber):
     """Valid OrderSubtypes"""
+
     ALL_OR_NONE = ()
     GOOD_TIL_CANCELED = ()
     DAY = ()

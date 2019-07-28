@@ -1,23 +1,10 @@
 import datetime
 import logging
-from abc import (
-    ABCMeta,
-    abstractmethod,
-)
-from typing import (
-    Any,
-    Dict,
-    Union,
-)
+from abc import ABCMeta, abstractmethod
+from typing import Any, Dict, Union
 
 import pytech.utils.dt_utils as dt_utils
-from pytech.utils.enums import (
-    EventType,
-    OrderType,
-    Position,
-    SignalType,
-    TradeAction,
-)
+from pytech.utils.enums import EventType, OrderType, Position, SignalType, TradeAction
 
 
 class Event(metaclass=ABCMeta):
@@ -41,8 +28,9 @@ class Event(metaclass=ABCMeta):
 
     @classmethod
     def get_subclasses(cls):
-        yield cls.__subclasses__() + [y for x in cls.__subclasses__()
-                                      for y in x.get_subclasses()]
+        yield cls.__subclasses__() + [
+            y for x in cls.__subclasses__() for y in x.get_subclasses()
+        ]
 
 
 class MarketEvent(Event):
@@ -62,20 +50,22 @@ class SignalEvent(Event):
     Which is received by a :class:`Portfolio` and acted upon.
     """
 
-    def __init__(self,
-                 ticker: str,
-                 signal_type: Union[SignalType, str],
-                 action: Union[TradeAction, str],
-                 limit_price: float = None,
-                 stop_price: float = None,
-                 target_price: float = None,
-                 strength: Any = None,
-                 order_type: OrderType = None,
-                 position: Position = None,
-                 upper_price: float = None,
-                 lower_price: float = None,
-                 *args,
-                 **kwargs):
+    def __init__(
+        self,
+        ticker: str,
+        signal_type: Union[SignalType, str],
+        action: Union[TradeAction, str],
+        limit_price: float = None,
+        stop_price: float = None,
+        target_price: float = None,
+        strength: Any = None,
+        order_type: OrderType = None,
+        position: Position = None,
+        upper_price: float = None,
+        lower_price: float = None,
+        *args,
+        **kwargs
+    ):
         """
         Base SignalEvent constructor.
 
@@ -140,8 +130,7 @@ class SignalEvent(Event):
             else:
                 order_type = OrderType.MARKET
                 # Typically a Market order is not desirable so we warn on it.
-                self.logger.warning(
-                    'Creating a SignalEvent with a Market order type.')
+                self.logger.warning("Creating a SignalEvent with a Market order type.")
 
         self.order_type = OrderType.check_if_valid(order_type)
 
@@ -153,31 +142,37 @@ class SignalEvent(Event):
 class TradeSignalEvent(SignalEvent):
     """A SignalEvent that is specifically for ``LONG`` or ``SHORT`` trades."""
 
-    def __init__(self,
-                 ticker: str,
-                 signal_type: Union[SignalType, str],
-                 action: Union[TradeAction, str],
-                 limit_price: float = None,
-                 stop_price: float = None,
-                 target_price: float = None,
-                 strength: Any = None,
-                 order_type: OrderType = None,
-                 position: Position = None,
-                 upper_price: float = None,
-                 lower_price: float = None,
-                 *args, **kwargs):
-        super().__init__(ticker,
-                         signal_type,
-                         limit_price,
-                         stop_price,
-                         target_price,
-                         strength,
-                         order_type,
-                         action,
-                         position,
-                         upper_price,
-                         lower_price,
-                         *args, **kwargs)
+    def __init__(
+        self,
+        ticker: str,
+        signal_type: Union[SignalType, str],
+        action: Union[TradeAction, str],
+        limit_price: float = None,
+        stop_price: float = None,
+        target_price: float = None,
+        strength: Any = None,
+        order_type: OrderType = None,
+        position: Position = None,
+        upper_price: float = None,
+        lower_price: float = None,
+        *args,
+        **kwargs
+    ):
+        super().__init__(
+            ticker,
+            signal_type,
+            limit_price,
+            stop_price,
+            target_price,
+            strength,
+            order_type,
+            action,
+            position,
+            upper_price,
+            lower_price,
+            *args,
+            **kwargs
+        )
 
 
 class TradeEvent(Event):
@@ -189,11 +184,7 @@ class TradeEvent(Event):
     is triggered.
     """
 
-    def __init__(self,
-                 order_id: str,
-                 price: float,
-                 qty: int,
-                 dt: datetime or str):
+    def __init__(self, order_id: str, price: float, qty: int, dt: datetime or str):
         super().__init__()
         self.order_id = order_id
         self.price = price
@@ -211,11 +202,9 @@ class FillEvent(Event):
     either cash or the asset.
     """
 
-    def __init__(self,
-                 order_id: str,
-                 price: float,
-                 available_volume: int,
-                 dt: datetime or str):
+    def __init__(
+        self, order_id: str, price: float, available_volume: int, dt: datetime or str
+    ):
         super().__init__()
         self.order_id = order_id
         self.price = price

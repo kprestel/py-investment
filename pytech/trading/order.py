@@ -1,14 +1,9 @@
 import logging
 import math
-from abc import (
-    ABCMeta,
-    abstractmethod,
-)
+from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from sys import float_info
-from typing import (
-    Union,
-)
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -19,12 +14,7 @@ from ..backtest.event import SignalEvent
 from ..exceptions import BadOrderParams
 from ..fin.asset.asset import Asset
 from ..utils import class_property
-from ..utils.enums import (
-    OrderStatus,
-    OrderSubType,
-    OrderType,
-    TradeAction,
-)
+from ..utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +22,21 @@ logger = logging.getLogger(__name__)
 class Order(metaclass=ABCMeta):
     """Hold open orders"""
 
-    LOGGER_NAME = 'order'
+    LOGGER_NAME = "order"
     _order_type = None
 
-    def __init__(self,
-                 ticker: str,
-                 action: TradeAction,
-                 qty: int,
-                 order_subtype: OrderSubType = None,
-                 created: datetime = None,
-                 max_days_open: int = None,
-                 order_id: str = None,
-                 *args, **kwargs):
+    def __init__(
+        self,
+        ticker: str,
+        action: TradeAction,
+        qty: int,
+        order_subtype: OrderSubType = None,
+        created: datetime = None,
+        max_days_open: int = None,
+        order_id: str = None,
+        *args,
+        **kwargs
+    ):
         """
         Order constructor
 
@@ -81,7 +74,8 @@ class Order(metaclass=ABCMeta):
         self.id = order_id or utils.make_id()
         self.ticker = ticker
         self.logger = logging.getLogger(
-            '{}_ticker_{}'.format(self.__class__.__name__, self.ticker))
+            "{}_ticker_{}".format(self.__class__.__name__, self.ticker)
+        )
 
         # TODO: validate that all of these inputs make sense together.
         # e.g. if its a stop order stop shouldn't be none
@@ -182,15 +176,15 @@ class Order(metaclass=ABCMeta):
     def open_amount(self):
         return self.qty - self.filled
 
-    def cancel(self, reason=''):
+    def cancel(self, reason=""):
         self.status = OrderStatus.CANCELLED
         self.reason = reason
 
-    def reject(self, reason=''):
+    def reject(self, reason=""):
         self.status = OrderStatus.REJECTED
         self.reason = reason
 
-    def hold(self, reason=''):
+    def hold(self, reason=""):
         self.status = OrderStatus.HELD
         self.reason = reason
 
@@ -241,7 +235,7 @@ class Order(metaclass=ABCMeta):
         return order_class(qty=qty, **signal.__dict__)
 
     @classmethod
-    def get_order(cls, type_: Union['OrderType', str]):
+    def get_order(cls, type_: Union["OrderType", str]):
         """
         Get a reference to the Order class requested.
 
@@ -258,14 +252,19 @@ class MarketOrder(Order):
 
     _order_type: OrderType = OrderType.MARKET
 
-    def __init__(self, ticker: str,
-                 action: TradeAction,
-                 qty: int,
-                 created: datetime = None,
-                 order_id: str = None,
-                 *args, **kwargs):
-        super().__init__(ticker, action, qty, created=created,
-                         order_id=order_id, *args, **kwargs)
+    def __init__(
+        self,
+        ticker: str,
+        action: TradeAction,
+        qty: int,
+        created: datetime = None,
+        order_id: str = None,
+        *args,
+        **kwargs
+    ):
+        super().__init__(
+            ticker, action, qty, created=created, order_id=order_id, *args, **kwargs
+        )
 
     def check_triggers(self, current_price: float, dt: datetime) -> bool:
         return True
@@ -280,19 +279,29 @@ class LimitOrder(Order):
 
     _order_type: OrderType = OrderType.LIMIT
 
-    def __init__(self,
-                 ticker: str,
-                 action: TradeAction,
-                 qty: int,
-                 order_subtype: OrderSubType = None,
-                 created: datetime = None,
-                 max_days_open: int = None,
-                 order_id: str = None,
-                 *,
-                 limit_price: float,
-                 **kwargs):
-        super().__init__(ticker, action, qty, order_subtype, created,
-                         max_days_open, order_id, **kwargs)
+    def __init__(
+        self,
+        ticker: str,
+        action: TradeAction,
+        qty: int,
+        order_subtype: OrderSubType = None,
+        created: datetime = None,
+        max_days_open: int = None,
+        order_id: str = None,
+        *,
+        limit_price: float,
+        **kwargs
+    ):
+        super().__init__(
+            ticker,
+            action,
+            qty,
+            order_subtype,
+            created,
+            max_days_open,
+            order_id,
+            **kwargs
+        )
         self.limit_reached = False
         self.limit_price = limit_price
 
@@ -311,9 +320,10 @@ class LimitOrder(Order):
         try:
             if np.isfinite(limit_price):
                 self._limit_price = asymmetric_round_price_to_penny(
-                    limit_price, pref_round_down)
+                    limit_price, pref_round_down
+                )
         except TypeError:
-            raise BadOrderParams(order_type='limit', price=limit_price)
+            raise BadOrderParams(order_type="limit", price=limit_price)
 
     @property
     def triggered(self) -> bool:
@@ -348,19 +358,29 @@ class StopOrder(Order):
 
     _order_type: OrderType = OrderType.STOP
 
-    def __init__(self,
-                 ticker: str,
-                 action: TradeAction,
-                 qty: int,
-                 order_subtype: OrderSubType = None,
-                 created: datetime = None,
-                 max_days_open: int = None,
-                 order_id: str = None,
-                 *,
-                 stop_price: float,
-                 **kwargs):
-        super().__init__(ticker, action, qty, order_subtype, created,
-                         max_days_open, order_id, **kwargs)
+    def __init__(
+        self,
+        ticker: str,
+        action: TradeAction,
+        qty: int,
+        order_subtype: OrderSubType = None,
+        created: datetime = None,
+        max_days_open: int = None,
+        order_id: str = None,
+        *,
+        stop_price: float,
+        **kwargs
+    ):
+        super().__init__(
+            ticker,
+            action,
+            qty,
+            order_subtype,
+            created,
+            max_days_open,
+            order_id,
+            **kwargs
+        )
         self.stop_price = stop_price
         self.stop_reached = False
 
@@ -377,10 +397,11 @@ class StopOrder(Order):
         pref_round_down = self.action is not TradeAction.BUY
         try:
             if np.isfinite(stop_price):
-                self._stop_price = asymmetric_round_price_to_penny(stop_price,
-                                                                   pref_round_down)
+                self._stop_price = asymmetric_round_price_to_penny(
+                    stop_price, pref_round_down
+                )
         except TypeError:
-            raise BadOrderParams(order_type='stop', price=stop_price)
+            raise BadOrderParams(order_type="stop", price=stop_price)
 
     @property
     def triggered(self) -> bool:
@@ -404,27 +425,33 @@ class StopLimitOrder(StopOrder, LimitOrder):
 
     _order_type: OrderType = OrderType.STOP_LIMIT
 
-    def __init__(self,
-                 ticker: str,
-                 action: TradeAction,
-                 qty: int,
-                 stop_price: float,
-                 limit_price: float,
-                 order_subtype: OrderSubType = None,
-                 created: datetime = None,
-                 max_days_open: int = None,
-                 order_id: str = None,
-                 **kwargs):
+    def __init__(
+        self,
+        ticker: str,
+        action: TradeAction,
+        qty: int,
+        stop_price: float,
+        limit_price: float,
+        order_subtype: OrderSubType = None,
+        created: datetime = None,
+        max_days_open: int = None,
+        order_id: str = None,
+        **kwargs
+    ):
         # # stop_price = kwargs.pop('stop_price')
         # limit_price = kwargs.pop('limit_price')
-        super().__init__(ticker, action, qty,
-                         stop_price=stop_price,
-                         limit_price=limit_price,
-                         order_subtype=order_subtype,
-                         created=created,
-                         max_days_open=max_days_open,
-                         order_id=order_id,
-                         **kwargs)
+        super().__init__(
+            ticker,
+            action,
+            qty,
+            stop_price=stop_price,
+            limit_price=limit_price,
+            order_subtype=order_subtype,
+            created=created,
+            max_days_open=max_days_open,
+            order_id=order_id,
+            **kwargs
+        )
 
     @property
     def triggered(self) -> bool:
@@ -448,8 +475,7 @@ class StopLimitOrder(StopOrder, LimitOrder):
         return self.triggered
 
 
-def asymmetric_round_price_to_penny(price, prefer_round_down,
-                                    diff=(0.0095 - .005)):
+def asymmetric_round_price_to_penny(price, prefer_round_down, diff=(0.0095 - 0.005)):
     """
     This method was taken from the zipline lib.
 

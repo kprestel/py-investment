@@ -3,21 +3,13 @@ import logging
 import operator
 import queue
 from datetime import datetime
-from typing import (
-    List,
-    TYPE_CHECKING,
-    Union,
-    Dict,
-)
+from typing import List, TYPE_CHECKING, Union, Dict
 
 import pytech.utils as utils
 from pytech.backtest.event import TradeEvent
 from pytech.data.handler import DataHandler
 from pytech.fin.asset.asset import Asset
-from pytech.trading.commission import (
-    AbstractCommissionModel,
-    PerOrderCommissionModel,
-)
+from pytech.trading.commission import AbstractCommissionModel, PerOrderCommissionModel
 from pytech.trading.order import (
     LimitOrder,
     MarketOrder,
@@ -26,45 +18,39 @@ from pytech.trading.order import (
     StopOrder,
 )
 from pytech.trading.trade import Trade
-from pytech.utils.enums import (
-    OrderStatus,
-    OrderSubType,
-    OrderType,
-    TradeAction,
-)
+from pytech.utils.enums import OrderStatus, OrderSubType, OrderType, TradeAction
 
 if TYPE_CHECKING:
     from fin.portfolio import Portfolio
-    from . import (
-        AnyOrder,
-        TradingControl,
-    )
+    from . import AnyOrder, TradingControl
 
 
 class Blotter(object):
     """Holds and interacts with all orders."""
 
-    def __init__(self,
-                 events,
-                 commission_model=None,
-                 max_shares=None,
-                 limit_pct_buffer: float = 1.02,
-                 stop_pct_buffer: float = .98,
-                 controls: List['TradingControl'] = None,
-                 bars: 'DataHandler' = None) -> None:
+    def __init__(
+        self,
+        events,
+        commission_model=None,
+        max_shares=None,
+        limit_pct_buffer: float = 1.02,
+        stop_pct_buffer: float = 0.98,
+        controls: List["TradingControl"] = None,
+        bars: "DataHandler" = None,
+    ) -> None:
         self.logger = logging.getLogger(__name__)
         # dict of all orders. key=ticker of the asset, value=the order.
-        self.orders: Dict[str, Dict[str, 'AnyOrder']] = {}
+        self.orders: Dict[str, Dict[str, "AnyOrder"]] = {}
         # keep a record of all past trades.
         self.trades: List[Trade] = []
         self.current_dt: datetime = None
         # events queue
         self.events: queue.Queue = events
-        self.bars: 'DataHandler' = bars
-        self.max_shares: int = max_shares or int(1e+11)
+        self.bars: "DataHandler" = bars
+        self.max_shares: int = max_shares or int(1e11)
         # how much an auto generated limit price will be over the market price.
         self.limit_pct_buffer: float = limit_pct_buffer or 1.02
-        self.stop_pct_buffer: float = stop_pct_buffer or .98
+        self.stop_pct_buffer: float = stop_pct_buffer or 0.98
         if controls is None:
             self.controls = []
         else:
@@ -76,9 +62,9 @@ class Blotter(object):
             self.commission_model = commission_model
         else:
             raise TypeError(
-                f'commission_model must be a subclass of '
-                f'AbstractCommissionModel. '
-                f'{type(commission_model)} was provided'
+                f"commission_model must be a subclass of "
+                f"AbstractCommissionModel. "
+                f"{type(commission_model)} was provided"
             )
 
     @property
@@ -93,8 +79,10 @@ class Blotter(object):
         elif data_handler is None:
             self._bars = None
         else:
-            raise TypeError(f'bars must be an instance of DataHandler. '
-                            f'{type(data_handler)} was provided')
+            raise TypeError(
+                f"bars must be an instance of DataHandler. "
+                f"{type(data_handler)} was provided"
+            )
 
     @property
     def current_dt(self):
@@ -107,8 +95,7 @@ class Blotter(object):
         else:
             self._current_dt = utils.parse_date(val)
 
-    def __getitem__(self, key) -> Union[Dict[str, 'AnyOrder'],
-                                        'AnyOrder']:
+    def __getitem__(self, key) -> Union[Dict[str, "AnyOrder"], "AnyOrder"]:
         """
         Get an order from the orders dict or get all orders for a ticker.
 
@@ -149,6 +136,7 @@ class Blotter(object):
         This means you can iterate over a :class:``Blotter`` instance directly
         and access all of the open orders it has.
         """
+
         def do_iter(orders_dict):
             for k, v in orders_dict.items():
                 if isinstance(v, collections.Mapping):
@@ -158,19 +146,21 @@ class Blotter(object):
 
         return do_iter(self.orders)
 
-    def place_order(self,
-                    portfolio: 'Portfolio',
-                    ticker: str,
-                    qty: int,
-                    action: Union[TradeAction, str] = None,
-                    order_type: Union[OrderType, str] = None,
-                    stop_price: float = None,
-                    limit_price: float = None,
-                    date_placed: datetime = None,
-                    order_subtype: OrderSubType = None,
-                    order_id: str = None,
-                    max_days_open: int = 90,
-                    **kwargs):
+    def place_order(
+        self,
+        portfolio: "Portfolio",
+        ticker: str,
+        qty: int,
+        action: Union[TradeAction, str] = None,
+        order_type: Union[OrderType, str] = None,
+        stop_price: float = None,
+        limit_price: float = None,
+        date_placed: datetime = None,
+        order_subtype: OrderSubType = None,
+        order_id: str = None,
+        max_days_open: int = 90,
+        **kwargs,
+    ):
         """
         Open a new order.  If an open order for the given ``ticker`` already
         exists placing a new order will **NOT** change the existing order,
@@ -227,39 +217,36 @@ class Blotter(object):
         if date_placed is None:
             date_placed = self.current_dt
 
-        order = self._create_order(ticker,
-                                   action,
-                                   qty,
-                                   order_type,
-                                   stop_price=stop_price,
-                                   limit_price=limit_price,
-                                   date_placed=date_placed,
-                                   order_subtype=order_subtype,
-                                   order_id=order_id,
-                                   max_days_open=max_days_open,
-                                   **kwargs)
+        order = self._create_order(
+            ticker,
+            action,
+            qty,
+            order_type,
+            stop_price=stop_price,
+            limit_price=limit_price,
+            date_placed=date_placed,
+            order_subtype=order_subtype,
+            order_id=order_id,
+            max_days_open=max_days_open,
+            **kwargs,
+        )
 
         for control in self.controls:
             control.validate(order, portfolio, self.current_dt, curr_price)
 
         if ticker in self.orders:
-            self.orders[ticker].update({
-                order.id: order
-            })
+            self.orders[ticker].update({order.id: order})
         else:
-            self.orders[ticker] = {
-                order.id: order
-            }
+            self.orders[ticker] = {order.id: order}
 
-    def _create_order(self,
-                      ticker: str,
-                      action: TradeAction,
-                      qty: int,
-                      order_type: Union[OrderType, str],
-                      **kwargs) -> Union[MarketOrder,
-                                         StopOrder,
-                                         LimitOrder,
-                                         StopLimitOrder]:
+    def _create_order(
+        self,
+        ticker: str,
+        action: TradeAction,
+        qty: int,
+        order_type: Union[OrderType, str],
+        **kwargs,
+    ) -> Union[MarketOrder, StopOrder, LimitOrder, StopLimitOrder]:
         """
         Figure out what type of order to create based on given parameters.
 
@@ -279,7 +266,7 @@ class Blotter(object):
         if order_type is OrderType.STOP_LIMIT:
             return StopLimitOrder(ticker, action, qty, **kwargs)
 
-    def _find_order(self, order_id: str, ticker: str = None) -> 'AnyOrder':
+    def _find_order(self, order_id: str, ticker: str = None) -> "AnyOrder":
         if ticker is None:
             for id_, order in self:
                 if order_id == id_:
@@ -289,9 +276,7 @@ class Blotter(object):
                 if k == order_id:
                     return v
 
-    def cancel_order(self, order_id: str,
-                     ticker: str = None,
-                     reason: str = ''):
+    def cancel_order(self, order_id: str, ticker: str = None, reason: str = ""):
         """
         Mark an order as canceled so that it will not get executed.
 
@@ -308,12 +293,15 @@ class Blotter(object):
         order = self._find_order(order_id, ticker)
         self._do_order_cancel(order, reason)
 
-    def cancel_all_orders_for_asset(self, ticker,
-                                    reason='',
-                                    upper_price=None,
-                                    lower_price=None,
-                                    order_type=None,
-                                    trade_action=None):
+    def cancel_all_orders_for_asset(
+        self,
+        ticker,
+        reason="",
+        upper_price=None,
+        lower_price=None,
+        order_type=None,
+        trade_action=None,
+    ):
         """
         Cancel all orders for a given ticker's ticker and then clean up the
         orders dict.
@@ -330,31 +318,32 @@ class Blotter(object):
         either ``BUY`` or ``SELL``.
         """
         for order in self.orders[ticker].values():
-            if self._check_filters(order, upper_price, lower_price,
-                                   order_type, trade_action):
+            if self._check_filters(
+                order, upper_price, lower_price, order_type, trade_action
+            ):
                 self._do_order_cancel(order, reason)
 
-    def _check_filters(self,
-                       order: 'AnyOrder',
-                       upper_price: float,
-                       lower_price: float,
-                       order_type: OrderType,
-                       trade_action: TradeAction) -> bool:
+    def _check_filters(
+        self,
+        order: "AnyOrder",
+        upper_price: float,
+        lower_price: float,
+        order_type: OrderType,
+        trade_action: TradeAction,
+    ) -> bool:
         """Check all of the possible filters."""
         if self._filter_on_order_type(order, order_type):
             return True
         elif self._filter_on_trade_action(order, trade_action):
             return True
-        elif self._filter_on_price(order,
-                                   upper_price=upper_price,
-                                   lower_price=lower_price):
+        elif self._filter_on_price(
+            order, upper_price=upper_price, lower_price=lower_price
+        ):
             return True
         else:
             return False
 
-    def _filter_on_order_type(self,
-                              order: 'AnyOrder',
-                              order_type: OrderType) -> bool:
+    def _filter_on_order_type(self, order: "AnyOrder", order_type: OrderType) -> bool:
         """
         Filter based on :class:``OrderType``. If the ``order`` is not the same
         :class:``OrderType`` as given then it will be filtered out from
@@ -367,14 +356,12 @@ class Blotter(object):
         taken.
         """
         if order_type is None:
-            self.logger.debug('Order type was None. Filtering...')
+            self.logger.debug("Order type was None. Filtering...")
             return True
         else:
             return order.order_type is order_type
 
-    def _filter_on_trade_action(self,
-                                order: 'AnyOrder',
-                                trade_action: TradeAction):
+    def _filter_on_trade_action(self, order: "AnyOrder", trade_action: TradeAction):
         """
 
         :param order:
@@ -382,15 +369,14 @@ class Blotter(object):
         :return:
         """
         if trade_action is None:
-            self.logger.debug('Trade action was none. Filtering...')
+            self.logger.debug("Trade action was none. Filtering...")
             return False
         else:
             return order.action is trade_action
 
-    def _filter_on_price(self,
-                         order: 'AnyOrder',
-                         upper_price: float,
-                         lower_price: float) -> bool:
+    def _filter_on_price(
+        self, order: "AnyOrder", upper_price: float, lower_price: float
+    ) -> bool:
         """
         Filter based on an upper and lower price and return ``True`` if the
         order meets the criteria. Meaning that whatever action is being
@@ -413,7 +399,7 @@ class Blotter(object):
         taken on it.
         """
         if upper_price is None and lower_price is None:
-            self.logger.warning('upper and lower price were both None.')
+            self.logger.warning("upper and lower price were both None.")
             return False
 
         if lower_price is None:
@@ -422,18 +408,15 @@ class Blotter(object):
         if upper_price is None:
             return self._do_price_filter(order, lower_price, operator.lt)
 
-        lower_price_broken = self._do_price_filter(order, lower_price,
-                                                   operator.lt)
+        lower_price_broken = self._do_price_filter(order, lower_price, operator.lt)
 
-        upper_price_broken = self._do_price_filter(order, upper_price,
-                                                   operator.gt)
+        upper_price_broken = self._do_price_filter(order, upper_price, operator.gt)
 
         return lower_price_broken or upper_price_broken
 
-    def _do_price_filter(self,
-                         order: 'AnyOrder',
-                         price: float,
-                         operator: operator) -> bool:
+    def _do_price_filter(
+        self, order: "AnyOrder", price: float, operator: operator
+    ) -> bool:
         """
         Filter based on stop and limit price.
 
@@ -444,7 +427,7 @@ class Blotter(object):
         try:
             stop_price = order.stop_price
         except AttributeError:
-            self.logger.debug('Order is not a stop order.')
+            self.logger.debug("Order is not a stop order.")
             stop_broken = False
         else:
             stop_broken = operator(stop_price, price)
@@ -452,29 +435,35 @@ class Blotter(object):
         try:
             limit_price = order.limit_price
         except AttributeError:
-            self.logger.debug('Order is not a limit order.')
+            self.logger.debug("Order is not a limit order.")
             limit_broken = False
         else:
             limit_broken = operator(limit_price, price)
 
         return limit_broken or stop_broken
 
-    def _do_order_cancel(self, order: 'AnyOrder', reason: str):
+    def _do_order_cancel(self, order: "AnyOrder", reason: str):
         """
         Cancel any order that is passed to this method and log the appropriate
         message.
         """
         if order.filled > 0:
-            self.logger.warning(f'Order for ticker: {order.ticker} has been '
-                                f'partially filled. {order.filled} shares '
-                                f'had already been purchased.')
+            self.logger.warning(
+                f"Order for ticker: {order.ticker} has been "
+                f"partially filled. {order.filled} shares "
+                f"had already been purchased."
+            )
         elif order.filled < 0:
-            self.logger.warning(f'Order for ticker: {order.ticker} has been '
-                                f'partially filled. {order.filled} shares '
-                                'had already been sold.')
+            self.logger.warning(
+                f"Order for ticker: {order.ticker} has been "
+                f"partially filled. {order.filled} shares "
+                "had already been sold."
+            )
         else:
-            self.logger.info(f'Canceled order for ticker: {order.ticker} '
-                             'successfully before it was executed.')
+            self.logger.info(
+                f"Canceled order for ticker: {order.ticker} "
+                "successfully before it was executed."
+            )
         order.cancel(reason)
         order.last_updated = self.current_dt
 
@@ -486,11 +475,14 @@ class Blotter(object):
         """
         self.orders[order.ticker][order.id].status = OrderStatus.HELD
 
-    def hold_all_orders_for_asset(self, ticker: str,
-                                  upper_price: float = None,
-                                  lower_price: float = None,
-                                  order_type: OrderType = None,
-                                  trade_action: TradeAction = None):
+    def hold_all_orders_for_asset(
+        self,
+        ticker: str,
+        upper_price: float = None,
+        lower_price: float = None,
+        order_type: OrderType = None,
+        trade_action: TradeAction = None,
+    ):
         """
         Place a hold on all orders for a given ticker's ticker.
 
@@ -505,11 +497,12 @@ class Blotter(object):
         either ``BUY`` or ``SELL``.
         """
         for order in self.orders[ticker].values():
-            if self._check_filters(order, upper_price, lower_price,
-                                   order_type, trade_action):
+            if self._check_filters(
+                order, upper_price, lower_price, order_type, trade_action
+            ):
                 self.hold_order(order)
 
-    def reject_order(self, order_id, ticker=None, reason=''):
+    def reject_order(self, order_id, ticker=None, reason=""):
         """
         Mark an order as rejected. A rejected order is functionally the same as
         a canceled order but an order being marked rejected is typically
@@ -527,10 +520,11 @@ class Blotter(object):
         self._find_order(order_id, ticker).reject(reason)
 
         self.logger.warning(
-            f'Order id: {order_id} for ticker: {ticker} '
-            f'was rejected because: {reason}')
+            f"Order id: {order_id} for ticker: {ticker} "
+            f"was rejected because: {reason}"
+        )
 
-    def check_order_triggers(self) -> List['AnyOrder']:
+    def check_order_triggers(self) -> List["AnyOrder"]:
         """
         Check if any order has been triggered and if they have execute the
         trade and then clean up closed orders.
@@ -544,16 +538,17 @@ class Blotter(object):
             # available_volume = bar[pd_utils.VOL_COL]
             # check_triggers returns a boolean indicating if it is triggered.
             if order.check_triggers(dt=dt, current_price=current_price):
-                self.events.put(TradeEvent(order_id, current_price,
-                                           order.qty, dt))
+                self.events.put(TradeEvent(order_id, current_price, order.qty, dt))
                 triggered_orders.append(order)
         return triggered_orders
 
-    def make_trade(self,
-                   order: 'AnyOrder',
-                   price_per_share: float,
-                   trade_date: datetime,
-                   volume: int) -> Trade:
+    def make_trade(
+        self,
+        order: "AnyOrder",
+        price_per_share: float,
+        trade_date: datetime,
+        volume: int,
+    ) -> Trade:
         """
         Buy or sell an ticker from the ticker universe.
 
@@ -577,18 +572,22 @@ class Blotter(object):
         * BUY
         * SELL
         """
-        commission_cost = self.commission_model.calculate(order,
-                                                          price_per_share)
+        commission_cost = self.commission_model.calculate(order, price_per_share)
         available_volume = order.get_available_volume(volume)
-        avg_price_per_share = _avg_price_per_share(price_per_share,
-                                                   available_volume,
-                                                   commission_cost)
+        avg_price_per_share = _avg_price_per_share(
+            price_per_share, available_volume, commission_cost
+        )
 
         order.commission += commission_cost
 
-        trade = Trade.from_order(order, trade_date, commission_cost,
-                                 price_per_share, available_volume,
-                                 avg_price_per_share)
+        trade = Trade.from_order(
+            order,
+            trade_date,
+            commission_cost,
+            price_per_share,
+            available_volume,
+            avg_price_per_share,
+        )
 
         order.filled += trade.qty
         self.trades.append(trade)
@@ -606,8 +605,9 @@ class Blotter(object):
         self.orders = open_orders
 
 
-def _avg_price_per_share(price_per_share: float, volume: float,
-                         commission: float) -> float:
+def _avg_price_per_share(
+    price_per_share: float, volume: float, commission: float
+) -> float:
     """Calculate the average price per share."""
     total_cost = price_per_share * volume + commission
     return total_cost / volume

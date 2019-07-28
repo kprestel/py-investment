@@ -4,15 +4,8 @@ through.
 """
 import datetime as dt
 import logging
-from abc import (
-    ABCMeta,
-    abstractmethod,
-)
-from typing import (
-    Any,
-    Dict,
-    TYPE_CHECKING,
-)
+from abc import ABCMeta, abstractmethod
+from typing import Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pytech.trading import AnyOrder
@@ -31,11 +24,13 @@ class TradingControl(metaclass=ABCMeta):
         self.__fail_args: Dict[str, Any] = kwargs
 
     @abstractmethod
-    def validate(self,
-                 order: 'AnyOrder',
-                 portfolio: 'Portfolio',
-                 cur_dt: dt.datetime,
-                 price: float):
+    def validate(
+        self,
+        order: "AnyOrder",
+        portfolio: "Portfolio",
+        cur_dt: dt.datetime,
+        price: float,
+    ):
         """
         This method should be called *exactly once* on each registered
         :class:`TradingControl` object.
@@ -70,10 +65,10 @@ class TradingControl(metaclass=ABCMeta):
             return msg
 
         for k, v in kwargs.items():
-            msg += f'{k}: {v} '
+            msg += f"{k}: {v} "
         return msg
 
-    def _fail(self, order: 'AnyOrder', cur_dt: dt.datetime, **kwargs):
+    def _fail(self, order: "AnyOrder", cur_dt: dt.datetime, **kwargs):
         """
         Handle a :class:`TradingConstraint` violation.
 
@@ -87,17 +82,17 @@ class TradingControl(metaclass=ABCMeta):
         control = self._control_msg()
 
         if self.raise_on_error:
-            raise TradingControlViolation(qty=order.qty,
-                                          ticker=order.ticker,
-                                          datetime=cur_dt,
-                                          control=control)
+            raise TradingControlViolation(
+                qty=order.qty, ticker=order.ticker, datetime=cur_dt, control=control
+            )
         else:
             self.logger.error(
-                f'Order for {order.qty} shares of {order.ticker} at {cur_dt} '
-                f'violates trading control {control}.')
+                f"Order for {order.qty} shares of {order.ticker} at {cur_dt} "
+                f"violates trading control {control}."
+            )
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.__fail_args})'
+        return f"{self.__class__.__name__}({self.__fail_args})"
 
 
 class MaxOrderSize(TradingControl):
@@ -108,31 +103,41 @@ class MaxOrderSize(TradingControl):
     This can be in terms of number of shares or a dollar amount.
     """
 
-    def __init__(self, raise_on_error: bool, ticker: str,
-                 max_shares: int = None, max_notional: float = None):
-        super().__init__(raise_on_error,
-                         ticker=ticker,
-                         max_shares=max_shares,
-                         max_notional=max_notional)
+    def __init__(
+        self,
+        raise_on_error: bool,
+        ticker: str,
+        max_shares: int = None,
+        max_notional: float = None,
+    ):
+        super().__init__(
+            raise_on_error,
+            ticker=ticker,
+            max_shares=max_shares,
+            max_notional=max_notional,
+        )
         self.ticker = ticker
         if max_shares is None and max_notional is None:
-            raise ValueError('Must supply at least one of max_shares,'
-                             'max_notional, or max_pct.')
+            raise ValueError(
+                "Must supply at least one of max_shares," "max_notional, or max_pct."
+            )
 
         if max_shares is not None and max_shares < 0:
-            raise ValueError('max_shares must be positive.')
+            raise ValueError("max_shares must be positive.")
 
         if max_notional is not None and max_notional < 0:
-            raise ValueError('max_notional must be positive.')
+            raise ValueError("max_notional must be positive.")
 
         self.max_shares: int = max_shares
         self.max_notional: float = max_notional
 
-    def validate(self,
-                 order: 'AnyOrder',
-                 portfolio: 'Portfolio',
-                 cur_dt: dt.datetime,
-                 price: float) -> None:
+    def validate(
+        self,
+        order: "AnyOrder",
+        portfolio: "Portfolio",
+        cur_dt: dt.datetime,
+        price: float,
+    ) -> None:
         """
         Fail if the given order would cause the total position (current +
         order) to be greater than `self.max_shares` or a greater than
@@ -153,16 +158,18 @@ class MaxOrderSize(TradingControl):
 
         shares_post_order = current_shares + order.qty
 
-        too_many_shares = (self.max_shares is not None
-                           and abs(shares_post_order) > self.max_shares)
+        too_many_shares = (
+            self.max_shares is not None and abs(shares_post_order) > self.max_shares
+        )
 
         if too_many_shares:
             self._fail(order, cur_dt)
 
         value_post_order = shares_post_order * price
 
-        too_much_value = (self.max_notional is not None and
-                          abs(value_post_order) > self.max_notional)
+        too_much_value = (
+            self.max_notional is not None and abs(value_post_order) > self.max_notional
+        )
 
         if too_much_value:
             self._fail(order, cur_dt)
@@ -180,10 +187,13 @@ class MaxOrderCount(TradingControl):
         self.max_count = max_count
         self.current_date = None
 
-    def validate(self, order: 'AnyOrder',
-                 portfolio: 'Portfolio',
-                 cur_dt: dt.datetime,
-                 price: float) -> None:
+    def validate(
+        self,
+        order: "AnyOrder",
+        portfolio: "Portfolio",
+        cur_dt: dt.datetime,
+        price: float,
+    ) -> None:
         """Fail if we've already placed `self.max_orders` today."""
         bt_date = cur_dt.date()
 

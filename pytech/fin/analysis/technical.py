@@ -11,9 +11,7 @@ import pytech.utils.pdutils as pd_utils
 logger = logging.getLogger(__name__)
 
 
-def sma(df: pd.DataFrame,
-        period: int = 50,
-        col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def sma(df: pd.DataFrame, period: int = 50, col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Simple moving average
 
@@ -22,15 +20,11 @@ def sma(df: pd.DataFrame,
     :param col: The column in the data frame to use.
     :return: A series with the simple moving average
     """
-    sma = df[col].rolling(center=False,
-                          window=period,
-                          min_periods=period - 1).mean()
-    return pd.Series(sma, name='sma', index=df.index).dropna()
+    sma = df[col].rolling(center=False, window=period, min_periods=period - 1).mean()
+    return pd.Series(sma, name="sma", index=df.index).dropna()
 
 
-def smm(df: pd.DataFrame,
-        period: int = 50,
-        col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def smm(df: pd.DataFrame, period: int = 50, col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Compute the simple moving median over a given period.
 
@@ -40,14 +34,15 @@ def smm(df: pd.DataFrame,
     :return: Series containing the simple moving median.
 
     """
-    temp_series = df[col].rolling(center=False,
-                                  window=period,
-                                  min_periods=period - 1).median()
-    return pd.Series(temp_series, index=df.index, name='smm')
+    temp_series = (
+        df[col].rolling(center=False, window=period, min_periods=period - 1).median()
+    )
+    return pd.Series(temp_series, index=df.index, name="smm")
 
 
-def ewma(df: pd.DataFrame, period: int = 50,
-         col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def ewma(
+    df: pd.DataFrame, period: int = 50, col: str = pd_utils.CLOSE_COL
+) -> pd.Series:
     """
     Exponential weighted moving average.
 
@@ -56,14 +51,13 @@ def ewma(df: pd.DataFrame, period: int = 50,
     :param col:
     :return:
     """
-    return df[col].ewm(ignore_na=False,
-                       min_periods=period - 1,
-                       span=period).mean()
+    return df[col].ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
 
 
 # noinspection PyTypeChecker,PyUnresolvedReferences
-def triple_ewma(df: pd.DataFrame, period: int = 50,
-                col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def triple_ewma(
+    df: pd.DataFrame, period: int = 50, col: str = pd_utils.CLOSE_COL
+) -> pd.Series:
     """
     Triple Exponential Weighted Moving Average.
 
@@ -76,17 +70,24 @@ def triple_ewma(df: pd.DataFrame, period: int = 50,
 
     triple_ema = 3 * ewma_
 
-    ema_ema_ema = (ewma_.ewm(ignore_na=False, span=period).mean()
-                   .ewm(ignore_na=False, span=period).mean())
+    ema_ema_ema = (
+        ewma_.ewm(ignore_na=False, span=period)
+        .mean()
+        .ewm(ignore_na=False, span=period)
+        .mean()
+    )
 
-    series = triple_ema - 3 * (ewma_.ewm(ignore_na=False,
-                                         min_periods=period - 1,
-                                         span=period).mean()) + ema_ema_ema
+    series = (
+        triple_ema
+        - 3 * (ewma_.ewm(ignore_na=False, min_periods=period - 1, span=period).mean())
+        + ema_ema_ema
+    )
     return series.dropna()
 
 
-def triangle_ma(df: pd.DataFrame, period: int = 50,
-                col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def triangle_ma(
+    df: pd.DataFrame, period: int = 50, col: str = pd_utils.CLOSE_COL
+) -> pd.Series:
     """
     Triangle Moving Average. The SMA of the SMA.
 
@@ -97,12 +98,16 @@ def triangle_ma(df: pd.DataFrame, period: int = 50,
     """
     sma_ = sma(df, period, col)
 
-    return sma_.rolling(center=False, window=period,
-                        min_periods=period - 1).mean().dropna()
+    return (
+        sma_.rolling(center=False, window=period, min_periods=period - 1)
+        .mean()
+        .dropna()
+    )
 
 
-def trix(df: pd.DataFrame, period: int = 50,
-         col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def trix(
+    df: pd.DataFrame, period: int = 50, col: str = pd_utils.CLOSE_COL
+) -> pd.Series:
     """
     Triple Exponential Moving Average Oscillator (trix)
 
@@ -118,20 +123,18 @@ def trix(df: pd.DataFrame, period: int = 50,
     """
     emwa_one = ewma(df, period, col)
 
-    emwa_two = emwa_one.ewm(ignore_na=False,
-                            min_periods=period - 1,
-                            span=period).mean()
+    emwa_two = emwa_one.ewm(ignore_na=False, min_periods=period - 1, span=period).mean()
 
-    emwa_three = emwa_two.ewm(ignore_na=False,
-                              min_periods=period - 1,
-                              span=period).mean()
+    emwa_three = emwa_two.ewm(
+        ignore_na=False, min_periods=period - 1, span=period
+    ).mean()
 
     return emwa_three.pct_change(periods=1).dropna()
 
 
-def efficiency_ratio(df: pd.DataFrame,
-                     period: int = 10,
-                     col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def efficiency_ratio(
+    df: pd.DataFrame, period: int = 10, col: str = pd_utils.CLOSE_COL
+) -> pd.Series:
     """
     Kaufman Efficiency Indicator.
     Oscillates between +100 and -100 where positive is bullish.
@@ -146,12 +149,14 @@ def efficiency_ratio(df: pd.DataFrame,
     return pd.Series(change / vol).dropna()
 
 
-def kama(df: pd.DataFrame,
-         period: int = 20,
-         col: str = pd_utils.CLOSE_COL,
-         efficiency_ratio_periods: int = 10,
-         ema_fast: int = 2,
-         ema_slow: int = 30) -> pd.Series:
+def kama(
+    df: pd.DataFrame,
+    period: int = 20,
+    col: str = pd_utils.CLOSE_COL,
+    efficiency_ratio_periods: int = 10,
+    ema_fast: int = 2,
+    ema_slow: int = 30,
+) -> pd.Series:
     """
     Kaufman's Adaptive Moving Average.
 
@@ -184,11 +189,12 @@ def kama(df: pd.DataFrame,
             else:
                 kama_.append(None)
 
-    return pd.Series(kama_, index=sma_.index, name='KAMA')
+    return pd.Series(kama_, index=sma_.index, name="KAMA")
 
 
-def zero_lag_ema(df: pd.DataFrame, period: int = 30,
-                 col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def zero_lag_ema(
+    df: pd.DataFrame, period: int = 30, col: str = pd_utils.CLOSE_COL
+) -> pd.Series:
     """
     Zero Lag Exponential Moving Average.
 
@@ -198,12 +204,10 @@ def zero_lag_ema(df: pd.DataFrame, period: int = 30,
     :return:
     """
     lag = (period - 1) / 2
-    return pd.Series(df[col] + (df[col].diff(lag)),
-                     name='zero_lag_ema').dropna()
+    return pd.Series(df[col] + (df[col].diff(lag)), name="zero_lag_ema").dropna()
 
 
-def wma(df: pd.DataFrame, period: int = 30,
-        col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def wma(df: pd.DataFrame, period: int = 30, col: str = pd_utils.CLOSE_COL) -> pd.Series:
     """
     Weighted Moving Average.
 
@@ -221,12 +225,12 @@ def wma(df: pd.DataFrame, period: int = 30,
             wma_.append(None)
 
     wma_.reverse()
-    return pd.Series(wma_, index=df.index, name='wma')
+    return pd.Series(wma_, index=df.index, name="wma")
 
 
-def _chunks(df: Union[pd.DataFrame, pd.Series],
-            period: int,
-            col: str = pd_utils.CLOSE_COL):
+def _chunks(
+    df: Union[pd.DataFrame, pd.Series], period: int, col: str = pd_utils.CLOSE_COL
+):
     """
     Create `n` chunks based on the number of periods.
 
@@ -238,7 +242,7 @@ def _chunks(df: Union[pd.DataFrame, pd.Series],
     df_rev = df[col].iloc[::-1]
 
     for i in enumerate(df_rev):
-        chunk = df_rev.iloc[i[0]:i[0] + period]
+        chunk = df_rev.iloc[i[0] : i[0] + period]
         if len(chunk) != period:
             yield None
         else:
@@ -250,8 +254,7 @@ def _chunked_wma(chunk, period) -> float:
 
     ma = []
 
-    for price, i in zip(chunk.iloc[::-1].items(),
-                        range(period + 1)[1:]):
+    for price, i in zip(chunk.iloc[::-1].items(), range(period + 1)[1:]):
         ma.append(price[1] * (i / denominator))
 
     return sum(ma)
@@ -268,18 +271,22 @@ def true_range(df: pd.DataFrame, period: int = 14) -> pd.Series:
     :param period:
     :return:
     """
-    high_low = pd.Series(df[pd_utils.HIGH_COL].tail(period)
-                         - df[pd_utils.LOW_COL].tail(period),
-                         name='high_low')
+    high_low = pd.Series(
+        df[pd_utils.HIGH_COL].tail(period) - df[pd_utils.LOW_COL].tail(period),
+        name="high_low",
+    )
 
-    high_close = pd.Series(df[pd_utils.HIGH_COL].tail(period)
-                           - (df[pd_utils.CLOSE_COL].shift(-1)
-                              .abs().tail(period)),
-                           name='high_prev_close')
+    high_close = pd.Series(
+        df[pd_utils.HIGH_COL].tail(period)
+        - (df[pd_utils.CLOSE_COL].shift(-1).abs().tail(period)),
+        name="high_prev_close",
+    )
 
-    low_close = pd.Series(df[pd_utils.CLOSE_COL].shift(-1).tail(period)
-                          - df[pd_utils.LOW_COL].abs().tail(period),
-                          name='prev_close_low')
+    low_close = pd.Series(
+        df[pd_utils.CLOSE_COL].shift(-1).tail(period)
+        - df[pd_utils.LOW_COL].abs().tail(period),
+        name="prev_close_low",
+    )
 
     true_range = pd.concat([high_low, high_close, low_close], axis=1)
     true_range_list = []
@@ -287,15 +294,15 @@ def true_range(df: pd.DataFrame, period: int = 14) -> pd.Series:
     for row in true_range.itertuples():
         # TODO: fix this so it doesn't throw an exception for weekends
         try:
-            true_range_list.append(max(row.high_low,
-                                       row.high_prev_close,
-                                       row.prev_close_low))
+            true_range_list.append(
+                max(row.high_low, row.high_prev_close, row.prev_close_low)
+            )
         except TypeError:
             continue
 
-    return pd.Series(true_range_list,
-                     index=df.index[-period:],
-                     name='true_range').dropna()
+    return pd.Series(
+        true_range_list, index=df.index[-period:], name="true_range"
+    ).dropna()
 
 
 def avg_true_range(df: pd.DataFrame, period=14) -> pd.Series:
@@ -307,15 +314,13 @@ def avg_true_range(df: pd.DataFrame, period=14) -> pd.Series:
     :return:
     """
     tr = true_range(df, period * 2)
-    atr = tr.rolling(center=False,
-                     window=period,
-                     min_periods=period - 1).mean()
-    return pd.Series(atr, name='atr').dropna()
+    atr = tr.rolling(center=False, window=period, min_periods=period - 1).mean()
+    return pd.Series(atr, name="atr").dropna()
 
 
-def smoothed_ma(df: pd.DataFrame,
-                period: int = 30,
-                col: str = pd_utils.CLOSE_COL) -> pd.Series:
+def smoothed_ma(
+    df: pd.DataFrame, period: int = 30, col: str = pd_utils.CLOSE_COL
+) -> pd.Series:
     """
     Moving average where equal weights are given to historic
     and current prices
@@ -325,7 +330,7 @@ def smoothed_ma(df: pd.DataFrame,
     :return:
     """
     ma = df[col].ewm(alpha=1 / period).mean()
-    return pd.Series(ma, index=df.index, name='smoothed_ma')
+    return pd.Series(ma, index=df.index, name="smoothed_ma")
 
 
 def rsi(df: pd.DataFrame, period: int = 14, col: str = pd_utils.CLOSE_COL):
@@ -355,21 +360,23 @@ def rsi(df: pd.DataFrame, period: int = 14, col: str = pd_utils.CLOSE_COL):
             gain.append(0)
             loss.append(0)
 
-    rsi_series['gain'] = gain
-    rsi_series['loss'] = loss
+    rsi_series["gain"] = gain
+    rsi_series["loss"] = loss
 
-    avg_gain = rsi_series['gain'].rolling(window=period).mean()
-    avg_loss = rsi_series['loss'].rolling(window=period).mean()
+    avg_gain = rsi_series["gain"].rolling(window=period).mean()
+    avg_loss = rsi_series["loss"].rolling(window=period).mean()
     relative_strength = avg_gain / avg_loss
     rsi_ = 100 - (100 / (1 + relative_strength))
-    return pd.Series(rsi_, index=df.index, name='rsi')
+    return pd.Series(rsi_, index=df.index, name="rsi")
 
 
-def macd_signal(df: pd.DataFrame,
-                period_fast: int = 12,
-                period_slow: int = 26,
-                signal: int = 9,
-                col: str = pd_utils.CLOSE_COL) -> pd.DataFrame:
+def macd_signal(
+    df: pd.DataFrame,
+    period_fast: int = 12,
+    period_slow: int = 26,
+    signal: int = 9,
+    col: str = pd_utils.CLOSE_COL,
+) -> pd.DataFrame:
     """
     When the MACD falls below the signal line this is a bearish signal,
     and vice versa.
@@ -391,24 +398,27 @@ def macd_signal(df: pd.DataFrame,
     :param col: The name of the column.
     :return:
     """
-    ema_fast = pd.Series(df[col].ewm(ignore_na=False,
-                                     min_periods=period_fast - 1,
-                                     span=period_fast).mean(),
-                         index=df.index)
+    ema_fast = pd.Series(
+        df[col]
+        .ewm(ignore_na=False, min_periods=period_fast - 1, span=period_fast)
+        .mean(),
+        index=df.index,
+    )
 
-    ema_slow = pd.Series(df[col].ewm(ignore_na=False,
-                                     min_periods=period_slow - 1,
-                                     span=period_slow).mean(),
-                         index=df.index)
+    ema_slow = pd.Series(
+        df[col]
+        .ewm(ignore_na=False, min_periods=period_slow - 1, span=period_slow)
+        .mean(),
+        index=df.index,
+    )
 
-    macd_series = pd.Series(ema_fast - ema_slow, index=df.index, name='macd')
+    macd_series = pd.Series(ema_fast - ema_slow, index=df.index, name="macd")
 
-    macd_signal_series = macd_series.ewm(ignore_na=False,
-                                         span=signal).mean()
+    macd_signal_series = macd_series.ewm(ignore_na=False, span=signal).mean()
 
-    macd_signal_series = pd.Series(macd_signal_series,
-                                   index=df.index,
-                                   name='macd_signal')
+    macd_signal_series = pd.Series(
+        macd_signal_series, index=df.index, name="macd_signal"
+    )
     macd_df = pd.concat([macd_signal_series, macd_series], axis=1)
 
     return pd.DataFrame(macd_df).dropna()
@@ -432,8 +442,8 @@ def dmi(df: pd.DataFrame, period: int = 14):
     :return:
     """
     temp_df = pd.DataFrame()
-    temp_df['up_move'] = df[pd_utils.HIGH_COL].diff()
-    temp_df['down_move'] = df[pd_utils.LOW_COL].diff()
+    temp_df["up_move"] = df[pd_utils.HIGH_COL].diff()
+    temp_df["down_move"] = df[pd_utils.LOW_COL].diff()
 
     positive_dm = []
     negative_dm = []
@@ -448,25 +458,25 @@ def dmi(df: pd.DataFrame, period: int = 14):
         else:
             negative_dm.append(0)
 
-    temp_df['positive_dm'] = positive_dm
-    temp_df['negative_dm'] = negative_dm
+    temp_df["positive_dm"] = positive_dm
+    temp_df["negative_dm"] = negative_dm
 
     atr = avg_true_range(df, period=period * 6)
 
     dir_plus = pd.Series(
-            100 * (temp_df['positive_dm'] / atr).ewm(span=period,
-                                                     min_periods=period - 1).mean())
+        100
+        * (temp_df["positive_dm"] / atr).ewm(span=period, min_periods=period - 1).mean()
+    )
 
     dir_minus = pd.Series(
-            100 * (temp_df['negative_dm'] / atr).ewm(span=period,
-                                                     min_periods=period - 1).mean())
+        100
+        * (temp_df["negative_dm"] / atr).ewm(span=period, min_periods=period - 1).mean()
+    )
     return pd.concat([dir_plus, dir_minus])
 
 
 # noinspection PyTypeChecker
-def bollinger_bands(df: pd.DataFrame,
-                    period: int = 30,
-                    col: str = pd_utils.CLOSE_COL):
+def bollinger_bands(df: pd.DataFrame, period: int = 30, col: str = pd_utils.CLOSE_COL):
     """
     TODO.
     :param df:
@@ -476,14 +486,13 @@ def bollinger_bands(df: pd.DataFrame,
     """
     std_dev = df[col].std()
     middle_band = sma(df, period=period, col=col)
-    upper_bband = pd.Series(middle_band + (2 * std_dev),
-                            name='upper_bband')
-    lower_bband = pd.Series(middle_band - (2 * std_dev),
-                            name='lower_bband')
+    upper_bband = pd.Series(middle_band + (2 * std_dev), name="upper_bband")
+    lower_bband = pd.Series(middle_band - (2 * std_dev), name="lower_bband")
 
     percent_b = (df[col] - lower_bband) / (upper_bband - lower_bband)
 
     b_bandwidth = pd.Series((upper_bband - lower_bband) / middle_band)
 
-    return pd.concat([upper_bband, middle_band, lower_bband, b_bandwidth,
-                      percent_b], axis=1)
+    return pd.concat(
+        [upper_bband, middle_band, lower_bband, b_bandwidth, percent_b], axis=1
+    )

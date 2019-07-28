@@ -13,7 +13,7 @@ class ExecutionHandler(metaclass=ABCMeta):
     def execute_order(self, event):
         """Execute the order"""
 
-        raise NotImplementedError('Implement execute_order you dummy.')
+        raise NotImplementedError("Implement execute_order you dummy.")
 
 
 class SimpleExecutionHandler(ExecutionHandler):
@@ -29,6 +29,5 @@ class SimpleExecutionHandler(ExecutionHandler):
         """
 
         if event.type is EventType.TRADE:
-            fill_event = FillEvent(event.order_id, event.price, event.qty,
-                                   event.dt)
+            fill_event = FillEvent(event.order_id, event.price, event.qty, event.dt)
             self.events.put(fill_event)

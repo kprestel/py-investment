@@ -3,8 +3,9 @@ import pandas as pd
 import pymc3 as pm
 
 
-def monte_carlo(mu: float, vol: float, days: int, start_price: float,
-                paths: int = 1000) -> np.ndarray:
+def monte_carlo(
+    mu: float, vol: float, days: int, start_price: float, paths: int = 1000
+) -> np.ndarray:
     """
     Do a monte carlo sim.
 
@@ -20,9 +21,7 @@ def monte_carlo(mu: float, vol: float, days: int, start_price: float,
     daily_vol = vol / np.sqrt(days)
 
     for _ in range(paths):
-        sim_returns = np.random.logistic(avg_daily_return,
-                                         daily_vol,
-                                         days) + 1
+        sim_returns = np.random.logistic(avg_daily_return, daily_vol, days) + 1
 
         price_list = np.array([start_price])
 
@@ -38,12 +37,11 @@ def monte_carlo(mu: float, vol: float, days: int, start_price: float,
 # noinspection PyTypeChecker
 def _vol_model(df: pd.DataFrame):
     with pm.Model() as model:
-        nu = pm.Exponential('nu', 1. / 10, testval=5.)
-        sigma = pm.Exponential('sigma', 1. / .02, testval=.1)
-        s = pm.GaussianRandomWalk('s', sigma ** -2, shape=len(df.index))
-        vol_process = pm.Deterministic('vol_process', pm.math.exp(-2 * s))
-        r = pm.StudentT('r', nu, lam=1 / vol_process,
-                        observed=df)
+        nu = pm.Exponential("nu", 1.0 / 10, testval=5.0)
+        sigma = pm.Exponential("sigma", 1.0 / 0.02, testval=0.1)
+        s = pm.GaussianRandomWalk("s", sigma ** -2, shape=len(df.index))
+        vol_process = pm.Deterministic("vol_process", pm.math.exp(-2 * s))
+        r = pm.StudentT("r", nu, lam=1 / vol_process, observed=df)
     with model:
         trace = pm.sample(20000)
     return trace

@@ -10,9 +10,9 @@ import pytech.utils as utils
 class ReaderResult(object):
     """Data holder object that gets returned by readers."""
 
-    def __init__(self, ticker: str,
-                 df: pd.DataFrame = None,
-                 successful: bool = True) -> None:
+    def __init__(
+        self, ticker: str, df: pd.DataFrame = None, successful: bool = True
+    ) -> None:
         """
         Constructor for the result.
 

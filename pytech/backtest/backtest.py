@@ -18,15 +18,17 @@ class Backtest(object):
     update me. plz upd8 me.
     """
 
-    def __init__(self,
-                 ticker_list,
-                 initial_capital,
-                 date_range: DateRange,
-                 strategy,
-                 data_handler=None,
-                 execution_handler=None,
-                 portfolio=None,
-                 balancer=None):
+    def __init__(
+        self,
+        ticker_list,
+        initial_capital,
+        date_range: DateRange,
+        strategy,
+        data_handler=None,
+        execution_handler=None,
+        portfolio=None,
+        balancer=None,
+    ):
         """
         Initialize the backtest.
 
@@ -72,16 +74,18 @@ class Backtest(object):
         self._init_trading_instances()
 
     def _init_trading_instances(self):
-        self.data_handler = self.data_handler_cls(self.events,
-                                                  self.ticker_list,
-                                                  self.date_range)
+        self.data_handler = self.data_handler_cls(
+            self.events, self.ticker_list, self.date_range
+        )
         self.blotter.bars = self.data_handler
         self.strategy = self.strategy_cls(self.data_handler, self.events)
-        self.portfolio = self.portfolio_cls(self.data_handler,
-                                            self.events,
-                                            self.date_range,
-                                            self.blotter,
-                                            self.initial_capital)
+        self.portfolio = self.portfolio_cls(
+            self.data_handler,
+            self.events,
+            self.date_range,
+            self.blotter,
+            self.initial_capital,
+        )
         self.execution_handler = self.execution_handler_cls(self.events)
 
     def pre_run_hook(self):
@@ -98,7 +102,7 @@ class Backtest(object):
 
         while True:
             iterations += 1
-            self.logger.info(f'Iteration #{iterations}')
+            self.logger.info(f"Iteration #{iterations}")
 
             try:
                 self.data_handler.update_bars()
@@ -110,14 +114,14 @@ class Backtest(object):
                 try:
                     event = self.events.get(False)
                 except queue.Empty:
-                    self.logger.info('Continuing to next day.')
+                    self.logger.info("Continuing to next day.")
                     break
 
                 if event is not None:
                     self._process_event(event)
 
     def _process_event(self, event) -> None:
-        self.logger.debug(f'Processing {event.event_type}')
+        self.logger.debug(f"Processing {event.event_type}")
 
         if event.event_type is EventType.MARKET:
             self.strategy.generate_signals(event)
