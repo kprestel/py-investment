@@ -22,6 +22,15 @@ import pytech.data.schema as schema
 from testing.postgresql import Postgresql
 
 
+@pytest.fixture()
+def mock_env(monkeypatch):
+    if os.getenv("TIINGO_API_KEY") is None:
+        monkeypatch.setenv("TIINGO_API_KEY", "API_KEY")
+    if os.getenv("ALPHA_VANTAGE_API_KEY") is None:
+        monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "API_KEY")
+    if os.getenv("BARCHART_API_KEY") is None:
+        monkeypatch.setenv("BARCHART_API_KEY", "API_KEY")
+
 
 @pytest.fixture(scope='session')
 def database_uri(pg_server):
@@ -57,7 +66,7 @@ def init_db(postgresql_db):
     postgresql_db.create_table(schema.portfolio_snapshot)
     postgresql_db.install_extension('timescaledb')
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def vcr_config():
     return {
         'filter_query_parameters': ('apikey', 'XXXXXX'),

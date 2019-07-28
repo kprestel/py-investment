@@ -12,7 +12,7 @@ from pytech.utils import dt_utils as dt_utils
 from pytech.utils.enums import TradeAction
 
 if TYPE_CHECKING:
-    from trading import Order
+    from . import Order
 
 
 class Trade(object):

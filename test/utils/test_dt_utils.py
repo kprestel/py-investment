@@ -1,13 +1,13 @@
 import datetime as dt
 from typing import Union
 
-import pandas as pd
 import pandas_market_calendars as mcal
 import pytest
 import pytz
 from hypothesis import (
     assume,
     given,
+    settings,
 )
 from hypothesis.strategies import (
     dates,
@@ -28,6 +28,7 @@ tzs = sampled_from((pytz.UTC, pytz.timezone('America/New_York'),
                    None)
                    )
 
+@settings(deadline=None)
 @given(dts, dts, tzs, sampled_from(('NYSE', 'CME', 'ICE')),
        sampled_from(('close_time', 'open_time')))
 def test_sanitize_dates(start, end, tz, cal, default_time):

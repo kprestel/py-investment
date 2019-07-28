@@ -10,7 +10,7 @@ from pytech.utils.enums import SignalType, TradeAction
 
 if TYPE_CHECKING:
     from pytech.fin.portfolio import Portfolio
-    from trading.blotter import AnyOrder
+    from pytech.trading.blotter import AnyOrder
 
 
 class SignalHandler(metaclass=ABCMeta):

@@ -29,10 +29,6 @@ class DataHandler(metaclass=ABCMeta):
         universe or all the assets that will available to be traded.
         :param start_date: The start of the sim.
         :param end_date: The end of the sim.
-        :param asset_lib_name: The name of the mongo library where asset
-            bars are stored. Defaults to *pytech.bars*
-        :param market_lib_name: The name of the mongo library where market
-            bars are stored. Defaults to *pytech.market*
         """
         self.logger: logging.Logger = logging.getLogger(__name__)
         self.events: queue.Queue = events

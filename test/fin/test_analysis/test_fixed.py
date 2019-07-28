@@ -11,7 +11,7 @@ class TestTVM(object):
         """
         expected_pv = 80.0
         tvm = TVM(periods=10*2, pmt=6/2, pv=-expected_pv, fv=100)
-        ir = 2 * tvm.calc_rate()
+        ir = 2 * tvm.calc_discount_rate()
         tvm.rate = ir
         pv = tvm.calc_pv()
         assert pv == expected_pv

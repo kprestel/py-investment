@@ -85,7 +85,6 @@ def write_df(table: str):
             )
             writer(ins)
 
-            df.index.freq = BDay()
             try:
                 writer.df(df, table)
             except IntegrityError as e:

@@ -72,11 +72,12 @@ class TVM(object):
         discount = (-self.discount_factor - self.pv) / (self.fv - self.discount_factor)
         return -log(discount) / log(1 + self.rate)
 
-    def calc_rate(self):
+    def calc_discount_rate(self):
         def fv_(r, self):
-            return (
-                -(self.pv + (1 - self.discount_factor) * self.pva)
-                / self.discount_factor
-            )
+            z = pow(1 + r, -self.periods)
+            pva = self.pmt / r
+            if self.mode == TVM.begin:
+                pva += self.pmt
+            return -(self.pv + (1 - z) * pva) / z
 
         return newton(func=fv_, x0=0.05, args=(self,), maxiter=1000, tol=0.00001)
