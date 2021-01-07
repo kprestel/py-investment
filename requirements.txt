@@ -29,7 +29,7 @@ ipython-genutils==0.2.0
 jedi==0.10.2
 Jinja2==2.9.6
 leveldb==0.194
-lxml==3.6.4
+lxml==4.6.2
 lz4==0.8.2
 MarkupSafe==1.0
 marshmallow==2.10.3
