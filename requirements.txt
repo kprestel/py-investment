@@ -54,7 +54,7 @@ pkg-resources==0.0.0
 prompt-toolkit==1.0.14
 psutil==5.6.6
 ptyprocess==0.5.1
-py==1.4.33
+py==1.10.0
 pyasn1==0.1.9
 pyasn1-modules==0.0.8
 pycparser==2.17
