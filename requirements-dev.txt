@@ -40,7 +40,7 @@ jupyter-client==5.1.0
 jupyter-console==5.1.0
 jupyter-core==4.3.0
 leveldb==0.194
-lxml==3.6.4
+lxml==4.6.5
 lz4==0.8.2
 MarkupSafe==1.0
 marshmallow==2.10.3
