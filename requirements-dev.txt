@@ -108,7 +108,7 @@ toolz==0.8.2
 tornado==4.5.1
 tqdm==4.14.0
 traitlets==4.3.2
-Twisted==19.7.0
+Twisted==22.1.0
 tzlocal==1.4
 urllib3==1.21.1
 vmprof==0.4.9
