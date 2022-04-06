@@ -52,7 +52,7 @@ multiprocess==0.70.5
 nbconvert==5.2.1
 nbformat==4.3.0
 networkx==1.11
-notebook==5.7.8
+notebook==6.4.10
 numpy==1.12.1
 odo==0.5.0
 ordereddict==1.1
