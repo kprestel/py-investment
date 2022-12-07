@@ -5,7 +5,7 @@ attrs==17.2.0
 Babel==2.4.0
 beautifulsoup4==4.5.1
 Bottleneck==1.2.1
-certifi==2017.4.17
+certifi==2022.12.7
 cffi==1.8.3
 chardet==3.0.3
 colorama==0.3.7
